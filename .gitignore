@@ -1,0 +1,7 @@
+/**/*.so
+/**/*.o
+/**/*.pdf
+*.Rcheck
+/**/*.Rhistory
+/**/.Rhistory
+*.tar.gz
