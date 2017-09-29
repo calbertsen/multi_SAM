@@ -55,10 +55,11 @@ suggestCorStructure <- function(x,
     }
 
 
+    
     if(nrow(noCorBetween) > 0){
         for(k in 1:nrow(noCorBetween)){
-            i <- which(noCorBetween[k,1] == useAreaNum)
-            j <- which(noCorBetween[k,2] == useAreaNum)
+            i <- noCorBetween[k,1]
+            j <- noCorBetween[k,2]
             if(length(i) > 0 & length(j) > 0){
                 indx1 <- 1:length(ala) + max(length(ala))*(i-1)
                 indx2 <- 1:length(ala) + max(length(ala))*(j-1)
