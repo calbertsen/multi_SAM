@@ -1,0 +1,16 @@
+Package: multiStockassessment
+Title: Fitting Multiple State-Space Assessment Models
+Version: 0.0.0-0001
+Date: 2017-09-18
+Authors@R: c(person(c("Christoffer","Moesgaard"), "Albertsen",
+	   	role=c("aut","cre"),
+		email="cmoe@aqua.dtu.dk"))
+Description: Fitting multiple SAM models.
+License: GPL-2
+Imports: TMB, stockassessment
+LinkingTo: TMB, RcppEigen, stockassessment
+URL: https://github.com/calbertsen/multi_SAM
+LazyData: TRUE
+BugReports: https://github.com/calbertsen/multi_SAM/issues
+Additional_repositories: https://rrepo.calbertsen.dk/
+RoxygenNote: 6.0.1

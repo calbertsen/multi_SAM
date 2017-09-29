@@ -1,0 +1,19 @@
+bibentry(bibtype = "Article",
+  title        = "Connecting single-stock assessment models through correlated survival",
+  author       = c(person(given = c("Christoffer","Moesgaard"),
+                          family = "Albertsen",
+                          email = "cmoe@aqua.dtu.dk"),
+                   person(given = "Anders",
+                          family = "Nielsen"),
+                   person(given = c("Uffe","Hogsbro"),
+                          family = "Thygesen")
+                   ),
+  journal      = "ICES Journal of Marine Science",
+  year         = "In Press",
+  volume       = "",
+  pages        = "",
+  doi          = "10.1093/icesjms/fsx114",
+
+  header       = "To cite in publications use:",
+  textVersion  = "Albertsen, C. M., Nielsen, A., and Thygesen, U. H. (In Press) Connecting single-stock assessment models through correlated survival. ICES Journal of Marine Science. doi: 10.1093/icesjms/fsx114"
+  )
