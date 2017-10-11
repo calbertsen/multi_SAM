@@ -228,7 +228,7 @@ Type objective_function<Type>::operator() ()
       logFa = logF.col(s);
 
       if(y > 0 && y < sam.dataSets(s).noYears){
-	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, ssb(s), y);
+	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, y);
 	
 	keep.segment(s * nages,predNnz.size()) = 1.0;
 	predN.segment(s * nages,predNnz.size()) = predNnz;
