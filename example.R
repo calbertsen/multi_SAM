@@ -16,21 +16,24 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
-AIC(obj)
-nobs(obj)
-logLik(obj)
-
-do.call("sum",lapply(fitSim,function(x)x$opt$objective))
-obj$opt$objective
+do.call("sum",lapply(fitSim,AIC)) - AIC(obj) < 1e-10
+do.call("sum",lapply(fitSim,BIC)) - BIC(obj) < 1e-10
+do.call("sum",lapply(fitSim,nobs)) - nobs(obj) < 1e-10
+do.call("sum",lapply(fitSim,function(x)attr(logLik(x),"df"))) - attr(logLik(obj),"df") < 1e-10
+do.call("sum",lapply(fitSim,logLik)) - as.numeric(logLik(obj)) < 1e-10
 
 cs2 <- suggestCorStructure(fitSim,nAgeClose=3)
 obj2 <- multisam.fit(fitSim,cs2)
-obj2$opt$objective
+AIC(obj); AIC(obj2)
+BIC(obj); BIC(obj2)
 
 
-v <- -obj2$opt$objective + obj$opt$objective
-p <- length(obj2$opt$par) - length(obj$opt$par)
-1-pchisq(2*v,p)
+ll1 <- logLik(obj)
+ll2 <- logLik(obj2)
+v <- abs(as.numeric(ll2 - ll1))
+p <- abs(attr(ll2,"df") - attr(ll1,"df"))
+pchisq(2*v,p,lower.tail=FALSE)
+
 
 ## One stock with correlation in survival
 
