@@ -23,7 +23,7 @@ multisam.fit(x, corStructure, usePartialCors = TRUE, newtonsteps = 3,
 \item{...}{Additional arguments passed to TMB::MakeADFun}
 }
 \value{
-A list of class samset and samsetfit
+A list of class msam and samset
 }
 \description{
 Fit multiple SAM models with correlated survival processes.

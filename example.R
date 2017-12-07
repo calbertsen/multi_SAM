@@ -6,7 +6,7 @@ data(nscodParameters)
 fit <- sam.fit(nscodData, nscodConf, nscodParameters,sim.condRE = FALSE)
 
 datSim <- simulate(fit,nsim=2)
-fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,fit$conf, fit$pl)))
+fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,defcon(x), defpar(x,defcon(x)))))
 
 
 ## Multiple stocks
@@ -16,16 +16,20 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
+nc <- corplot(obj)
+
 do.call("sum",lapply(fitSim,AIC)) - AIC(obj) < 1e-10
 do.call("sum",lapply(fitSim,BIC)) - BIC(obj) < 1e-10
 do.call("sum",lapply(fitSim,nobs)) - nobs(obj) < 1e-10
 do.call("sum",lapply(fitSim,function(x)attr(logLik(x),"df"))) - attr(logLik(obj),"df") < 1e-10
 do.call("sum",lapply(fitSim,logLik)) - as.numeric(logLik(obj)) < 1e-10
 
-cs2 <- suggestCorStructure(fitSim,nAgeClose=3)
-obj2 <- multisam.fit(fitSim,cs2)
+cs2 <- suggestCorStructure(fitSim,nAgeClose=2)
+obj2 <- multisam.fit(fitSim,cs2,usePartialCors=FALSE)
 AIC(obj); AIC(obj2)
 BIC(obj); BIC(obj2)
+
+nc <- corplot(obj2)
 
 
 ll1 <- logLik(obj)
@@ -50,3 +54,8 @@ AIC(fitPC3)
 AIC(fitPC4)
 AIC(fitPC5)
 AIC(fitPC6)
+
+names(fitPC1[[1]]$rep)
+
+names(attr(fitPC1,"m_rep"))
+

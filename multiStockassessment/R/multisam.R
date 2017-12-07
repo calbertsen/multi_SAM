@@ -8,7 +8,7 @@
 ##' @param lower As for stockassessment::sam.fit
 ##' @param upper As for stockassessment::sam.fit
 ##' @param ... Additional arguments passed to TMB::MakeADFun
-##' @return A list of class samset and samsetfit
+##' @return A list of class msam and samset
 ##' @author Christoffer Moesgaard Albertsen
 ##' @examples
 ##' \donttest{
@@ -22,13 +22,16 @@
 ##' }
 ##' }
 ##' @importFrom stats nlminb
-##' @importFrom TMB MakeADFun
+##' @importFrom methods is
+##' @importFrom TMB MakeADFun sdreport
 ##' @export
 multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=NULL,upper=NULL,...){
+    ## Check input
     requireNamespace("TMB")
-    if(class(x) != "samset")
+    if(!methods::is(x,"samset"))
         stop("x must be a samset.")
-    
+
+    ## Prepare data for TMB
     dat0 <- collect_data(x)
     dat <- list(sam = dat0,
                 usePartialCor = as.integer(usePartialCors),
@@ -38,35 +41,55 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
                 minAgeAll = min(unlist(lapply(dat0,function(dd)dd$minAge))),
                 cons = boolMat2ConstraintList(corStructure)
                 )
+
+    ## Prepare parameters for TMB
     pars <- collect_pars(x)
     pars$RE <- rep(0,sum(lower.tri(corStructure)))
-    if(is.null(lower))
-        lower <- getLowerBounds(pars)
-    if(is.null(upper))
-        upper <- getUpperBounds(pars)
+
+    ## Create initial TMB Object
     ran <- c("logN", "logF", "missing")
     obj <- TMB::MakeADFun(dat, pars, random=ran, DLL="multiStockassessment", ...)
+
+    ## Check for unused correlation parameters
     indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
     mvals <- 1:sum(lower.tri(corStructure))
     mvals[indx] <- NA
     map <- list(RE = factor(mvals))
+
+    ## Create TMB Object
     obj <- TMB::MakeADFun(dat, pars, map, random=ran, DLL="multiStockassessment", ...)
-    
-    lower2<-rep(-Inf,length(obj$par))
-    upper2<-rep(Inf,length(obj$par))
+
+    pars2 <- pars
+    pars2$RE <- obj$par[names(obj$par)=="RE"]
+    ## Fit object
+   if(is.null(lower))
+        lower <- getLowerBounds(pars2)
+    if(is.null(upper))
+        upper <- getUpperBounds(pars2)
+
+    lower2 <- rep(-Inf,length(obj$par))
+    upper2 <- rep(Inf,length(obj$par))
     for(nn in names(lower)) lower2[names(obj$par)==nn]=lower[[nn]]
     for(nn in names(upper)) upper2[names(obj$par)==nn]=upper[[nn]]
     
-    opt <- stats::nlminb(obj$par, obj$fn,obj$gr ,control=list(trace=1, eval.max=2000, iter.max=1000),lower=lower2,upper=upper2)
+    opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
+                         control=list(trace=1,
+                                      eval.max=2000,
+                                      iter.max=1000),
+                         lower=lower2,
+                         upper=upper2)
 
-    ## for(i in seq_len(newtonsteps)) { # Take a few extra newton steps 
-    ##     g <- as.numeric( obj$gr(opt$par) )
-    ##     h <- optimHess(opt$par, obj$fn, obj$gr)
-    ##     opt$par <- opt$par - solve(h, g)
-    ##     opt$objective <- obj$fn(opt$par)
-    ## }
-    ## rep <- obj$report()
-    ## sdrep <- sdreport(obj,opt$par)
+    for(i in seq_len(newtonsteps)) { # Take a few extra newton steps 
+        g <- as.numeric( obj$gr(opt$par) )
+        h <- optimHess(opt$par, obj$fn, obj$gr)
+        opt$par <- opt$par - solve(h, g)
+        opt$objective <- obj$fn(opt$par)
+    }
+
+    ## Get report and sdreport
+    rep <- obj$report()
+    sdrep <- TMB::sdreport(obj,opt$par)
+    ssdrep <- summary(sdrep)
 
     ##                                     # Last two states
     ## idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"))
@@ -84,7 +107,16 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
 
     ## ## Split everything to sam classes
 
-    res <- list(obj=obj,opt=opt)
-    class(res) <- c("msamfit")
+    res <- x
+    attr(res,"m_obj") <- obj
+    attr(res,"m_opt") <- opt
+    attr(res,"m_rep") <- rep
+    attr(res,"m_data") <- dat
+    attr(res,"m_low") <- lower2
+    attr(res,"m_high") <- upper2
+    attr(res,"corStructure") <- corStructure
+    attr(res,"partialCors") <- usePartialCors
+    attr(res,"correlationParameters") <- ssdrep[rownames(ssdrep)=="RE",]
+    class(res) <- c("msam","samset")
     return(res)
 }
