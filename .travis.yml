@@ -1,0 +1,33 @@
+language: r
+
+sudo: required
+cache: packages
+
+r:
+  - oldrel
+  - release
+  - devel
+
+os:
+  - linux
+  - osx
+
+install:
+  - make updateStockassessment 
+
+script:
+  - make check
+  - make test
+
+after_failure:
+  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
+  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
+  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
+  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
+  - ./travis-tool.sh dump_logs
+
+after_success:
+  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
+  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
+  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
+  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
