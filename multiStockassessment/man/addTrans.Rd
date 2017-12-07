@@ -14,6 +14,9 @@ addTrans(name, alpha = 1)
 \value{
 A hex color string
 }
+\description{
+Function to add transparency to a color
+}
 \author{
 Christoffer Moesgaard Albertsen
 }

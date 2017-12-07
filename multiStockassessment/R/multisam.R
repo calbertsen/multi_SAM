@@ -21,7 +21,7 @@
 ##'   obj <- multisam.fit(fits)
 ##' }
 ##' }
-##' @importFrom stats nlminb
+##' @importFrom stats nlminb optimHess
 ##' @importFrom methods is
 ##' @importFrom TMB MakeADFun sdreport
 ##' @export
@@ -81,7 +81,7 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
 
     for(i in seq_len(newtonsteps)) { # Take a few extra newton steps 
         g <- as.numeric( obj$gr(opt$par) )
-        h <- optimHess(opt$par, obj$fn, obj$gr)
+        h <- stats::optimHess(opt$par, obj$fn, obj$gr)
         opt$par <- opt$par - solve(h, g)
         opt$objective <- obj$fn(opt$par)
     }

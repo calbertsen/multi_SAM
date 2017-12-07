@@ -1,3 +1,5 @@
+##' Correlation plot
+##'
 ##' @title Correlation plot for assessment model
 ##' @param object Assessment object
 ##' @param ... Other arguments
@@ -17,7 +19,9 @@ corplot <- function(object,...){
 ##' @param ... Other parameters not currently used
 ##' @return A matrix of correlations (lower triangular) and partial correlations (upper triangular)
 ##' @author Christoffer Moesgaard Albertsen
-##' @importFrom graphics image axis abline box mtext
+##' @importFrom graphics image axis abline box mtext text rect
+##' @importFrom stats cov2cor
+##' @importFrom grDevices colorRampPalette
 ##' @export
 corplot.msam <- function(object,...){
     rp <- attr(object,"m_rep")
@@ -25,7 +29,7 @@ corplot.msam <- function(object,...){
     nc <- rp$Sigma
     m <- -solve(rp$Sigma)
     diag(m) <- -diag(m)
-    npc <- cov2cor(m)
+    npc <- stats::cov2cor(m)
 
     stockNames <- names(dat$sam)
     
@@ -44,7 +48,7 @@ corplot.msam <- function(object,...){
           ylim=c(dim(nc)[1]+0.5,1-0.5),
           xlab="",ylab="",
           breaks=brks,
-          col=addTrans(colorRampPalette(c("blue","white","red"))(20),0.5))
+          col=addTrans(grDevices::colorRampPalette(c("blue","white","red"))(20),0.5))
     graphics::axis(1,labels=colnames(nc),at=1:dim(nc)[1])
     graphics::axis(2,labels=colnames(nc),at=1:dim(nc)[1])
     for(i in 1:dim(nc)[1])
@@ -61,11 +65,11 @@ corplot.msam <- function(object,...){
                 ##     polygon(c(i+0.5,i+0.5-0.2,i+0.5,i+0.5),
                 ##             c(j-0.5,j-0.5,j-0.5+0.2,j-0.5),
                 ##             col="black")
-                text(i,j,txt)
+                graphics::text(i,j,txt)
             }
     for(i in 1:dim(nc)[1]){
         colIndx <- as.numeric(rownames(nc)[i] %in% unlist(sapply(1:nAreas,function(aa)ageList[[aa]]))) + 1
-        rect(i-0.5,i-0.5,i+0.5,i+0.5,col=c("white","black")[colIndx],border=NA)
+        graphics::rect(i-0.5,i-0.5,i+0.5,i+0.5,col=c("white","black")[colIndx],border=NA)
     }
     graphics::abline(v=1:(dim(nc)[1]+1)-0.5,h=1:(dim(nc)[1]+1)-0.5,col="darkgrey")
     graphics::abline(v = (length(ala)) * (1:(nAreas-1)) + 0.5,lwd=2)

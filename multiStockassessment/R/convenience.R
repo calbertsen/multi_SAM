@@ -1,3 +1,5 @@
+##' Function to add transparency to a color
+##'
 ##' @title Add transparency to a color
 ##' @param name Name of color
 ##' @param alpha Alpha level

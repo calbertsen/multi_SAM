@@ -7,7 +7,7 @@ Authors@R: c(person(c("Christoffer","Moesgaard"), "Albertsen",
 		email="cmoe@aqua.dtu.dk"))
 Description: Fitting multiple SAM models.
 License: GPL-2
-Imports: TMB, stockassessment
+Imports: TMB, stockassessment, grDevices, graphics, methods, stats
 LinkingTo: TMB, RcppEigen, stockassessment
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE

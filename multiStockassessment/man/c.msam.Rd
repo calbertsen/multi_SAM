@@ -12,3 +12,6 @@
 \value{
 An msamset
 }
+\description{
+Collect a number of msam objects into an msamset
+}

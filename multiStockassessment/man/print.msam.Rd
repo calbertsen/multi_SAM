@@ -7,5 +7,10 @@
 \method{print}{msam}(x, ...)
 }
 \arguments{
-\item{x}{}
+\item{x}{A msam object}
+
+\item{...}{Other parameters passes to logLik}
+}
+\description{
+Print output from multisam.fit
 }
