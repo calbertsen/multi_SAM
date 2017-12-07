@@ -13,7 +13,7 @@ os:
   - osx
 
 install:
-  - R -e 'install.packages("devtools")'
+  - R -e 'install.packages(c("roxygen","devtools"))'
   - make updateStockassessment 
 
 script:
