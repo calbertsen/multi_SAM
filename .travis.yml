@@ -13,6 +13,7 @@ os:
   - osx
 
 install:
+  - R -e 'install.packages("devtools")'
   - make updateStockassessment 
 
 script:
