@@ -1,7 +1,6 @@
 language: r
 
 sudo: required
-cache: packages
 
 r:
   - oldrel
@@ -13,7 +12,7 @@ os:
   - osx
 
 install:
-  - R -e 'install.packages(c("roxygen2","devtools"))'
+  - R -e 'install.packages(c("roxygen2","devtools","TMB","ellipse"),dependencies = TRUE)'
   - make updateStockassessment 
 
 script:
