@@ -120,6 +120,10 @@ Type objective_function<Type>::operator() ()
   vector<vector<Type> > logtsb(nStocks);
   vector<vector<Type> > predObs(nStocks);
 
+
+  // Reported inside functions
+  vector<vector<matrix<Type> > > obsCov(nStocks);
+  
   for(int s = 0; s < nStocks; ++s){
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
     logNa = logN.col(s);
@@ -145,24 +149,48 @@ Type objective_function<Type>::operator() ()
   
 
   Type ans=0; //negative log-likelihood
+  ofall<Type> ofAll(nStocks);
+
+  ////////////////////////////////
+  ////////// F PROCESS //////////
+  //////////////////////////////
 
   for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of;
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
 
     data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
-    ans += nllF(sam.confSets(s), paraSets(s), logFa, keep, this);
-    //ans += nllN(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, ssb(s), keep, this);
-    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), predObs(s), varLogCatch(s), keep,  this);
+    ans += nllF(sam.confSets(s), paraSets(s), logFa, keep, &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
   }
 
 
+  ///////////////////////////////////
+  ////////// OBSERVATIONS //////////
+  /////////////////////////////////
 
-  ////////////////////////////////////////
-  ////////// Multi SAM specific //////////
-  ////////////////////////////////////////
+  
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of;
+    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+    logNa = logN.col(s);
+    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+    logFa = logF.col(s);
+
+    data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
+    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), predObs(s), varLogCatch(s), keep,  &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+
+
+  ////////////////////////////////
+  ////////// N PROCESS //////////
+  //////////////////////////////
   int nAreas = sam.dataSets.size();
 
   int nages = (maxAgeAll - minAgeAll + 1);
@@ -239,7 +267,11 @@ Type objective_function<Type>::operator() ()
       ans+=neg_log_densityN(newN-predN, keep);
   }
 
-
+  ////////////////////////////////////////////////////////
+  ////// ADD REPORTED OBJECTS FROM stockassessment //////
+  //////////////////////////////////////////////////////
+  if(isDouble<Type>::value && this->current_parallel_region<0)
+    addMissingVars(this->report,ofAll.report);
   
   return ans;
 }

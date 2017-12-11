@@ -87,30 +87,44 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
     }
 
     ## Get report and sdreport
-    rep <- obj$report()
+    rep <- obj$report(obj$env$last.par.best)
     sdrep <- TMB::sdreport(obj,opt$par)
     ssdrep <- summary(sdrep)
 
-    ##                                     # Last two states
-    ## idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"))
-    ## sdrep$estY <- sdrep$value[idx]
-    ## sdrep$covY <- sdrep$cov[idx,idx]
+    ## Do as in stockassessment package
+    # Last two states
+    idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"))
+    sdrep$estY <- sdrep$value[idx]
+    sdrep$covY <- sdrep$cov[idx,idx]
 
-    ## idx <- c(which(names(sdrep$value)=="beforeLastLogN"),which(names(sdrep$value)=="beforeLastLogF"))
-    ## sdrep$estYm1 <- sdrep$value[idx]
-    ## sdrep$covYm1 <- sdrep$cov[idx,idx]
+    idx <- c(which(names(sdrep$value)=="beforeLastLogN"),which(names(sdrep$value)=="beforeLastLogF"))
+    sdrep$estYm1 <- sdrep$value[idx]
+    sdrep$covYm1 <- sdrep$cov[idx,idx]
 
-    ## pl <- as.list(sdrep,"Est")
-    ## plsd <- as.list(sdrep,"Std")
+    pl <- as.list(sdrep,"Est")
+    plsd <- as.list(sdrep,"Std")
+    
+    sdrep$cov<-NULL # save memory
+    
 
-    ## sdrep$cov<-NULL # save memory
-
-    ## ## Split everything to sam classes
-
+    ## Prepare result
     res <- x
+
+    ##sdrep
+
+    ## pl
+
+    ## plsd
+
+    ## rep
+
+    ## Add multi SAM info
     attr(res,"m_obj") <- obj
     attr(res,"m_opt") <- opt
     attr(res,"m_rep") <- rep
+    attr(res,"m_sdrep") <- sdrep
+    attr(res,"m_pl") <- pl
+    attr(res,"m_plsd") <- plsd
     attr(res,"m_data") <- dat
     attr(res,"m_low") <- lower2
     attr(res,"m_high") <- upper2

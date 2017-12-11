@@ -16,6 +16,12 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
+unique(rownames(summary(attr(obj,"m_sdrep"))))
+unique(rownames(summary(fit$sdrep)))
+
+unique(rownames(summary(attr(obj,"m_rep"))))
+unique(rownames(summary(fit$rep)))
+
 nc <- corplot(obj)
 
 do.call("sum",lapply(fitSim,AIC)) - AIC(obj) < 1e-10
