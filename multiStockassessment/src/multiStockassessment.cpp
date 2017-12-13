@@ -77,7 +77,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(RE)
 
     
-  int nStocks = logF.cols();
+    int nStocks = logF.cols();
   vector<paraSet<Type> > paraSets(nStocks);
 
   for(int s = 0; s < nStocks; ++s){
@@ -106,50 +106,50 @@ Type objective_function<Type>::operator() ()
       }    
     }
   
-  vector<vector<Type> > R(nStocks);
-  vector<vector<Type> > logR(nStocks);
-  vector<vector<Type> > ssb(nStocks);
-  vector<vector<Type> > logssb(nStocks);
-  vector<vector<Type> > fbar(nStocks);
-  vector<vector<Type> > logfbar(nStocks);
-  vector<vector<Type> > cat(nStocks);
-  vector<vector<Type> > logCatch(nStocks);
-  vector<vector<Type> > varLogCatch(nStocks);
-  vector<vector<Type> > fsb(nStocks);
-  vector<vector<Type> > logfsb(nStocks);
-  vector<vector<Type> > tsb(nStocks);
-  vector<vector<Type> > logtsb(nStocks);
-  vector<vector<Type> > predObs(nStocks);
+  // vector<vector<Type> > R(nStocks);
+  // vector<vector<Type> > logR(nStocks);
+  // vector<vector<Type> > ssb(nStocks);
+  // vector<vector<Type> > logssb(nStocks);
+  // vector<vector<Type> > fbar(nStocks);
+  // vector<vector<Type> > logfbar(nStocks);
+  // vector<vector<Type> > cat(nStocks);
+  // vector<vector<Type> > logCatch(nStocks);
+  // vector<vector<Type> > varLogCatch(nStocks);
+  // vector<vector<Type> > fsb(nStocks);
+  // vector<vector<Type> > logfsb(nStocks);
+  // vector<vector<Type> > tsb(nStocks);
+  // vector<vector<Type> > logtsb(nStocks);
+  // vector<vector<Type> > predObs(nStocks);
 
 
-  // Reported inside functions
-  vector<vector<matrix<Type> > > obsCov(nStocks);
+  // // Reported inside functions
+  // vector<vector<matrix<Type> > > obsCov(nStocks);
   
-  for(int s = 0; s < nStocks; ++s){
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
-    R(s) = rFun(logNa);
-    logR(s) = log(R(s));  
-    ssb(s) = ssbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-    logssb(s) = log(ssb(s));
-    fbar(s) = fbarFun(sam.confSets(s), logFa);
-    logfbar(s) = log(fbar(s));
-    cat(s) = catchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-    logCatch(s) = log(cat(s));
-    varLogCatch(s) = varLogCatchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa, paraSets(s));
-    fsb(s) = fsbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-    logfsb(s) = log(fsb(s));
-    tsb(s) = tsbFun(sam.dataSets(s), sam.confSets(s), logNa);
-    logtsb(s) = log(tsb(s));
-    predObs(s) = predObsFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, logssb(s), logfsb(s), logCatch(s));
-  }
+  // for(int s = 0; s < nStocks; ++s){
+  //   array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+  //   logNa = logN.col(s);
+  //   array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+  //   logFa = logF.col(s);
+  //   R(s) = rFun(logNa);
+  //   logR(s) = log(R(s));  
+  //   ssb(s) = ssbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
+  //   logssb(s) = log(ssb(s));
+  //   fbar(s) = fbarFun(sam.confSets(s), logFa);
+  //   logfbar(s) = log(fbar(s));
+  //   cat(s) = catchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
+  //   logCatch(s) = log(cat(s));
+  //   varLogCatch(s) = varLogCatchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa, paraSets(s));
+  //   fsb(s) = fsbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
+  //   logfsb(s) = log(fsb(s));
+  //   tsb(s) = tsbFun(sam.dataSets(s), sam.confSets(s), logNa);
+  //   logtsb(s) = log(tsb(s));
+  //   predObs(s) = predObsFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, logssb(s), logfsb(s), logCatch(s));
+  // }
 
 
   
 
-  Type ans=0; //negative log-likelihood
+  Type ans = 0; //negative log-likelihood
   ofall<Type> ofAll(nStocks);
 
   ////////////////////////////////
@@ -164,24 +164,6 @@ Type objective_function<Type>::operator() ()
 
     data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
     ans += nllF(sam.confSets(s), paraSets(s), logFa, keep, &of);
-    ofAll.addToReport(of.report,s);
-    moveADREPORT(&of,this,s);
-  }
-
-
-  ///////////////////////////////////
-  ////////// OBSERVATIONS //////////
-  /////////////////////////////////
-
-  for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of;
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
-
-    data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
-    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), predObs(s), varLogCatch(s), keep,  &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
@@ -230,10 +212,10 @@ Type objective_function<Type>::operator() ()
   REPORT(ncov)
 
     ////////////////////////////////////
-   ////// CALCULATE CONTRIBUTION //////
-  ////////////////////////////////////
+    ////// CALCULATE CONTRIBUTION //////
+    ////////////////////////////////////
 
-  density::MVNORM_t<Type> neg_log_densityN(ncov);
+    density::MVNORM_t<Type> neg_log_densityN(ncov);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
 
@@ -263,6 +245,27 @@ Type objective_function<Type>::operator() ()
     if(keep.sum()>0)
       ans+=neg_log_densityN(newN-predN, keep);
   }
+
+  
+
+  ///////////////////////////////////
+  ////////// OBSERVATIONS //////////
+  /////////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of;
+    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+    logNa = logN.col(s);
+    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+    logFa = logF.col(s);
+
+    data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
+    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, keep,  &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+
+
 
   ////////////////////////////////////////////////////////
   ////// ADD REPORTED OBJECTS FROM stockassessment //////

@@ -26,6 +26,13 @@ install:
 
 script:
   - make check
+  - ls
+  - make test
+
+after_succes:
   - cat ./multStockassessment.Rcheck/00check.log
   - cat ./multStockassessment.Rcheck/00install.out
-  - make test
+
+after_failure:
+  - cat ./multStockassessment.Rcheck/00check.log
+  - cat ./multStockassessment.Rcheck/00install.out
