@@ -12,9 +12,10 @@ struct sam_data {
 
     // Loop through x to get the data for each area
     for(int i = 0; i < n; ++i){
-      SEXP y = VECTOR_ELT(x,i);
+      SEXP y = PROTECT(VECTOR_ELT(x,i));
       dataSets(i) = dataSet<Type>(y);
       confSets(i) = confSet(y);
+      UNPROTECT(1);
     }
   }; // End constructor
 

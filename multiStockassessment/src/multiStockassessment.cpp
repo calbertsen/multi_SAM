@@ -38,6 +38,7 @@ Type objective_function<Type>::operator() ()
 {
   using CppAD::abs;
 
+
   DATA_STRUCT(sam,sam_data);
 
   ////////////////////////////////////////
@@ -75,6 +76,7 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   PARAMETER_VECTOR(RE)
 
+    
   int nStocks = logF.cols();
   vector<paraSet<Type> > paraSets(nStocks);
 
@@ -103,7 +105,6 @@ Type objective_function<Type>::operator() ()
   	sam.dataSets(s).logobs(i)=missing(idxmis++);
       }    
     }
-  
   
   vector<vector<Type> > R(nStocks);
   vector<vector<Type> > logR(nStocks);
@@ -154,7 +155,6 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
-
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of;
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -173,7 +173,6 @@ Type objective_function<Type>::operator() ()
   ////////// OBSERVATIONS //////////
   /////////////////////////////////
 
-  
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of;
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -225,7 +224,6 @@ Type objective_function<Type>::operator() ()
   }
 
   ncov = (matrix<Type>)(A * Sigma) * A;
-
   REPORT(Sigma);
   REPORT(SigmaTmp);
   REPORT(L);
@@ -236,7 +234,6 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////
 
   density::MVNORM_t<Type> neg_log_densityN(ncov);
-
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
 

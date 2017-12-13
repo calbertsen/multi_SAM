@@ -3,15 +3,18 @@
 #include <sstream>
 
 void addMissingVars(SEXP to, SEXP from){
-  SEXP names = R_lsInternal(from, FALSE);
+  SEXP names = PROTECT(R_lsInternal(from, FALSE));
   for(int i = 0; i < Rf_length(names); ++i){
-    SEXP name = STRING_ELT(names,i);
-    SEXP val = Rf_findVarInFrame(to, Rf_install(CHAR(name)));
+    SEXP name = PROTECT(STRING_ELT(names,i));
+    SEXP val = PROTECT(Rf_findVarInFrame(to, Rf_install(CHAR(name))));
     if (val == R_UnboundValue) {
-	SEXP valfrom = Rf_findVarInFrame(from, Rf_install(CHAR(name)));
-	Rf_defineVar(Rf_install(CHAR(name)),valfrom,to);
+      SEXP valfrom = PROTECT(Rf_findVarInFrame(from, Rf_install(CHAR(name))));
+      Rf_defineVar(Rf_install(CHAR(name)),valfrom,to);
+      UNPROTECT(1);
     }
+    UNPROTECT(2);
   }
+  UNPROTECT(1);
   return;
 }
 
@@ -42,12 +45,16 @@ struct oftmp :
   public objective_function<Type> {
 
   oftmp() :
-    objective_function<Type>(Rf_allocVector(VECSXP,0),
-			     Rf_allocVector(VECSXP,0),
-			     allocSExp(ENVSXP))
+    objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(allocSExp(ENVSXP)))
   {};
   Type operator()(){
     return Type();
+  }
+  
+  ~oftmp(){
+    UNPROTECT(3);
   }
 };
 
@@ -58,32 +65,41 @@ struct ofall :
   int nStocks;
   
   ofall(int nStocks_) :
-    objective_function<Type>(Rf_allocVector(VECSXP,0),
-			     Rf_allocVector(VECSXP,0),
-			     allocSExp(ENVSXP)),
+    objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(allocSExp(ENVSXP))),
     nStocks(nStocks_)
   {};
+
+  ~ofall(){
+    UNPROTECT(3);
+  }
+
   Type operator()(){
     return Type();
   }
 
   void addToReport(SEXP rep, int stock){
     if(!isDouble<Type>::value) return;
-    SEXP names = R_lsInternal(rep, FALSE);
+    SEXP names = PROTECT(R_lsInternal(rep, FALSE));
     if(names == NILSXP) return;
     for(int i = 0; i < Rf_length(names); ++i){
-      SEXP name = STRING_ELT(names,i);
-      SEXP val = Rf_findVarInFrame(this->report, Rf_install(CHAR(name)));
+      SEXP name = PROTECT(STRING_ELT(names,i));
+      SEXP val = PROTECT(Rf_findVarInFrame(this->report, Rf_install(CHAR(name))));
       if (val == R_UnboundValue) {
-	SEXP vec = Rf_allocVector(VECSXP,nStocks);
-	SEXP newval = Rf_findVarInFrame(rep,Rf_install(CHAR(name)));
+	SEXP vec = PROTECT(Rf_allocVector(VECSXP,nStocks));
+	SEXP newval = PROTECT(Rf_findVarInFrame(rep,Rf_install(CHAR(name))));
 	SET_VECTOR_ELT(vec,stock,newval);
 	Rf_defineVar(Rf_install(CHAR(name)),vec,this->report);
+	UNPROTECT(2);
       }else{
-	SEXP newval = Rf_findVarInFrame(rep,Rf_install(CHAR(name)));
+	SEXP newval = PROTECT(Rf_findVarInFrame(rep,Rf_install(CHAR(name))));
 	SET_VECTOR_ELT(val,stock,newval);
+	UNPROTECT(1);
       }
+      UNPROTECT(2);
     }
+    UNPROTECT(1);
     return;
   }
   

@@ -26,21 +26,6 @@ install:
 
 script:
   - make check
-  - cat ./covafillr/covafillr.Rcheck/00check.log
-  - cat ./covafillr/covafillr.Rcheck/00install.out
+  - cat ./multStockassessment.Rcheck/00check.log
+  - cat ./multStockassessment.Rcheck/00install.out
   - make test
-
-after_failure:
-  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
-  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
-  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
-  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
-  - ./travis-tool.sh dump_logs
-
-after_success:
-  - cat ./covafillr/covafillr.Rcheck/00check.log
-  - cat ./covafillr/covafillr.Rcheck/00install.out
-  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
-  - if [ ${OS} = Darwin ]; then cat /Users/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi
-  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00check.log; fi
-  - if [ ${OS} != Darwin ]; then cat /home/travis/build/calbertsen/covafillr/covafillr.Rcheck/00install.out; fi

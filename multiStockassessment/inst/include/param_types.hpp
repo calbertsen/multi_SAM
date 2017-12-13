@@ -12,8 +12,8 @@ struct cmoe_vector{
   int ncol_;
 
   cmoe_vector(SEXP x){
-    SEXP dimsS = getAttrib(x,install("vdim"));
-    int nv = LENGTH(dimsS);
+    SEXP dimsS = PROTECT(getAttrib(x,install("vdim")));
+    int nv = Rf_length((dimsS));
     ncol_ = nv;
     dat = vector<vector<Type> >(ncol_);
     int indx = 0;
@@ -29,6 +29,7 @@ struct cmoe_vector{
       
     }
     size_ = indx;
+    UNPROTECT(1);
   }
 
   cmoe_vector(vector<vector<Type> > x){
@@ -127,7 +128,7 @@ cmoe_vector<Type> asCmoeVector(SEXP x){
 }
 
 template<class Type>
-SEXP asSEXP(cmoe_vector<Type> x){
+SEXP asSEXP(const cmoe_vector<Type>& x){
   return asSEXP(x.dat);
 }
 
@@ -140,9 +141,9 @@ struct cmoe_matrix{
   int ncol_;
 
   cmoe_matrix(SEXP x){
-    SEXP dimcS = getAttrib(x,install("cdim"));
-    SEXP dimrS = getAttrib(x,install("rdim"));
-    int nv = LENGTH(dimcS);
+    SEXP dimcS = PROTECT(getAttrib(x,install("cdim")));
+    SEXP dimrS = PROTECT(getAttrib(x,install("rdim")));
+    int nv = Rf_length(dimcS);
     ncol_ = nv;
     dat = vector<matrix<Type> >(ncol_);
     int indx = 0;
@@ -160,6 +161,7 @@ struct cmoe_matrix{
       
     }
     size_ = indx;
+    UNPROTECT(2);
   }
 
   cmoe_matrix(vector<matrix<Type> > x){
@@ -260,7 +262,7 @@ cmoe_matrix<Type> asCmoeMatrix(SEXP x){
 }
 
 template<class Type>
-SEXP asSEXP(cmoe_matrix<Type> x){
+SEXP asSEXP(const cmoe_matrix<Type>& x){
   return asSEXP(x.dat);
 }
 
