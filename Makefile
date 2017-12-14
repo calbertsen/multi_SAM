@@ -14,7 +14,8 @@ build: doc
 
 updateStockassessment:
 	@echo "\033[0;32mUpdating stockassessment from ${SAM_BRANCH} branch\033[0;0m"
-	$(R) -q -e  "devtools::install_github(\"fishfollower/SAM\",subdir=\"stockassessment\",ref=\"${SAM_BRANCH}\",force=TRUE)"
+	@echo "source('https://raw.githubusercontent.com/calbertsen/caMisc/master/R/build_from_github.R'); \
+	installFromGithub('fishfollower/SAM','${SAM_BRANCH}','stockassessment')" | $(R) -q --slave
 
 check: doc build
 	@echo "\033[0;32mChecking package as cran\033[0;0m"

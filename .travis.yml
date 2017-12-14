@@ -21,7 +21,7 @@ matrix:
     os: osx
 
 install:
-  - R -e 'install.packages(c("roxygen2","devtools","TMB","ellipse"),dependencies = TRUE)'
+  - R -e 'install.packages(c("roxygen2","TMB","ellipse"),dependencies = TRUE)'
   - make updateStockassessment 
 
 script:
