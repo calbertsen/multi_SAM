@@ -18,7 +18,7 @@ updateStockassessment:
 
 check: doc build
 	@echo "\033[0;32mChecking package as cran\033[0;0m"
-	$(eval VERSION = $(shell $(R) -q --slave "l<-readLines(\"multiStockassessment/DESCRIPTION\");cat(gsub(\"Version: \",\"\",l[grepl(\"Version: \",l)]))"))
+	$(eval VERSION = $(shell Rscript -e "l<-readLines(\"multiStockassessment/DESCRIPTION\");cat(gsub(\"Version: \",\"\",l[grepl(\"Version: \",l)]))"))
 	$(R) CMD check --as-cran multiStockassessment_${VERSION}.tar.gz
 
 install: doc build
