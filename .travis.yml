@@ -26,10 +26,10 @@ install:
 
 script:
   - make check
-  - ls
   - make test
+  - make testmore_stockassessment
 
-after_succes:
+after_success:
   - cat ./multStockassessment.Rcheck/00check.log
   - cat ./multStockassessment.Rcheck/00install.out
 
