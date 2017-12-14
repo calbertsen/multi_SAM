@@ -29,9 +29,11 @@ script:
   - make test
 
 after_success:
+  - ls
   - cat multi_SAM/multStockassessment.Rcheck/00check.log
   - cat calbertsen/multi_SAM/multStockassessment.Rcheck/00install.out
 
 after_failure:
+  - ls
   - cat multi_SAM/multStockassessment.Rcheck/00check.log
   - cat calbertsen/multi_SAM/multStockassessment.Rcheck/00install.out
