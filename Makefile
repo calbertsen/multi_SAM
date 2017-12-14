@@ -6,7 +6,7 @@ all: doc updateStockassessment build check test install
 doc:
 	@echo "\033[0;32mUpdating documentation\033[0;0m"
 	rm -f multiStockassessment/src/*.so
-	$(R) -q -e 'devtools::document("multiStockassessment")'
+	$(R) -q -e 'roxygen2::roxygenize("multiStockassessment")'
 
 build: doc
 	@echo "\033[0;32mBuilding package\033[0;0m"
