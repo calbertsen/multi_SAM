@@ -27,12 +27,11 @@ install:
 script:
   - make check
   - make test
-  - make testmore_stockassessment
 
 after_success:
-  - cat ./multStockassessment.Rcheck/00check.log
-  - cat ./multStockassessment.Rcheck/00install.out
+  - cat multi_SAM/multStockassessment.Rcheck/00check.log
+  - cat calbertsen/multi_SAM/multStockassessment.Rcheck/00install.out
 
 after_failure:
-  - cat ./multStockassessment.Rcheck/00check.log
-  - cat ./multStockassessment.Rcheck/00install.out
+  - cat multi_SAM/multStockassessment.Rcheck/00check.log
+  - cat calbertsen/multi_SAM/multStockassessment.Rcheck/00install.out
