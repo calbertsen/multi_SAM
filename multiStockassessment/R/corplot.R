@@ -1,16 +1,3 @@
-##' Correlation plot
-##'
-##' @title Correlation plot for assessment model
-##' @param object Assessment object
-##' @param ... Other arguments
-##' @return It depends...
-##' @author Christoffer Moesgaard Albertsen
-##' @export
-corplot <- function(object,...){
-    UseMethod("corplot")
-}
-
-
 ##' Correlation and partial correlation plot between survival processes
 ##'
 ##' 
@@ -22,6 +9,8 @@ corplot <- function(object,...){
 ##' @importFrom graphics image axis abline box mtext text rect
 ##' @importFrom stats cov2cor
 ##' @importFrom grDevices colorRampPalette
+##' @importFrom stockassessment corplot
+##' @method corplot msam
 ##' @export
 corplot.msam <- function(object,...){
     rp <- attr(object,"m_rep")

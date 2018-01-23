@@ -3,10 +3,12 @@ library(stockassessment)
 data(nscodData)
 data(nscodConf)
 data(nscodParameters)
+## gctorture()
 fit <- sam.fit(nscodData, nscodConf, nscodParameters,sim.condRE = FALSE)
+## gctorture(FALSE)
 
 datSim <- simulate(fit,nsim=2)
-fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,defcon(x), defpar(x,defcon(x)))))
+fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,nscodConf, nscodParameters)))
 
 
 ## Multiple stocks
@@ -16,11 +18,13 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
+
 unique(rownames(summary(attr(obj,"m_sdrep"))))
 unique(rownames(summary(fit$sdrep)))
 
 unique(rownames(summary(attr(obj,"m_rep"))))
 unique(rownames(summary(fit$rep)))
+
 
 nc <- corplot(obj)
 
@@ -31,7 +35,7 @@ do.call("sum",lapply(fitSim,function(x)attr(logLik(x),"df"))) - attr(logLik(obj)
 do.call("sum",lapply(fitSim,logLik)) - as.numeric(logLik(obj)) < 1e-10
 
 cs2 <- suggestCorStructure(fitSim,nAgeClose=2)
-obj2 <- multisam.fit(fitSim,cs2,usePartialCors=FALSE)
+obj2 <- multisam.fit(fitSim,cs2,usePartialCors=TRUE)
 AIC(obj); AIC(obj2)
 BIC(obj); BIC(obj2)
 
