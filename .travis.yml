@@ -26,6 +26,7 @@ install:
 
 script:
   - make check
+  - make install
   - make test
 
 after_success:
