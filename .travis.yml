@@ -22,6 +22,9 @@ matrix:
 
 install:
   - R -e 'install.packages(c("roxygen2"),dependencies = c("Depends", "Imports", "LinkingTo", "Enhances"))'
+  - if [ ${OS} = Darwin ]; then xcode-select --install; fi
+  - if [ ${OS} = Darwin ]; then curl -O http://r.research.att.com/libs/gfortran-4.8.2-darwin13.tar.bz2; fi
+  - if [ ${OS} = Darwin ]; then sudo tar fvxz gfortran-4.8.2-darwin13.tar.bz2 -C; fi
   - make updateStockassessment 
 
 script:
