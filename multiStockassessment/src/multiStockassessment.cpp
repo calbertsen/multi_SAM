@@ -33,6 +33,30 @@
 #include <SAM.hpp>
 #include "../inst/include/multiSAM.hpp"
 
+
+
+
+
+
+
+extern "C" {
+
+
+  SEXP vecpar2list(SEXP array){
+    if(!Rf_isArray(array))Rf_error("Argument must be an array");
+    return asSEXP(asCmoeVector<double>(array));
+  }
+
+  SEXP matpar2list(SEXP array){
+    if(!Rf_isArray(array))Rf_error("Argument must be an array");
+    return asSEXP(asCmoeMatrix<double>(array));
+  }
+
+
+}
+
+
+
 template<class Type>
 Type objective_function<Type>::operator() ()
 {

@@ -3,7 +3,6 @@
 #ifndef _CMOE_PARAMETER_TYPES_
 #define _CMOE_PARAMETER_TYPES_
 
-
 template<class Type>
 struct cmoe_vector{
 

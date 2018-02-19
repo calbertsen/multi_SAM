@@ -19,6 +19,8 @@ cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
 
+faytable(obj,returnList=TRUE)
+
 unique(rownames(summary(attr(obj,"m_sdrep"))))
 unique(rownames(summary(fit$sdrep)))
 
@@ -40,6 +42,17 @@ AIC(obj); AIC(obj2)
 BIC(obj); BIC(obj2)
 
 nc <- corplot(obj2)
+
+
+modeltable.msam <- function(object,...){
+    cat("Hello\n")
+}
+
+modeltable.msamlist <- function(...){
+    cat("Hello list\n")
+    x <- list(...)
+    lapply(x,modeltable)
+}
 
 
 ll1 <- logLik(obj)

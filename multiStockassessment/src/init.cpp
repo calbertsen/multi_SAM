@@ -6,9 +6,14 @@
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
 
-
+  
 extern "C" {
 
+
+SEXP vecpar2list(SEXP array);
+SEXP matpar2list(SEXP array);
+
+  
 #define CALLDEF(name,n) {#name, (DL_FUNC) &name, n}
   
   static const
@@ -43,6 +48,9 @@ extern "C" {
     // CALLDEF(stepLength,5),
     // CALLDEF(bearing,5),
 
+    CALLDEF(vecpar2list,1),
+    CALLDEF(matpar2list,1),
+    
     {NULL,NULL,0}
   };
 

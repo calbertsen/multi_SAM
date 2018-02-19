@@ -1,8 +1,7 @@
 ##' @method logLik msam
-##' @export
 ##' @inheritParams stats::logLik
-##' 
-##' 
+##' @importFrom stats logLik
+##' @export
 logLik.msam <- function(object, ...) {
     opt <- attr(object,"m_opt")
     val <-  -opt$objective

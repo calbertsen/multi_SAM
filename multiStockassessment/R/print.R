@@ -5,8 +5,13 @@
 ##' @param ... Other parameters passes to logLik
 ##' @export
 print.msam <- function(x, ...){
-    cat("Multi-SAM model with",length(x),"stocks: log likelihood is",
-        logLik.msam(x,...),
-        "Convergence",ifelse(0==attr(x,"m_opt")$convergence, "OK\n", "failed\n"))
+    txt <- "Multi-SAM model with %i stock%s: log likelihood is %.4f. Convergence %s.\n"
+    cat(sprintf(txt,
+            length(x),
+            ifelse(length(x)==1,"","s"),
+            logLik(x,...),
+            ifelse(0==attr(x,"m_opt")$convergence, "OK", "failed")
+            ))
+    invisible(x)
 }
 
