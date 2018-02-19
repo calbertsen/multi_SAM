@@ -17,8 +17,7 @@ env:
 
 matrix:
   exclude:
-  - r: devel
-    os: osx
+   - os: osx
 
 install:
   - R -e 'install.packages(c("roxygen2"),dependencies = c("Depends", "Imports", "LinkingTo", "Enhances"))'
