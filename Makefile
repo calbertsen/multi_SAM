@@ -1,7 +1,7 @@
 SAM_BRANCH?=master
 R?=R
 
-all: doc updateStockassessment build check test install
+all: doc updateStockassessment build check install test
 
 doc:
 	@echo "\033[0;32mUpdating documentation\033[0;0m"
@@ -48,12 +48,12 @@ prepare_testmore_stockassessment: clean_testmore_stockassessment
 	@mv testmore_stockassessment/*/testmore/* testmore_stockassessment/
 	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep
 	@echo "lf <- list.files('testmore_stockassessment',recursive=TRUE,full.names=TRUE,pattern='script.R'); \
-	fn <- function(f){rl <- readLines(f);cat(c(paste0('setwd(sub(\'script.R\',\'\',\"',f,'\"))'),'sink(\'/dev/null\',type=\'output\')','capture.output({',rl[!grepl('cat\\\\\\\\(',rl)],'library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)','cs<-suggestCorStructure(c(fit),nAgeClose=0)','mfit<-multisam.fit(c(fit),cs)','},type=\'message\')','sink()', \
-	'if(round(AIC(fit),7) != round(AIC(mfit),7)) stop(sprintf(\'AIC not equal %s vs %s\',round(AIC(fit),7),round(AIC(mfit),7)))','cat(\'AIC OK\\\\\\\\n\')', \
-	'if(round(logLik(fit),7) != round(logLik(mfit),7)) stop(sprintf(\'logLik not equal %s vs %s\',round(logLik(fit),7),round(logLik(mfit),7)))','cat(\'logLik OK\\\\\\\\n\')', \
-	'if(round(nobs(fit),7) != round(nobs(mfit),7)) stop(sprintf(\'nobs not equal %s vs %s\',round(nobs(fit),7),round(nobs(mfit),7)))','cat(\'nobs OK\\\\\\\\n\')', \
-	'if(round(BIC(fit),7) != round(BIC(mfit),7)) stop(sprintf(\'BIC not equal %s vs %s\',round(BIC(fit),7),round(BIC(mfit),7)))','cat(\'BIC OK\\\\\\\\n\')', \
-	'if(round(attr(logLik(fit),\'df\'),7) != round(attr(logLik(mfit),\'df\'),7)) stop(sprintf(\'logLik df not equal %s vs %s\',round(attr(logLik(fit),\'df\'),7),round(attr(logLik(mfit),\'df\'),7)))','cat(\'logLik df OK\\\\\\\\n\')'), \
+	fn <- function(f){rl <- readLines(f);cat(c('success_symbol <- \'\u001B[0;32m\u263A\u001B[0;0m\'','failure_symbol <- \'\u001B[0;31m\u2639\u001B[0;0m\'',paste0('setwd(sub(\'script.R\',\'\',\"',f,'\"))'),'sink(\'/dev/null\',type=\'output\')','capture.output({',rl[!grepl('cat\\\\\\\\(',rl)],'library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)','cs<-suggestCorStructure(c(fit),nAgeClose=0)','mfit<-multisam.fit(c(fit),cs)','},type=\'message\')','sink()', \
+	'if(round(AIC(fit),7) != round(AIC(mfit),7)) stop(sprintf(\'AIC not equal %s vs %s %s\',round(AIC(fit),7),round(AIC(mfit),7),failure_symbol))','cat(sprintf(\'AIC OK %s\\\\\\\\n\',success_symbol))', \
+	'if(round(logLik(fit),7) != round(logLik(mfit),7)) stop(sprintf(\'logLik not equal %s vs %s %s\',round(logLik(fit),7),round(logLik(mfit),7),failure_symbol))','cat(sprintf(\'logLik OK %s\\\\\\\\n\',success_symbol))', \
+	'if(round(nobs(fit),7) != round(nobs(mfit),7)) stop(sprintf(\'nobs not equal %s vs %s %s\',round(nobs(fit),7),round(nobs(mfit),7),failure_symbol))','cat(sprintf(\'nobs OK %s\\\\\\\\n\',success_symbol))', \
+	'if(round(BIC(fit),7) != round(BIC(mfit),7)) stop(sprintf(\'BIC not equal %s vs %s %s\',round(BIC(fit),7),round(BIC(mfit),7),failure_symbol))','cat(sprintf(\'BIC OK %s\\\\\\\\n\',success_symbol))', \
+	'if(round(attr(logLik(fit),\'df\'),7) != round(attr(logLik(mfit),\'df\'),7)) stop(sprintf(\'logLik df not equal %s vs %s %s\',round(attr(logLik(fit),\'df\'),7),round(attr(logLik(mfit),\'df\'),7),failure_symbol))','cat(sprintf(\'logLik df OK %s\\\\\\\\n\',success_symbol))'), \
 	sep='\n',file=f)};invisible(sapply(lf,fn))" | $(R) -q --slave
 
 run_testmore_stockassessment: prepare_testmore_stockassessment

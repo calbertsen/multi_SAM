@@ -19,8 +19,6 @@ cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
 
-faytable(obj,returnList=TRUE)
-
 unique(rownames(summary(attr(obj,"m_sdrep"))))
 unique(rownames(summary(fit$sdrep)))
 

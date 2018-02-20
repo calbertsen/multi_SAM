@@ -321,18 +321,114 @@ modeltable.msamset <- function(fits,...){
 }
 
 
+##' Yield per recruit calculation
+##'
+##' @param fit msam object
+##' @param Flimit Upper limit for Fbar
+##' @param Fdelta increments on the Fbar axis
+##' @param aveYears A list/vector of same length as the number of stocks with number of years to average over 
+##' @param ageLimit Oldest age used
+##' @param ... not used
+##' @return A list of samypr objects
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment ypr
+##' @method ypr msam
+##' @export
+ypr.msam <- function(fit,
+                     Flimit=2,
+                     Fdelta=0.01,
+                     aveYears=lapply(attr(fit,"m_data")$sam,function(x)min(15,length(x$years))),
+                     ageLimit=100,
+                     ...){
+    if(!is.list(aveYears))
+        aveYears <- as.list(aveYears)    
+    d <- attr(fit,"m_data")$sam
+    barAges <- lapply(d,function(x)do.call(":",as.list(x$fbarRange))+(1-x$minAge))
+    last.year.used <- lapply(d,function(x)max(x$years))
+    idxno<-sapply(1:length(d),function(i)which(d[[i]]$years==last.year.used[[i]]),simplify = FALSE)
+    F <- lapply(faytable(fit,returnList = TRUE),function(x){
+        y <- t(x); y[is.na(y)]<-0; y})
+    Fbar <- fbartable(fit, returnList = TRUE)
+    
+    sel<-function(stock){
+        Sa<-rep(0,nrow(F[[stock]]))
+        K<-0
+        indxy <- 0:(aveYears[[stock]]-1)
+        Say <- F[[stock]][,idxno[[stock]]-indxy]
+        Ky<- Fbar[[stock]][idxno[[stock]]-indxy,1]
+        return(rowSums(Say)/sum(Ky))
+    }
 
-## ypr.msam <- function(fit, Flimit=2, Fdelta=0.01, aveYears=sapply(1:length(fit),function(i)min(15,length(fit[[i]]$data$years))), ageLimit=100,...){
-##     tabs <- sapply(1:length(fit),function(i)stockassessment::ypr(fit[[i]],
-##                                                                  Flimit=Flimit,
-##                                                                  Fdelta=Fdelta,
-##                                                                  aveYears=aveYears[i],
-##                                                                  ageLimit=ageLimit,
-##                                                                  ...),
-##                    simplify=FALSE
-##                    )
-##     names(tabs) <- names(fit)
-##     if(is.null(names(tabs)))
-##         names(tabs) <- paste("Stock",1:length(tabs))
-##     return(tabs)
-## }
+    extend<-function(x,len=100){
+        ret<-numeric(len)
+        ret[1:length(x)]<-x
+        ret[-c(1:length(x))]<-x[length(x)]
+        ret
+    }
+
+    ave.sl<-sapply(1:length(fit),sel,simplify=FALSE)
+    ave.sw <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$stockMeanWeight[(idxno[[i]]-aveYears[[i]]+1):idxno[[i]],,drop=FALSE]),simplify=FALSE)
+    ave.cw <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$catchMeanWeight[(idxno[[i]]-aveYears[[i]]+1):(idxno[[i]]-1),,drop=FALSE]),simplify=FALSE)
+    ave.pm <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$propMat[(idxno[[i]]-aveYears[[i]]+1):idxno[[i]],,drop=FALSE]),simplify=FALSE)
+    ave.nm <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$natMor[(idxno[[i]]-aveYears[[i]]+1):idxno[[i]],,drop=FALSE]),simplify=FALSE)
+    ave.lf <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$landFrac[(idxno[[i]]-aveYears[[i]]+1):(idxno[[i]]-1),,drop=FALSE]),simplify=FALSE)
+    ave.cw.land <- sapply(1:length(d),
+                     function(i)colMeans(d[[i]]$landMeanWeight[(idxno[[i]]-aveYears[[i]]+1):(idxno[[i]]-1),,drop=FALSE]),simplify=FALSE)
+
+    N <- lapply(as.list(rep(ageLimit,length(fit))),numeric)
+    N <- lapply(N,function(x){x[1] <- 1.0;x})
+    M <- lapply(ave.nm,extend,len = ageLimit)
+    sw <- lapply(ave.sw,extend,len = ageLimit)
+    cw <- lapply(ave.cw.land,extend,len = ageLimit)
+    pm <- lapply(ave.pm,extend,len = ageLimit)
+    lf <- lapply(ave.lf,extend,len = ageLimit)
+
+
+    doOne <- function(stock){
+        deltafirst <- 0.00001
+        delta <- Fdelta
+        scales<-c(0, deltafirst, seq(0.01, Flimit, by=delta))
+        yields<-numeric(length(scales))
+        ssbs<-numeric(length(scales))
+        for(i in 1:length(scales)){
+            scale<-scales[i]
+            F<-extend(ave.sl[[stock]]*scale,ageLimit)
+            Z<-M[[stock]]+F
+            for(a in 2:length(N[[stock]])){
+                N[[stock]][a]<-N[[stock]][a-1]*exp(-Z[a-1])  
+            }
+            C<-F/Z*(1-exp(-Z))*N[[stock]]*lf[[stock]]  
+            Y<-sum(C*cw[[stock]])
+            yields[i]<-Y
+            ssbs[i]<-sum(N[[stock]]*pm[[stock]]*sw[[stock]])
+        }
+        fmaxidx<-which.max(yields)
+        fmax<-scales[fmaxidx]
+
+        deltaY<-diff(yields)
+        f01idx<-which.min((deltaY/delta-0.1*deltaY[1]/deltafirst)^2)+1
+        f01<-scales[f01idx]
+        
+        f35spridx<-which.min((ssbs-0.35*ssbs[1])^2)+1
+        f35<-scales[f35spridx]
+    
+        fbarlab <- substitute(bar(F)[X - Y], list(X = d[[stock]]$fbarRange[1], Y = d[[stock]]$fbarRange[2]))
+        ret<-list(fbar=scales, ssb=ssbs, yield=yields, fbarlab=fbarlab, f35=f35, f01=f01, fmax=fmax, 
+                  f35Idx=f35spridx, f01Idx=f01idx, fmaxIdx=fmaxidx)
+        class(ret)<-"samypr"
+        return(ret)
+    }
+
+    res <- lapply(1:length(fit),doOne)
+    names(res) <- getStockNames(fit)
+    class(res) <- "msamypr"
+    return(res)
+}
+
+
+
