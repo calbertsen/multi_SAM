@@ -1,12 +1,17 @@
 SAM_BRANCH?=master
 R?=R
 
-all: doc updateStockassessment build check install test
+all: doc updateStockassessment build check install test testmore_stockassessment readme
 
 doc:
 	@echo "\033[0;32mUpdating documentation\033[0;0m"
 	rm -f multiStockassessment/src/*.so
 	$(R) -q -e 'roxygen2::roxygenize("multiStockassessment")'
+
+readme:
+	@echo "\033[0;32mCreating README\033[0;0m"
+	rm -r -f README_files
+	$(R) -q -e 'rmarkdown::render("README.Rmd",rmarkdown::md_document(variant = "gfm"))'
 
 build: doc
 	@echo "\033[0;32mBuilding package\033[0;0m"
