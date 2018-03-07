@@ -7,9 +7,9 @@
 \method{fbarplot}{msam}(fit, partial = FALSE, drop = 0, page = NULL, ...)
 }
 \arguments{
-\item{fit}{}
+\item{fit}{fitted msam object}
 
-\item{...}{}
+\item{...}{plotting arguments}
 }
 \description{
 Fbar plot for msam object

@@ -12,10 +12,11 @@ plotit <- function(fit, what, ...){
     UseMethod("plotit")
 }
 
-
+##' Function to actually do the plotting
 ##' @rdname plotit
 ##' @method plotit msam
-##' @importFrom grDevices colorRampPalette
+##' @importFrom grDevices colorRampPalette gray
+##' @importFrom graphics  grid legend lines matplot plot
 ##' @export
 plotit.msam <- function(fit, what,
                         x=lapply(attr(fit,"m_data")$sam,function(x)x$years),
@@ -82,9 +83,8 @@ plotit.msam <- function(fit, what,
 
 ##' Fbar plot for msam object
 ##'
-##' @param fit 
-##' @param ... 
-##' @return 
+##' @param fit fitted msam object
+##' @param ... plotting arguments
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
 ##' @export
