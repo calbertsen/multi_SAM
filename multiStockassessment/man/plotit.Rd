@@ -11,6 +11,44 @@
   xlim = NULL, ciAlpha = 0.3, col = .plotcols.crp(length(fit)),
   extraLabel = NULL, ...)
 }
+\arguments{
+\item{fit}{msam fit}
+
+\item{what}{variable to plot}
+
+\item{x}{x-axis values}
+
+\item{ylab}{y-axis label}
+
+\item{xlab}{x-axis label}
+
+\item{ex}{extra years to add}
+
+\item{trans}{function to transform variable to plot}
+
+\item{add}{If false a new plot is created. If true everything is added to the previous plot-}
+
+\item{ci}{Add confidence intervals?}
+
+\item{cicol}{Color of confidence intervals}
+
+\item{addCI}{Not used}
+
+\item{drop}{Number of years to drop from the end}
+
+\item{unnamed.basename}{not used}
+
+\item{xlim}{x-axis limits. If null, the range of x is used.}
+
+\item{ciAlpha}{Alpha channel value of confidence interval color}
+
+\item{col}{line colors}
+
+\item{extraLabel}{Not used}
+
+\item{...}{Other arguments
+##' @export}
+}
 \description{
 Function to actually do the plotting
 }

@@ -9,6 +9,8 @@
 \arguments{
 \item{fit}{msam object}
 
+\item{cor.report.limit}{Not used}
+
 \item{...}{extra arguments for plotting}
 }
 \description{

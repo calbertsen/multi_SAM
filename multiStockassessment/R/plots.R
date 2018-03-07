@@ -17,7 +17,25 @@ plotit <- function(fit, what, ...){
 ##' @method plotit msam
 ##' @importFrom grDevices colorRampPalette gray
 ##' @importFrom graphics  grid legend lines matplot plot
-##' @export
+##' @param fit msam fit
+##' @param what variable to plot
+##' @param x x-axis values 
+##' @param ylab y-axis label
+##' @param xlab x-axis label
+##' @param ex extra years to add
+##' @param trans function to transform variable to plot
+##' @param add If false a new plot is created. If true everything is added to the previous plot-
+##' @param ci Add confidence intervals?
+##' @param cicol Color of confidence intervals
+##' @param addCI Not used
+##' @param drop Number of years to drop from the end
+##' @param unnamed.basename not used
+##' @param xlim x-axis limits. If null, the range of x is used.
+##' @param ciAlpha Alpha channel value of confidence interval color
+##' @param col line colors
+##' @param extraLabel Not used
+##' @param ... Other arguments
+##' ##' @export
 plotit.msam <- function(fit, what,
                         x=lapply(attr(fit,"m_data")$sam,function(x)x$years),
                         ylab=what,
@@ -84,6 +102,9 @@ plotit.msam <- function(fit, what,
 ##' Fbar plot for msam object
 ##'
 ##' @param fit fitted msam object
+##' @param partial Should F for each age in Fbar range be added?
+##' @param drop Number of years to drop from the end
+##' @param page List of ages to be used per stock for partial = true. Defaults to all ages used to calculate Fbar.
 ##' @param ... plotting arguments
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
@@ -101,7 +122,7 @@ fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL,...){
     if(is.null(page)){
         page<-lapply(fbarRange,function(x)attr(x,"page"))
     }
-    fmatsInPage <- sapply(1:length(fit),function(i)flist[[i]][,d[[i]]$minAge:d[[i]]$maxAge %in% page[[i]]],simplify = FALSE)
+    fmatsInPage <- sapply(1:length(fit),function(i)flist[[i]][,d[[i]]$minAge:d[[i]]$maxAge %in% page[[i]],drop=FALSE],simplify = FALSE)
     exx <- if(partial){unlist(fmatsInPage)}else{numeric(0)}
     fit2 <- fit
     names(fit2) <- paste0(gsub("[[:space:]]","~",getStockNames(fit)),":~",
@@ -164,9 +185,12 @@ recplot.msam <- function(fit,...){
 ##' Catch plot
 ##'
 ##' @param fit msam object
+##' @param obs.show Show observations in plot?
+##' @param drop Number of years to drop from the end
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment catchplot
+##' @importFrom graphics points polygon
 ##' @export
 catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
     args <- list(...)
@@ -188,6 +212,7 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
 ##' Parameter plot
 ##'
 ##' @param fit msam object
+##' @param cor.report.limit Not used
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment parplot
@@ -200,6 +225,9 @@ parplot.msam <- function(fit, cor.report.limit=0.95, ...){
 ##' Stock-recruitment plot
 ##'
 ##' @param fit msam object
+##' @param textcol Text color
+##' @param add Should the figure be added to a current plot?
+##' @param col Line colors
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment srplot
@@ -228,6 +256,9 @@ srplot.msam <- function(fit,textcol="red",add=FALSE,
 ##' Fit plot
 ##'
 ##' @param fit msam object
+##' @param stock Stock to plot for
+##' @param log Plot on log-scale?
+##' @param fleets Fleets to plot
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fitplot plotby

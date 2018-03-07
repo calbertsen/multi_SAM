@@ -10,6 +10,12 @@
 \arguments{
 \item{fit}{msam object}
 
+\item{stock}{Stock to plot for}
+
+\item{log}{Plot on log-scale?}
+
+\item{fleets}{Fleets to plot}
+
 \item{...}{extra arguments for plotting}
 }
 \description{

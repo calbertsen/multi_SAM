@@ -9,6 +9,10 @@
 \arguments{
 \item{fit}{msam object}
 
+\item{obs.show}{Show observations in plot?}
+
+\item{drop}{Number of years to drop from the end}
+
 \item{...}{extra arguments for plotting}
 }
 \description{

@@ -9,6 +9,12 @@
 \arguments{
 \item{fit}{fitted msam object}
 
+\item{partial}{Should F for each age in Fbar range be added?}
+
+\item{drop}{Number of years to drop from the end}
+
+\item{page}{List of ages to be used per stock for partial = true. Defaults to all ages used to calculate Fbar.}
+
 \item{...}{plotting arguments}
 }
 \description{

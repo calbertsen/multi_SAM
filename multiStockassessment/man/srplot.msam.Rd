@@ -10,6 +10,12 @@
 \arguments{
 \item{fit}{msam object}
 
+\item{textcol}{Text color}
+
+\item{add}{Should the figure be added to a current plot?}
+
+\item{col}{Line colors}
+
 \item{...}{extra arguments for plotting}
 }
 \description{
