@@ -18,6 +18,16 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,cs)
 
+fbarplot(obj)
+ssbplot(obj)
+tsbplot(obj)
+recplot(obj)
+catchplot(obj)
+srplot(obj)
+fitplot(obj,1)
+fitplot(obj,2)
+parplot(obj)
+
 
 unique(rownames(summary(attr(obj,"m_sdrep"))))
 unique(rownames(summary(fit$sdrep)))

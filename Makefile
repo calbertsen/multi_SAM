@@ -45,6 +45,7 @@ prepare_testmore_stockassessment: clean_testmore_stockassessment
 	@mkdir testmore_stockassessment
 	@curl -s -L https://github.com/fishfollower/SAM/archive/${SAM_BRANCH}.zip -o sam.zip > /dev/null
 	@unzip sam.zip */testmore/* -d testmore_stockassessment/ > /dev/null
+	@rm sam.zip
 	@mv testmore_stockassessment/*/testmore/* testmore_stockassessment/
 	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep
 	@echo "lf <- list.files('testmore_stockassessment',recursive=TRUE,full.names=TRUE,pattern='script.R'); \
@@ -66,8 +67,17 @@ run_testmore_stockassessment: prepare_testmore_stockassessment
 
 testmore_stockassessment: run_testmore_stockassessment
 
-clean:
-	@echo "\033[0;32mCleaning directory\033[0;0m"
+clean: clean_testmore_stockassessment
+	@echo "\033[0;32mRemoving tar.gz files cleaning directory\033[0;0m"
+	rm -f multiStockassessment_*.tar.gz
+	@echo "\033[0;32mRemoving Rhistory files cleaning directory\033[0;0m"
+	find . -type f -name '.Rhistory' -delete
+	@echo "\033[0;32mRemoving Rcheck directory cleaning directory\033[0;0m"
+	rm -f -r multiStockassessment.Rcheck
+
+
+clean_hard:
+	@echo "\033[0;32mHard cleaning directory\033[0;0m"
 	git clean -f -d
 
 uninstall:

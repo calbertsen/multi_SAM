@@ -7,6 +7,8 @@
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom grDevices col2rgb rgb
 addTrans <- Vectorize(function(name,alpha=1){
+    if(is.na(name) | is.null(name))
+        return(name)
     arg <- as.list(grDevices::col2rgb(name)/255)
     names(arg) <- c("red","green","blue")
     arg$alpha <- alpha

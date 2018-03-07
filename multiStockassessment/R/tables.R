@@ -39,14 +39,20 @@ tableit.msam <- function (fit, what,
         xstock <- replicate(length(fit),x,simplify=FALSE)
     }
     sdrep <- attr(fit,"m_sdrep")
-    idx <- grep(what,names(sdrep$value))
+    idx <- grep(paste0("_",what,"$"),names(sdrep$value))
     y<-sdrep$value[idx]
     ci<-y+sdrep$sd[idx]%o%c(-2,2)
     stockIndx <- as.numeric(factor(sub(paste0("_",what),"",names(sdrep$value)[idx])))
     ret <- list()
 
     for(i in unique(stockIndx)){
-        m <- trans(unname(cbind(y[stockIndx==i],ci[stockIndx==i,])))
+        syears <- d$sam[[i]]$years
+        allyears <- sort(unique(c(syears,xstock[[i]])))
+        xindx <- allyears %in% xstock[[i]]
+        sindx <- allyears %in% syears[1:sum(stockIndx==i)]
+        m <- matrix(NA,length(allyears),3)
+        m[sindx,] <- trans(unname(cbind(y[stockIndx==i],ci[stockIndx==i,])))
+        m <- m[xindx,]
         rownames(m) <- xstock[[i]]
         colnames(m) <- c("Estimate","Low","High")
         ret[[i]] <- m
