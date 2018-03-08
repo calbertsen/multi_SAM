@@ -1,7 +1,7 @@
 Package: multiStockassessment
 Title: Fitting Multiple State-Space Assessment Models
-Version: 0.0.0-0003
-Date: 2017-12-13
+Version: 0.1.0
+Date: 2018-03-08
 Authors@R: c(person(c("Christoffer","Moesgaard"), "Albertsen",
 	   	role=c("aut","cre"),
 		email="cmoe@aqua.dtu.dk"))
