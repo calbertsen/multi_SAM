@@ -128,5 +128,5 @@ obj2 <- multisam.fit(fitSim,cs2)
 ```
 
 ```{r}
-modeltable(c(obj,obj2))
+modeltable(obj,obj2)
 ```
