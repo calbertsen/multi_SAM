@@ -199,9 +199,9 @@ obj2 <- multisam.fit(fitSim,cs2)
 ```
 
 ``` r
-modeltable(c(obj,obj2))
+modeltable(obj,obj2)
 ```
 
     ##       log(L) #par      AIC Pval( M1 -> M2 )
-    ## M1 -259.3252   84 686.6503               NA
-    ## M2 -265.0501   68 666.1002        0.7809027
+    ## M1 -259.3252   84 686.6504               NA
+    ## M2 -265.0501   68 666.1002        0.7809076
