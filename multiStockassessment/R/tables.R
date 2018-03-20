@@ -290,7 +290,17 @@ partable.msam <- function(fit, ...){
 ##' @method modeltable msam
 ##' @export
 modeltable.msam <- function(fits,...){
-    modeltable(c(fits),...)
+    l <- list(...)
+    isExtraFit <- unlist(lapply(l,methods::is,class2="msam"))
+    if(sum(isExtraFit) > 0){
+        extraFits <- l[isExtraFit]
+        extraArgs <- l[!isExtraFit]
+        args <- c(list(fits = do.call("c",c(list(fits),extraFits))),
+                  extraArgs)
+        do.call("modeltable",args)
+    }else{
+        modeltable(c(fits),...)
+    }
 }
 
 ##' Model table
