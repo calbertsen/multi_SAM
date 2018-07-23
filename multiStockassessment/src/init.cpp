@@ -1,3 +1,4 @@
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #define WITH_LIBTMB
 #include <TMB.hpp>
 

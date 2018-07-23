@@ -29,6 +29,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //  --------------------------------------------------------------------------
 
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include <TMB.hpp>
 #include <SAM.hpp>
 #include "../inst/include/multiSAM.hpp"
