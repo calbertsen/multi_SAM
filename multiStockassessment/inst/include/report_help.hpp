@@ -22,9 +22,9 @@ template<class Type>
 void moveADREPORT(objective_function<Type>* from, objective_function<Type>* to,int stock){  
   int nStart = 0;
   for(int i = 0; i < from->reportvector.names.size(); ++i){
-    int n = from->reportvector.namelength(i);
-    vector<Type> res = from->reportvector.result.segment(nStart,n);
-    nStart += n;
+    vector<int> n = from->reportvector.namedim(i);
+    vector<Type> res = from->reportvector.result.segment(nStart,n.prod());
+    nStart += n.prod();
     std::string nam("");
     if(stock >= 0){
       nam.append("SAM_");
