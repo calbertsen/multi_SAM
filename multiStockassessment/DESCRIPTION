@@ -2,9 +2,9 @@ Package: multiStockassessment
 Title: Fitting Multiple State-Space Assessment Models
 Version: 0.1.0
 Date: 2018-03-08
-Authors@R: c(person(c("Christoffer","Moesgaard"), "Albertsen",
-	   	role=c("aut","cre"),
-		email="cmoe@aqua.dtu.dk"))
+Authors@R: person(c("Christoffer","Moesgaard"), "Albertsen",
+	   email = "cmoe@aqua.dtu.dk", role = c("aut", "cre"),
+	   comment = c(ORCID = "0000-0003-0088-4363"))
 Description: Fitting multiple SAM models.
 License: GPL-2
 Imports: TMB, stockassessment, grDevices, graphics, methods, stats

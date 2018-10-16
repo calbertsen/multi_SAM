@@ -1,37 +1,52 @@
 SAM_BRANCH?=master
 R?=R
+PACKAGE=multiStockassessment
+VERSION = $(shell Rscript -e "l<-readLines(\"${PACKAGE}/DESCRIPTION\");cat(gsub(\"Version: \",\"\",l[grepl(\"Version: \",l)]))")
+
+TARBALL := ${PACKAGE}_${VERSION}.tar.gz
+RFILES := $(wildcard ${PACKAGE}/R/*.R)
+NAMESPACEFILE := ${PACKAGE}/NAMESPACE
+RCHECK := ${PACKAGE}.Rcheck
+
+.PHONY: all doc build check install test
+
 
 all: doc updateStockassessment build check install test testmore_stockassessment readme
 
-doc:
+$(NAMESPACEFILE): $(RFILES)
 	@echo "\033[0;32mUpdating documentation\033[0;0m"
-	rm -f multiStockassessment/src/*.so
-	$(R) -q -e 'roxygen2::roxygenize("multiStockassessment")'
+	rm -f ${PACKAGE}/src/*.so
+	$(R) -q -e 'roxygen2::roxygenize("${PACKAGE}")'
+	@touch $@
+
+doc: ${PACKAGE}/NAMESPACE
 
 readme:
 	@echo "\033[0;32mCreating README\033[0;0m"
 	rm -r -f README_files
 	$(R) -q -e 'rmarkdown::render("README.Rmd",rmarkdown::md_document(variant = "gfm"))'
 
-build: doc
+$(TARBALL): $(NAMESPACEFILE)
 	@echo "\033[0;32mBuilding package\033[0;0m"
-	$(R) CMD build multiStockassessment
+	$(R) CMD build ${PACKAGE}
+
+
+build: $(TARBALL)
 
 updateStockassessment:
 	@echo "\033[0;32mUpdating stockassessment from ${SAM_BRANCH} branch\033[0;0m"
-	@echo "source('https://raw.githubusercontent.com/calbertsen/caMisc/master/R/build_from_github.R'); \
+	@echo "source('https://raw.githubusercontent.com/calbertsen/caMisc/master/caMisc/R/build_from_github.R'); \
 	installFromGithub('fishfollower/SAM','${SAM_BRANCH}','stockassessment')" | $(R) -q --slave
 
-check: doc build
+$(RCHECK): $(TARBALL)
 	@echo "\033[0;32mChecking package as cran\033[0;0m"
-	$(eval VERSION = $(shell Rscript -e "l<-readLines(\"multiStockassessment/DESCRIPTION\");cat(gsub(\"Version: \",\"\",l[grepl(\"Version: \",l)]))"))
-	$(R) CMD check --as-cran multiStockassessment_${VERSION}.tar.gz
+	$(R) CMD check --as-cran $(TARBALL)
 
-install: doc build
+check: $(RCHECK)
+
+install: $(TARBALL)
 	@echo "\033[0;32mInstalling package\033[0;0m"
-	$(eval VERSION = $(shell Rscript -e "l<-readLines(\"multiStockassessment/DESCRIPTION\");cat(gsub(\"Version: \",\"\",l[grepl(\"Version: \",l)]))"))
-	@echo "Version: ${VERSION}"
-	$(R) CMD INSTALL multiStockassessment_${VERSION}.tar.gz
+	$(R) CMD INSTALL $(TARBALL)
 
 test:
 	@echo "\033[0;32mRunning tests\033[0;0m"
