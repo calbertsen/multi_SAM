@@ -41,10 +41,10 @@ After the simulated data have been fitted and combined by the `c` function, the 
 The `suggestCorStructure` function can be used to set up the correlation matrix. The `nAgeClose` argument can be used to construct the banded structures used in the paper. The result is a logical symmetric matrix indicating whether a correlation should be fixed at zero.
 The dimension of the matrix is the number of stocks times the number of ages in the data.
 
-For instance, `suggestCorStructure(fitSim,nAgeClose=2)` creates a matrix where ages less than 2 appart are correlated between the stocks. Likewise, 
+For instance, `suggestCorStructure(fitSim,nAgeClose=1)` creates a matrix where ages less than 1 appart are correlated between the stocks:
 
 ```{r}
-cs <- suggestCorStructure(fitSim,nAgeClose=2)
+cs <- suggestCorStructure(fitSim,nAgeClose=1)
 cs
 ```
 

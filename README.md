@@ -56,34 +56,33 @@ indicating whether a correlation should be fixed at zero. The dimension
 of the matrix is the number of stocks times the number of ages in the
 data.
 
-For instance, `suggestCorStructure(fitSim,nAgeClose=2)` creates a matrix
-where ages less than 2 appart are correlated between the stocks.
-Likewise,
+For instance, `suggestCorStructure(fitSim,nAgeClose=1)` creates a matrix
+where ages less than 1 appart are correlated between the stocks:
 
 ``` r
-cs <- suggestCorStructure(fitSim,nAgeClose=2)
+cs <- suggestCorStructure(fitSim,nAgeClose=1)
 cs
 ```
 
     ##        [,1]  [,2]  [,3]  [,4]  [,5]  [,6]  [,7]  [,8]  [,9] [,10] [,11]
-    ##  [1,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE
-    ##  [2,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE
-    ##  [3,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE
-    ##  [4,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE
-    ##  [5,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE
-    ##  [6,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE
-    ##  [7,] FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##  [8,] FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##  [9,]  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [10,]  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [11,]  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [12,]  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [1,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE
+    ##  [2,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE
+    ##  [3,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE
+    ##  [4,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE
+    ##  [5,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE
+    ##  [6,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [7,] FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [8,]  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [9,]  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [10,]  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [11,]  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [12,]  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
     ##       [,12]
     ##  [1,]  TRUE
     ##  [2,]  TRUE
     ##  [3,]  TRUE
     ##  [4,]  TRUE
-    ##  [5,] FALSE
+    ##  [5,]  TRUE
     ##  [6,] FALSE
     ##  [7,]  TRUE
     ##  [8,]  TRUE
@@ -113,7 +112,7 @@ obj <- multisam.fit(fitSim,cs)
 obj
 ```
 
-    ## Multi-SAM model with 2 stocks: log likelihood is -259.3252. Convergence OK.
+    ## Multi-SAM model with 2 stocks: log likelihood is -253.2214. Convergence OK.
 
 ### Investigating the result
 
@@ -203,5 +202,5 @@ modeltable(obj,obj2)
 ```
 
     ##       log(L) #par      AIC Pval( M1 -> M2 )
-    ## M1 -259.3252   84 686.6504               NA
-    ## M2 -265.0501   68 666.1002        0.7809076
+    ## M1 -253.2214   74 654.4428               NA
+    ## M2 -255.0715   68 646.1429        0.7171872
