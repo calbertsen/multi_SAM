@@ -5,6 +5,7 @@ VERSION = $(shell Rscript -e "l<-readLines(\"${PACKAGE}/DESCRIPTION\");cat(gsub(
 
 TARBALL := ${PACKAGE}_${VERSION}.tar.gz
 RFILES := $(wildcard ${PACKAGE}/R/*.R)
+CPPFILES := $(wildcard ${PACKAGE}/src/*.cpp)
 NAMESPACEFILE := ${PACKAGE}/NAMESPACE
 RCHECK := ${PACKAGE}.Rcheck
 
@@ -26,7 +27,7 @@ README.md: README.Rmd
 	rm -r -f README_files
 	$(R) -q -e 'rmarkdown::render("README.Rmd",rmarkdown::md_document(variant = "gfm"))'
 
-$(TARBALL): $(NAMESPACEFILE)
+$(TARBALL): $(NAMESPACEFILE) $(CPPFILES)
 	@echo "\033[0;32mBuilding package\033[0;0m"
 	$(R) CMD build ${PACKAGE}
 
@@ -70,11 +71,11 @@ prepare_testmore_stockassessment: clean_testmore_stockassessment
 	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep testmore_stockassessment/plots testmore_stockassessment/tables testmore_stockassessment/fromSEXP testmore_stockassessment/parallel
 	@echo "lf <- list.files('testmore_stockassessment',recursive=TRUE,full.names=TRUE,pattern='script.R'); \
 	fn <- function(f){rl <- readLines(f);cat(c('success_symbol <- \'\u001B[0;32m\u263A\u001B[0;0m\'','failure_symbol <- \'\u001B[0;31m\u2639\u001B[0;0m\'',paste0('setwd(sub(\'script.R\',\'\',\"',f,'\"))'),'sink(\'/dev/null\',type=\'output\')','capture.output({',rl[!grepl('cat\\\\\\\\(',rl)],'library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)','cs<-suggestCorStructure(c(fit),nAgeClose=0)','mfit<-multisam.fit(c(fit),cs)','},type=\'message\')','sink()', \
-	'if(round(AIC(fit),7) != round(AIC(mfit),7)) stop(sprintf(\'AIC not equal %s vs %s %s\',round(AIC(fit),7),round(AIC(mfit),7),failure_symbol))','cat(sprintf(\'AIC OK %s\\\\\\\\n\',success_symbol))', \
-	'if(round(logLik(fit),7) != round(logLik(mfit),7)) stop(sprintf(\'logLik not equal %s vs %s %s\',round(logLik(fit),7),round(logLik(mfit),7),failure_symbol))','cat(sprintf(\'logLik OK %s\\\\\\\\n\',success_symbol))', \
-	'if(round(nobs(fit),7) != round(nobs(mfit),7)) stop(sprintf(\'nobs not equal %s vs %s %s\',round(nobs(fit),7),round(nobs(mfit),7),failure_symbol))','cat(sprintf(\'nobs OK %s\\\\\\\\n\',success_symbol))', \
-	'if(round(BIC(fit),7) != round(BIC(mfit),7)) stop(sprintf(\'BIC not equal %s vs %s %s\',round(BIC(fit),7),round(BIC(mfit),7),failure_symbol))','cat(sprintf(\'BIC OK %s\\\\\\\\n\',success_symbol))', \
-	'if(round(attr(logLik(fit),\'df\'),7) != round(attr(logLik(mfit),\'df\'),7)) stop(sprintf(\'logLik df not equal %s vs %s %s\',round(attr(logLik(fit),\'df\'),7),round(attr(logLik(mfit),\'df\'),7),failure_symbol))','cat(sprintf(\'logLik df OK %s\\\\\\\\n\',success_symbol))'), \
+	'if(!isTRUE(all.equal(AIC(fit),AIC(mfit)))) stop(sprintf(\'AIC not equal %s vs %s %s\',round(AIC(fit),7),round(AIC(mfit),7),failure_symbol))','cat(sprintf(\'AIC OK %s\\\\\\\\n\',success_symbol))', \
+	'if(!isTRUE(all.equal(logLik(fit),logLik(mfit),check.attributes=FALSE))) stop(sprintf(\'logLik not equal %s vs %s %s\',round(logLik(fit),7),round(logLik(mfit),7),failure_symbol))','cat(sprintf(\'logLik OK %s\\\\\\\\n\',success_symbol))', \
+	'if(!isTRUE(all.equal(nobs(fit),nobs(mfit),check.attributes=FALSE))) stop(sprintf(\'nobs not equal %s vs %s %s\',round(nobs(fit),7),round(nobs(mfit),7),failure_symbol))','cat(sprintf(\'nobs OK %s\\\\\\\\n\',success_symbol))', \
+	'if(!isTRUE(all.equal(BIC(fit),BIC(mfit)))) stop(sprintf(\'BIC not equal %s vs %s %s\',round(BIC(fit),7),round(BIC(mfit),7),failure_symbol))','cat(sprintf(\'BIC OK %s\\\\\\\\n\',success_symbol))', \
+	'if(!isTRUE(all.equal(attr(logLik(fit),\'df\'),attr(logLik(mfit),\'df\')))) stop(sprintf(\'logLik df not equal %s vs %s %s\',round(attr(logLik(fit),\'df\'),7),round(attr(logLik(mfit),\'df\'),7),failure_symbol))','cat(sprintf(\'logLik df OK %s\\\\\\\\n\',success_symbol))'), \
 	sep='\n',file=f)};invisible(sapply(lf,fn))" | $(R) -q --slave
 
 run_testmore_stockassessment: prepare_testmore_stockassessment

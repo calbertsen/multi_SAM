@@ -218,6 +218,7 @@ Type objective_function<Type>::operator() ()
       A(i,i) = Type(0.0);
     }
   }
+  REPORT(A);
 
   matrix<Type> L = constructL(nages,nAreas,RE,cons);
     
@@ -246,12 +247,15 @@ Type objective_function<Type>::operator() ()
 
     // Vector for predictions
     vector<Type> predN(ncov.rows());
+    predN.setZero();
     vector<Type> newN(ncov.rows());
+    newN.setZero();
     // Determine which ages to use with keep vector
     vector<Type> keep(ncov.rows());
     keep.setZero();
     // Loop over stocks
     for(int s = 0; s < nAreas; ++s){
+      int ageOffset = sam.confSets(s).minAge - minAgeAll;
       int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
       
       array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -262,13 +266,14 @@ Type objective_function<Type>::operator() ()
       if(y > 0 && y < sam.dataSets(s).noYears){
 	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, y);
 	
-	keep.segment(s * nages,predNnz.size()) = 1.0;
-	predN.segment(s * nages,predNnz.size()) = predNnz;
-	newN.segment(s * nages,predNnz.size()) = logNa.col(y);
+	keep.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
+	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
+	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
       }
+      REPORT(keep);REPORT(predN);REPORT(newN);
     }
     if(keep.sum()>0)
-      ans+=neg_log_densityN(newN-predN, keep);
+      ans+=neg_log_densityN(newN-predN, keep);      
   }
 
   
