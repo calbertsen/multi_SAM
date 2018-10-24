@@ -57,7 +57,7 @@ plotit.msam <- function(fit, what,
     tab <- cbindYearTables(tabList)
 
     xTab <- as.numeric(rownames(tab))
-    xAll <- sort(unique(unlist(x)))
+    xAll <- min(unlist(x)):max(unlist(x))
     xindx <- which(xAll%in%xTab)
     
     y <- low <- high <- matrix(NA,length(xAll),length(fit))
@@ -79,20 +79,20 @@ plotit.msam <- function(fit, what,
     high<-high[didx,]
     if(add){
         for(i in 1:length(fit))
-            lines(x[[i]], (y[,i]), lwd=3, col=col[i],...)
+            lines(xAll, (y[,i]), lwd=3, col=col[i],...)
     }else{
         plot(xAll, NA*xAll, xlab=xlab, ylab=ylab, type="n", lwd=3, xlim=xr,
              ylim=range(c((low),(high),0,ex),na.rm=TRUE), las=1,...)
         grid(col="black")
         for(i in 1:length(fit))
-            lines(x[[i]], (y[xAll%in%x[[i]],i]), lwd=3, col=col[i], ...)
+            lines(xAll, (y[,i]), lwd=3, col=col[i], ...)
     }
     if(ci){
         for(i in 1:length(fit)){
             xuse <- xAll%in%x[[i]]
             indx <- which(!is.na(low[,i]) & !is.na(high[,i]) & xuse)
             polygon(c(xAll[indx],rev(xAll[indx])), y = c((low[indx,i]),rev((high[indx,i]))), col = addTrans(col[i],ciAlpha), border=NA)
-            lines(x[[i]], (y[,i]), lwd=3, col=col[i])
+            lines(xAll, (y[,i]), lwd=3, col=col[i])
         }
     }
     stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))

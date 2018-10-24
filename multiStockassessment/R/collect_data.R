@@ -5,6 +5,10 @@ collect_data <- function(x) {
     dat <- lapply(x,function(y){
         y$obj$env$data
     })
-    names(dat) <- paste("Stock",1:length(dat))
+    if(!is.null(names(x))){
+        names(dat) <- names(x)
+    }else{
+        names(dat) <- paste("Stock",1:length(dat))
+    }
     return(dat)
 }
