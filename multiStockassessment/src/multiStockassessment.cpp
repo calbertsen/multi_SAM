@@ -176,12 +176,11 @@ Type objective_function<Type>::operator() ()
 
   Type ans = 0; //negative log-likelihood
   ofall<Type> ofAll(nStocks);
-
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
   for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of;
+    oftmp<Type> of(this->do_simulate);
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
@@ -191,6 +190,8 @@ Type objective_function<Type>::operator() ()
     ans += nllF(sam.confSets(s), paraSets(s), logFa, keep, &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
+    // If simulate -> move grab new logF values and move them to the right place!         
+    logF.col(s) = logFa.matrix();
   }
 
 
@@ -262,10 +263,8 @@ Type objective_function<Type>::operator() ()
       logNa = logN.col(s);
       array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
       logFa = logF.col(s);
-
       if(y > 0 && y < sam.dataSets(s).noYears){
 	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, y);
-	
 	keep.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
@@ -273,8 +272,24 @@ Type objective_function<Type>::operator() ()
       REPORT(keep);REPORT(predN);REPORT(newN);
     }
     if(keep.sum()>0)
-      ans+=neg_log_densityN(newN-predN, keep);      
-  }
+      ans+=neg_log_densityN(newN-predN, keep);
+    SIMULATE{
+      // R_NaReal
+      // 1) Simulate all values
+      vector<Type> Ntmp = predN + neg_log_densityN.simulate();
+      // 2) Insert in logN if conf.simFlag==0
+      for(int i = 0; i < keep.size(); ++i){
+	if(keep(i) > 0){
+	  int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+	  // Age index = age - minAge
+	  int a = i % nages;
+	  int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	  if(sam.confSets(s).simFlag == 0)
+	    logN.col(s)(a,y) = Ntmp(i);
+	}
+      } // End keep loop
+    } // End simulate
+  } // End year loop
 
   
 
@@ -283,12 +298,11 @@ Type objective_function<Type>::operator() ()
   /////////////////////////////////
 
   for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of;
+    oftmp<Type> of(this->do_simulate);
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
-
     data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
     ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, keep,  &of);
     ofAll.addToReport(of.report,s);
@@ -301,7 +315,7 @@ Type objective_function<Type>::operator() ()
   ////// ADD REPORTED OBJECTS FROM stockassessment //////
   //////////////////////////////////////////////////////
   if(isDouble<Type>::value && this->current_parallel_region<0)
-    addMissingVars(this->report,ofAll.report);
+    moveREPORT(this->report,ofAll.report);
   
   return ans;
 }

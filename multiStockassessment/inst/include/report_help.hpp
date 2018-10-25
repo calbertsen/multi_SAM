@@ -2,16 +2,16 @@
 #include <string>
 #include <sstream>
 
-void addMissingVars(SEXP to, SEXP from){
+void moveREPORT(SEXP to, SEXP from){
   SEXP names = PROTECT(R_lsInternal(from, FALSE));
   for(int i = 0; i < Rf_length(names); ++i){
     SEXP name = PROTECT(STRING_ELT(names,i));
-    SEXP val = PROTECT(Rf_findVarInFrame(to, Rf_install(CHAR(name))));
-    if (val == R_UnboundValue) {
-      SEXP valfrom = PROTECT(Rf_findVarInFrame(from, Rf_install(CHAR(name))));
-      Rf_defineVar(Rf_install(CHAR(name)),valfrom,to);
-      UNPROTECT(1);
-    }
+    // SEXP val = PROTECT(Rf_findVarInFrame(to, Rf_install(CHAR(name))));
+    // if (val == R_UnboundValue) {
+    SEXP valfrom = PROTECT(Rf_findVarInFrame(from, Rf_install(CHAR(name))));
+    Rf_defineVar(Rf_install(CHAR(name)),valfrom,to);
+    //UNPROTECT(1);
+    //}
     UNPROTECT(2);
   }
   UNPROTECT(1);
@@ -49,6 +49,15 @@ struct oftmp :
 			     PROTECT(Rf_allocVector(VECSXP,0)),
 			     PROTECT(allocSExp(ENVSXP)))
   {};
+
+  oftmp(bool do_simulate):
+    objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(Rf_allocVector(VECSXP,0)),
+			     PROTECT(allocSExp(ENVSXP)))
+  {
+    this->set_simulate(do_simulate);
+  };
+  
   Type operator()(){
     return Type();
   }

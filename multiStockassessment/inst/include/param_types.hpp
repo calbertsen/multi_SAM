@@ -45,7 +45,7 @@ struct cmoe_vector{
     return size_;
   }
 
-  vector<Type> col(int i){
+  vector<Type>& col(int i){
     return dat(i);
   }
 
@@ -177,7 +177,7 @@ struct cmoe_matrix{
     return size_;
   }
 
-  matrix<Type> col(int i){
+  matrix<Type>& col(int i){
     return dat(i);
   }
 
