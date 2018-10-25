@@ -6,6 +6,7 @@ VERSION = $(shell Rscript -e "l<-readLines(\"${PACKAGE}/DESCRIPTION\");cat(gsub(
 TARBALL := ${PACKAGE}_${VERSION}.tar.gz
 RFILES := $(wildcard ${PACKAGE}/R/*.R)
 CPPFILES := $(wildcard ${PACKAGE}/src/*.cpp)
+INCLHPPFILES := $(wildcard ${PACKAGE}/inst/include/*.hpp)
 NAMESPACEFILE := ${PACKAGE}/NAMESPACE
 RCHECK := ${PACKAGE}.Rcheck
 
@@ -27,7 +28,7 @@ README.md: README.Rmd
 	rm -r -f README_files
 	$(R) -q -e 'rmarkdown::render("README.Rmd",rmarkdown::md_document(variant = "gfm"))'
 
-$(TARBALL): $(NAMESPACEFILE) $(CPPFILES)
+$(TARBALL): $(NAMESPACEFILE) $(CPPFILES) $(INCLHPPFILES)
 	@echo "\033[0;32mBuilding package\033[0;0m"
 	$(R) CMD build ${PACKAGE}
 
