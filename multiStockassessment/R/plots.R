@@ -34,6 +34,8 @@ plotit <- function(fit, what, ...){
 ##' @param ciAlpha Alpha channel value of confidence interval color
 ##' @param col line colors
 ##' @param extraLabel Not used
+##' @param addSingle add lines corresponding to single stock estimate
+##' @param addSingleCI Shade redion corresponding to single stock CI
 ##' @param ... Other arguments
 ##' ##' @export
 plotit.msam <- function(fit, what,
@@ -52,6 +54,8 @@ plotit.msam <- function(fit, what,
                         ciAlpha = 0.3,
                         col = .plotcols.crp(length(fit)),
                         extraLabel=NULL,
+                        addSingle=FALSE,
+                        addSingleCI=FALSE,
                         ...){
     tabList <- tableit(fit=fit,what=what,x=x,trans=trans, returnList = TRUE)
     tab <- cbindYearTables(tabList)
@@ -86,6 +90,22 @@ plotit.msam <- function(fit, what,
         grid(col="black")
         for(i in 1:length(fit))
             lines(xAll, (y[,i]), lwd=3, col=col[i], ...)
+    }
+    if(addSingle | addSingleCI){
+        for(i in 1:length(fit)){
+            sfit<-fit[[i]]
+            idx <- names(sfit$sdrep$value)==what
+            yy <- sfit$sdrep$value[idx]
+            lowhig <- trans(yy+sfit$sdrep$sd[idx]%o%c(-2,2))
+            xx<-sfit$data$years
+            if(addSingleCI){
+              polygon(c(xx,rev(xx)), y = c((lowhig[,1]),rev((lowhig[,2]))), col = addTrans(gray(0.2),ciAlpha), border=NA)
+            }
+            if(addSingle){
+              lines(xx, trans(yy), lwd=3, col=col[i])
+              lines(xx, trans(yy), lwd=3, col=gray(.2), lty="dotted")
+            }
+        }
     }
     if(ci){
         for(i in 1:length(fit)){
