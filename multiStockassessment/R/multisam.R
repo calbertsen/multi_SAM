@@ -79,10 +79,14 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
                          lower=lower2,
                          upper=upper2)
 
-    for(i in seq_len(newtonsteps)) { # Take a few extra newton steps 
+    for(i in seq_len(newtonsteps)) { # Take a few extra newton steps
+        atLBound <- (opt$par < (lower2 + sqrt(.Machine$double.eps)))
+        atUBound <- (upper2 < (opt$par + sqrt(.Machine$double.eps)))
+        atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
         h <- stats::optimHess(opt$par, obj$fn, obj$gr)
-        opt$par <- opt$par - solve(h, g)
+        opt$par[!atBound] <- opt$par[!atBound]- solve(h[!atBound,!atBound], g[!atBound])
+        opt$par[atBound] <- (atLBound * lower2 + atUbound * upper2)[atBound]
         opt$objective <- obj$fn(opt$par)
     }
 
