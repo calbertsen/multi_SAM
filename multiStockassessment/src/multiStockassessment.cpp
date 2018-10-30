@@ -131,48 +131,6 @@ Type objective_function<Type>::operator() ()
       }    
     }
   
-  // vector<vector<Type> > R(nStocks);
-  // vector<vector<Type> > logR(nStocks);
-  // vector<vector<Type> > ssb(nStocks);
-  // vector<vector<Type> > logssb(nStocks);
-  // vector<vector<Type> > fbar(nStocks);
-  // vector<vector<Type> > logfbar(nStocks);
-  // vector<vector<Type> > cat(nStocks);
-  // vector<vector<Type> > logCatch(nStocks);
-  // vector<vector<Type> > varLogCatch(nStocks);
-  // vector<vector<Type> > fsb(nStocks);
-  // vector<vector<Type> > logfsb(nStocks);
-  // vector<vector<Type> > tsb(nStocks);
-  // vector<vector<Type> > logtsb(nStocks);
-  // vector<vector<Type> > predObs(nStocks);
-
-
-  // // Reported inside functions
-  // vector<vector<matrix<Type> > > obsCov(nStocks);
-  
-  // for(int s = 0; s < nStocks; ++s){
-  //   array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-  //   logNa = logN.col(s);
-  //   array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-  //   logFa = logF.col(s);
-  //   R(s) = rFun(logNa);
-  //   logR(s) = log(R(s));  
-  //   ssb(s) = ssbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-  //   logssb(s) = log(ssb(s));
-  //   fbar(s) = fbarFun(sam.confSets(s), logFa);
-  //   logfbar(s) = log(fbar(s));
-  //   cat(s) = catchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-  //   logCatch(s) = log(cat(s));
-  //   varLogCatch(s) = varLogCatchFun(sam.dataSets(s), sam.confSets(s), logNa, logFa, paraSets(s));
-  //   fsb(s) = fsbFun(sam.dataSets(s), sam.confSets(s), logNa, logFa);
-  //   logfsb(s) = log(fsb(s));
-  //   tsb(s) = tsbFun(sam.dataSets(s), sam.confSets(s), logNa);
-  //   logtsb(s) = log(tsb(s));
-  //   predObs(s) = predObsFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, logssb(s), logfsb(s), logCatch(s));
-  // }
-
-
-  
 
   Type ans = 0; //negative log-likelihood
   ofall<Type> ofAll(nStocks);
@@ -201,8 +159,7 @@ Type objective_function<Type>::operator() ()
   int nAreas = sam.dataSets.size();
 
   int nages = (maxAgeAll - minAgeAll + 1);
-  matrix<Type> ncov;
-
+ 
   matrix<Type> A(nages*nAreas,nages*nAreas);
   A.setZero();
   // Create matrix A of variances to scale
@@ -216,7 +173,7 @@ Type objective_function<Type>::operator() ()
       Type lsdln = paraSets(s).logSdLogN(sam.confSets(s).keyVarLogN(a - (sam.confSets(s).minAge - minAgeAll)));
       A(i,i) = exp(lsdln);
     }else{
-      A(i,i) = Type(0.0);
+      A(i,i) = Type(1.0);
     }
   }
   REPORT(A);
@@ -225,14 +182,16 @@ Type objective_function<Type>::operator() ()
     
   // Get covariance matrix with arbitrary scale
   matrix<Type> Sigma = L * L.transpose();
-  Sigma = cov2cor(Sigma);
+  //Sigma = cov2cor(Sigma);
   matrix<Type> SigmaTmp = Sigma;
     
   if(usePartialCor){
-    Sigma = cov2cor((matrix<Type>)Sigma.inverse()); //pcor2cor(Sigma);
+    Sigma = atomic::matinv(Sigma); //cov2cor((matrix<Type>)Sigma.inverse()); //pcor2cor(Sigma);
   }
 
-  ncov = (matrix<Type>)(A * Sigma) * A;
+  Sigma = cov2cor(Sigma);
+  
+  matrix<Type> ncov = (matrix<Type>)(A * Sigma) * A;
   REPORT(Sigma);
   REPORT(SigmaTmp);
   REPORT(L);
@@ -269,25 +228,109 @@ Type objective_function<Type>::operator() ()
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
       }
-      REPORT(keep);REPORT(predN);REPORT(newN);
     }
     if(keep.sum()>0)
       ans+=neg_log_densityN(newN-predN, keep);
     SIMULATE{
-      // R_NaReal
-      // 1) Simulate all values
-      vector<Type> Ntmp = predN + neg_log_densityN.simulate();
-      // 2) Insert in logN if conf.simFlag==0
-      for(int i = 0; i < keep.size(); ++i){
-	if(keep(i) > 0){
-	  int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
-	  // Age index = age - minAge
-	  int a = i % nages;
-	  int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
-	  if(sam.confSets(s).simFlag == 0)
-	    logN.col(s)(a,y) = Ntmp(i);
+      /* Plan:
+	 1) If all sam.confSets(s).simFlag == 1, skip the simulation
+	 2) Get conditional distribution of stocks with simFlag == 0 (and keep == 1)
+	 3) Simulate from marginal distribution
+	 4) Insert into logN at the right places
+       */
+      // 1) Check if any simFlags are 0
+      bool doSim = false;
+      for(int s = 0; s < nAreas; ++s)
+	if(sam.confSets(s).simFlag == 0){
+	  doSim = true;
+	  break;
 	}
-      } // End keep loop
+      if(doSim){
+	// 2) Get conditional distribution of stocks with simFlag == 0 (and keep = 1)
+	vector<int> notCondOn(ncov.cols());
+	notCondOn.setZero();
+	for(int i = 0; i < notCondOn.size(); ++i){
+	  int s = (int)i / (int)nages;
+	  if(sam.confSets(s).simFlag == 0 && keep(i) == 1)
+	    notCondOn(i) = 1;
+	}
+
+	int nAll = ncov.cols();
+	int nNotCond = notCondOn.sum();
+	int nCond = nAll - nNotCond;
+	if(nNotCond > 0){ // Only do this if there are any not conditional
+	  vector<int> ccond(nNotCond);
+	  vector<int> cond(nCond);
+	  int k1 = 0; int k2 = 0;
+	  for(int i = 0; i < notCondOn.size(); ++i){
+	    if(notCondOn(i) == 0){
+	      cond(k1++) = i;
+	    }else{
+	      ccond(k2++) = i;
+	    }
+	  }
+	  matrix<Type> Sigma_NN(nNotCond,nNotCond);
+	  matrix<Type> Sigma_CC(nCond,nCond);
+	  matrix<Type> Sigma_NC(nNotCond,nCond);
+	  matrix<Type> Sigma_CN(nCond,nNotCond);
+
+	  for(int i = 0; i < ccond.size(); ++i)
+	    for(int j = 0; j < ccond.size(); ++j)
+	      Sigma_NN(i,j) = ncov(ccond(i),ccond(j));
+
+	  for(int i = 0; i < cond.size(); ++i)
+	    for(int j = 0; j < cond.size(); ++j)
+	      Sigma_CC(i,j) = ncov(cond(i),cond(j));
+	  matrix<Type> Sigma_CC_inv = Sigma_CC.inverse();
+
+	  for(int i = 0; i < ccond.size(); ++i)
+	    for(int j = 0; j < cond.size(); ++j)
+		Sigma_NC(i,j) = ncov(ccond(i),cond(j));
+	  
+	  matrix<Type> meanCorrectionMat = Sigma_NC * Sigma_CC_inv;
+
+	  for(int i = 0; i < cond.size(); ++i)
+	    for(int j = 0; j < ccond.size(); ++j)
+		Sigma_CN(i,j) = ncov(cond(i),ccond(j));
+
+	  matrix<Type> newSigma = Sigma_NN - (matrix<Type>)(meanCorrectionMat * Sigma_CN);
+
+	  // 3) Simulate marginal distribution
+	  vector<Type> avec(nCond);
+	  vector<Type> muNew(nNotCond);
+	  k1 = 0; k2 = 0;
+	  for(int i = 0; i < notCondOn.size(); ++i){
+	    if(notCondOn(i) == 0){
+	      if(keep(i) == 0){
+		avec(k1++) = 0.0;
+	      }else{
+		int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+		// Age index = age - minAge
+		int a = i % nages;
+		int ageOffset = sam.confSets(s).minAge - minAgeAll;
+		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);	
+		avec(k1++) = logN.col(s)(a - ageOffset,y) - predN(i);
+	      }
+	    }else{
+	      muNew(k2++) = predN(i);
+	    }
+	  }
+	  vector<Type> simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + density::MVNORM(newSigma).simulate();
+	  
+	  // 4) Insert into logN at the right places
+	  k1 = 0;
+	  for(int i = 0; i < notCondOn.size(); ++i){
+	    if(notCondOn(i) == 1){
+	      int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+	      // Age index = age - minAge
+	      int a = i % nages;
+	      int ageOffset = sam.confSets(s).minAge - minAgeAll;
+	      int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	      logN.col(s)(a - ageOffset,y) = simRes(k1++);
+	    }
+	  }
+	}
+      }// End doSim
     } // End simulate
   } // End year loop
 
