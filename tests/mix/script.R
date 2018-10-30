@@ -73,6 +73,6 @@ capture.output({
     mfitSCW<-multisam.fit(c(sprat,cbh,wbh),cs)
 },type='message')
 sink()
-testFun(c(sprat,cbh,wbh),mfitSCG)
+testFun(c(sprat,cbh,wbh),mfitSCW)
 
 
