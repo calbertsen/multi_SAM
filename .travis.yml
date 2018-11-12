@@ -25,9 +25,6 @@ install:
 
 script:
   - make check
-  - make install
-  - make test
-  - make testmore_stockassessment
 
 after_success:
   - cat multiStockassessment.Rcheck/00check.log

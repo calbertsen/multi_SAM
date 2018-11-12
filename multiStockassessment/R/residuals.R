@@ -32,7 +32,7 @@ residuals.msam <- function(object, discrete = FALSE, trace = TRUE, ...) {
     resid$residual[is.na(resid$observation)] <- NA
     cat("One-observation-ahead residuals. Done\n")
     ret <- cbind(year = year[sortVals], fleet = as.numeric(factor(fleet))[sortVals], age = age[sortVals], resid, stock = stock[sortVals], stockFleet = fleetNum[sortVals])
-    stockNames <- multiStockassessment:::getStockNames(object)
+    stockNames <- getStockNames(object)
     fleetNamesList <- lapply(as.list(1:length(object)),
                              function(i){
                                  paste(stockNames[i],attributes(object[[i]]$data)$fleetNames,sep=" - ")

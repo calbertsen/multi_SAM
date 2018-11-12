@@ -12,7 +12,6 @@ RCHECK := ${PACKAGE}.Rcheck
 
 .PHONY: all doc build check install test
 
-
 all: doc updateStockassessment build check install test testmore_stockassessment README.md
 
 $(NAMESPACEFILE): $(RFILES)
