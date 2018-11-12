@@ -35,9 +35,12 @@
 #include "../inst/include/multiSAM.hpp"
 
 
-
-
-
+template<class VT, class Type>
+struct fake_data_indicator :
+  public data_indicator<VT, Type> {
+  fake_data_indicator() : data_indicator<VT, Type>(VT()){};
+  fake_data_indicator(VT obs) : data_indicator<VT, Type>(obs) {};
+};
 
 
 extern "C" {
@@ -55,6 +58,8 @@ extern "C" {
 
 
 }
+
+
 
 
 
@@ -76,6 +81,33 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(minAgeAll);
   DATA_STRUCT(cons, cov_constraints);
 
+
+  // Related to residuals
+  DATA_VECTOR(fake_obs);
+  DATA_IVECTOR(fake_stock);
+  DATA_IVECTOR(fake_indx);
+  DATA_VECTOR_INDICATOR(fake_keep, fake_obs);
+  DATA_INTEGER(doResiduals);
+
+  // Create a keep indicator for each stock
+  vector<fake_data_indicator<vector<Type>,Type> > keep(sam.dataSets.size());
+  
+  for(int s = 0; s < sam.dataSets.size(); ++s){
+    fake_data_indicator<vector<Type>,Type> keepTmp(sam.dataSets(s).logobs);
+    keep(s) = keepTmp;
+  }
+  
+  if(doResiduals){
+    for(int i = 0; i < fake_obs.size(); ++i){
+      // Overwrite true observations with residual observations
+      sam.dataSets(fake_stock(i)).logobs(fake_indx(i)) = fake_obs(i);
+      // Overwrite keep value
+      keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
+    }
+  }
+
+
+  
   
   PARAMETER_CMOE_VECTOR(logFpar);
   PARAMETER_CMOE_VECTOR(logQpow);
@@ -99,10 +131,12 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
-  PARAMETER_VECTOR(RE)
+  PARAMETER_VECTOR(RE);
+
+  Type ans = 0; //negative log-likelihood
 
     
-    int nStocks = logF.cols();
+  int nStocks = logF.cols();
   vector<paraSet<Type> > paraSets(nStocks);
 
   for(int s = 0; s < nStocks; ++s){
@@ -123,16 +157,22 @@ Type objective_function<Type>::operator() ()
   }
 
   // patch missing 
-  int idxmis=0;
+  int idxmis = 0;
   for(int s = 0; s < nStocks; ++s)
     for(int i = 0; i < sam.dataSets(s).nobs; ++i){
       if(isNA(sam.dataSets(s).logobs(i))){
-  	sam.dataSets(s).logobs(i)=missing(idxmis++);
+  	sam.dataSets(s).logobs(i) = missing(idxmis++);
       }    
     }
+
+  // add wide prior for missing random effects, but _only_ when computing ooa residuals
+  if(doResiduals){
+    Type huge = 10.0;
+    for (int i = 0; i < missing.size(); i++)
+      ans -= dnorm(missing(i), Type(0.0), huge, true);  
+} 
   
 
-  Type ans = 0; //negative log-likelihood
   ofall<Type> ofAll(nStocks);
   ////////////////////////////////
   ////////// F PROCESS //////////
@@ -143,9 +183,8 @@ Type objective_function<Type>::operator() ()
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
-
-    data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
-    ans += nllF(sam.confSets(s), paraSets(s), logFa, keep, &of);
+    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    ans += nllF(sam.confSets(s), paraSets(s), logFa, keepTmp, &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
     // If simulate -> move grab new logF values and move them to the right place!         
@@ -201,6 +240,16 @@ Type objective_function<Type>::operator() ()
     ////// CALCULATE CONTRIBUTION //////
     ////////////////////////////////////
 
+    // add wide prior for first state, but _only_ when computing ooa residuals
+    if(doResiduals){
+      Type huge = 10.0;
+      for(int s = 0; s < nAreas; ++s){
+	for (int i = 0; i < logN.col(s).rows(); i++){
+	  ans -= dnorm((logN.col(s))(i, 0), Type(0.0), huge, true);
+	}
+      }
+    } 
+    
     density::MVNORM_t<Type> neg_log_densityN(ncov);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
@@ -211,8 +260,8 @@ Type objective_function<Type>::operator() ()
     vector<Type> newN(ncov.rows());
     newN.setZero();
     // Determine which ages to use with keep vector
-    vector<Type> keep(ncov.rows());
-    keep.setZero();
+    vector<Type> keepN(ncov.rows());
+    keepN.setZero();
     // Loop over stocks
     for(int s = 0; s < nAreas; ++s){
       int ageOffset = sam.confSets(s).minAge - minAgeAll;
@@ -224,17 +273,17 @@ Type objective_function<Type>::operator() ()
       logFa = logF.col(s);
       if(y > 0 && y < sam.dataSets(s).noYears){
 	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, y);
-	keep.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
+	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
       }
     }
-    if(keep.sum()>0)
-      ans+=neg_log_densityN(newN-predN, keep);
+    if(keepN.sum()>0)
+      ans+=neg_log_densityN(newN-predN, keepN);
     SIMULATE{
       /* Plan:
 	 1) If all sam.confSets(s).simFlag == 1, skip the simulation
-	 2) Get conditional distribution of stocks with simFlag == 0 (and keep == 1)
+	 2) Get conditional distribution of stocks with simFlag == 0 (and keepN == 1)
 	 3) Simulate from marginal distribution
 	 4) Insert into logN at the right places
        */
@@ -246,12 +295,12 @@ Type objective_function<Type>::operator() ()
 	  break;
 	}
       if(doSim){
-	// 2) Get conditional distribution of stocks with simFlag == 0 (and keep = 1)
+	// 2) Get conditional distribution of stocks with simFlag == 0 (and keepN = 1)
 	vector<int> notCondOn(ncov.cols());
 	notCondOn.setZero();
 	for(int i = 0; i < notCondOn.size(); ++i){
 	  int s = (int)i / (int)nages;
-	  if(sam.confSets(s).simFlag == 0 && keep(i) == 1)
+	  if(sam.confSets(s).simFlag == 0 && keepN(i) == 1)
 	    notCondOn(i) = 1;
 	}
 
@@ -301,7 +350,7 @@ Type objective_function<Type>::operator() ()
 	  k1 = 0; k2 = 0;
 	  for(int i = 0; i < notCondOn.size(); ++i){
 	    if(notCondOn(i) == 0){
-	      if(keep(i) == 0){
+	      if(keepN(i) == 0){
 		avec(k1++) = 0.0;
 	      }else{
 		int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
@@ -346,8 +395,8 @@ Type objective_function<Type>::operator() ()
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
-    data_indicator<vector<Type>,Type> keep(sam.dataSets(s).logobs);
-    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, keep,  &of);
+    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, keepTmp,  &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }

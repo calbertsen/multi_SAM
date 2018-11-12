@@ -39,7 +39,11 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
                 minYearAll = min(unlist(lapply(dat0,function(dd)dd$years))),
                 maxAgeAll = max(unlist(lapply(dat0,function(dd)dd$maxAge))),
                 minAgeAll = min(unlist(lapply(dat0,function(dd)dd$minAge))),
-                cons = boolMat2ConstraintList(corStructure)
+                cons = boolMat2ConstraintList(corStructure),
+                fake_obs = numeric(0),
+                fake_stock = numeric(0),
+                fake_indx = numeric(0),
+                doResiduals = as.integer(FALSE)
                 )
 
     ## Prepare parameters for TMB
