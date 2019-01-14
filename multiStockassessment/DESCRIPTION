@@ -1,7 +1,7 @@
 Package: multiStockassessment
 Title: Fitting Multiple State-Space Assessment Models
-Version: 0.2.0
-Date: 2018-11-12
+Version: 0.2.1
+Date: 2019-01-14
 Authors@R: person(c("Christoffer","Moesgaard"), "Albertsen",
 	   email = "cmoe@aqua.dtu.dk", role = c("aut", "cre"),
 	   comment = c(ORCID = "0000-0003-0088-4363"))
@@ -13,4 +13,4 @@ URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE
 BugReports: https://github.com/calbertsen/multi_SAM/issues
 Additional_repositories: https://rrepo.calbertsen.dk/
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1

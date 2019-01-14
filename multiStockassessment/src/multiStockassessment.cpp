@@ -39,7 +39,7 @@ template<class VT, class Type>
 struct fake_data_indicator :
   public data_indicator<VT, Type> {
   fake_data_indicator() : data_indicator<VT, Type>(VT()){};
-  fake_data_indicator(VT obs) : data_indicator<VT, Type>(obs) {};
+  fake_data_indicator(VT obs) : data_indicator<VT, Type>(obs, true) {};
 };
 
 
