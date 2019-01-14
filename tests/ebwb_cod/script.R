@@ -9,6 +9,11 @@ library(stockassessment)
 eb <- fitfromweb("EBC2014_final_tmb")
 wb <- fitfromweb("wbcod_2014_tmb")
 
+## Refit with current stockassessment version
+eb <- sam.fit(eb$data,eb$conf,defpar(eb$data,eb$conf))
+wb <- sam.fit(wb$data,wb$conf,defpar(wb$data,wb$conf))
+
+
 dat <- eb$data
 conf <- eb$conf
 conf$corFlag <- 2

@@ -123,9 +123,11 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logScale);
   PARAMETER_CMOE_VECTOR(logitReleaseSurvival);
   PARAMETER_CMOE_VECTOR(logitRecapturePhi);
+  PARAMETER_CMOE_VECTOR(logRecaptureSd);
 
   PARAMETER_CMOE_MATRIX(logF); 
   PARAMETER_CMOE_MATRIX(logN);
+  PARAMETER_CMOE_VECTOR(logRecapEps);
   PARAMETER_CMOE_VECTOR(missing);
 
   ////////////////////////////////////////
@@ -134,11 +136,10 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(RE);
 
   Type ans = 0; //negative log-likelihood
-
-    
+  
   int nStocks = logF.cols();
   vector<paraSet<Type> > paraSets(nStocks);
-
+  
   for(int s = 0; s < nStocks; ++s){
     paraSets(s).logFpar = logFpar.col(s);  
     paraSets(s).logQpow = logQpow.col(s);  
@@ -153,7 +154,8 @@ Type objective_function<Type>::operator() ()
     paraSets(s).itrans_rho = itrans_rho.col(s);  
     paraSets(s).logScale = logScale.col(s);
     paraSets(s).logitReleaseSurvival = logitReleaseSurvival.col(s);
-    paraSets(s).logitRecapturePhi = logitRecapturePhi.col(s);    
+    paraSets(s).logitRecapturePhi = logitRecapturePhi.col(s);
+    paraSets(s).logRecaptureSd = logRecaptureSd.col(s);
   }
 
   // patch missing 
@@ -170,9 +172,15 @@ Type objective_function<Type>::operator() ()
     Type huge = 10.0;
     for (int i = 0; i < missing.size(); i++)
       ans -= dnorm(missing(i), Type(0.0), huge, true);  
-} 
+  } 
   
 
+  // Contribution from recapture random effects
+  for(int s = 0; s < nStocks; ++s)
+    for(int i=0; i<logRecapEps.col(s).size(); ++i){
+      ans += -dnorm(logRecapEps.col(s)(i),Type(0),exp(paraSets(s).logRecaptureSd(0)),true);
+    }
+  
   ofall<Type> ofAll(nStocks);
   ////////////////////////////////
   ////////// F PROCESS //////////
@@ -404,7 +412,8 @@ Type objective_function<Type>::operator() ()
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    ans += nllObs(ds, cs, ps, logNa, logFa, keepTmp,  &of);
+    vector<Type> recap = logRecapEps.col(s);
+    ans += nllObs(ds, cs, ps, logNa, logFa, recap, keepTmp,  &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }

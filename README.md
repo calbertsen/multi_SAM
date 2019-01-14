@@ -35,7 +35,7 @@ data(nscodParameters)
 set.seed(9876)
 fit <- sam.fit(nscodData, nscodConf, nscodParameters,sim.condRE = FALSE)
 
-datSim <- simulate(fit,nsim=2)
+datSim <- simulate(fit,nsim=3)
 fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,nscodConf, nscodParameters)))
 ```
 
@@ -60,36 +60,48 @@ For instance, `suggestCorStructure(fitSim,nAgeClose=1)` creates a matrix
 where ages less than 1 appart are correlated between the stocks:
 
 ``` r
-cs <- suggestCorStructure(fitSim,nAgeClose=1)
+cs <- suggestCorStructure(fitSim,nAgeClose=2)
 cs
 ```
 
     ##        [,1]  [,2]  [,3]  [,4]  [,5]  [,6]  [,7]  [,8]  [,9] [,10] [,11]
-    ##  [1,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE
-    ##  [2,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE
-    ##  [3,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE
-    ##  [4,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE
-    ##  [5,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE
-    ##  [6,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##  [7,] FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##  [8,]  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##  [9,]  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [10,]  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [11,]  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ## [12,]  TRUE  TRUE  TRUE  TRUE  TRUE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
-    ##       [,12]
-    ##  [1,]  TRUE
-    ##  [2,]  TRUE
-    ##  [3,]  TRUE
-    ##  [4,]  TRUE
-    ##  [5,]  TRUE
-    ##  [6,] FALSE
-    ##  [7,]  TRUE
-    ##  [8,]  TRUE
-    ##  [9,]  TRUE
-    ## [10,]  TRUE
-    ## [11,]  TRUE
-    ## [12,]  TRUE
+    ##  [1,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE
+    ##  [2,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE
+    ##  [3,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE
+    ##  [4,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE
+    ##  [5,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE
+    ##  [6,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE FALSE
+    ##  [7,] FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [8,] FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ##  [9,]  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [10,]  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [11,]  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [12,]  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [13,] FALSE FALSE  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE
+    ## [14,] FALSE FALSE FALSE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE
+    ## [15,]  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE
+    ## [16,]  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE FALSE FALSE FALSE
+    ## [17,]  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE FALSE FALSE
+    ## [18,]  TRUE  TRUE  TRUE  TRUE FALSE FALSE  TRUE  TRUE  TRUE  TRUE FALSE
+    ##       [,12] [,13] [,14] [,15] [,16] [,17] [,18]
+    ##  [1,]  TRUE FALSE FALSE  TRUE  TRUE  TRUE  TRUE
+    ##  [2,]  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE
+    ##  [3,]  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE
+    ##  [4,]  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE
+    ##  [5,] FALSE  TRUE  TRUE  TRUE FALSE FALSE FALSE
+    ##  [6,] FALSE  TRUE  TRUE  TRUE  TRUE FALSE FALSE
+    ##  [7,]  TRUE FALSE FALSE  TRUE  TRUE  TRUE  TRUE
+    ##  [8,]  TRUE FALSE FALSE FALSE  TRUE  TRUE  TRUE
+    ##  [9,]  TRUE  TRUE FALSE FALSE FALSE  TRUE  TRUE
+    ## [10,]  TRUE  TRUE  TRUE FALSE FALSE FALSE  TRUE
+    ## [11,]  TRUE  TRUE  TRUE  TRUE FALSE FALSE FALSE
+    ## [12,]  TRUE  TRUE  TRUE  TRUE  TRUE FALSE FALSE
+    ## [13,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [14,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [15,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [16,]  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [17,] FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
+    ## [18,] FALSE  TRUE  TRUE  TRUE  TRUE  TRUE  TRUE
 
 The `suggestCorStructure` function has several options to configure the
 correlation structure, and the result can be modified by hand for
@@ -112,7 +124,7 @@ obj <- multisam.fit(fitSim,cs)
 obj
 ```
 
-    ## Multi-SAM model with 2 stocks: log likelihood is -253.2214. Convergence OK.
+    ## Multi-SAM model with 3 stocks: log likelihood is -346.6933. Convergence OK.
 
 ### Investigating the result
 
@@ -202,5 +214,5 @@ modeltable(obj,obj2)
 ```
 
     ##       log(L) #par      AIC Pval( M1 -> M2 )
-    ## M1 -253.2214   74 654.4428               NA
-    ## M2 -255.0715   68 646.1429        0.7171872
+    ## M1 -346.6933  150 993.3867               NA
+    ## M2 -376.2874  102 956.5747        0.1291461

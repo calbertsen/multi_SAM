@@ -51,7 +51,7 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
     pars$RE <- rep(0,sum(lower.tri(corStructure)))
 
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing")
+    ran <- c("logN", "logF", "missing", "logRecapEps")
     obj <- TMB::MakeADFun(dat, pars, random=ran, DLL="multiStockassessment", ...)
 
     ## Check for unused correlation parameters

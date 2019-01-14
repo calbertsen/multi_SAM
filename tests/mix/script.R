@@ -26,6 +26,10 @@ sprat <- fitfromweb("sp2015tmb2")
 cbh <- fitfromweb("cbh2015_tmb")
 wbh <- fitfromweb("wbss_herring_2017_tmb")
 
+## Refit with current stockassessment version
+sprat <- sam.fit(sprat$data,sprat$conf,defpar(sprat$data,sprat$conf))
+cbh <- sam.fit(cbh$data,cbh$conf,defpar(cbh$data,cbh$conf))
+wbh <- sam.fit(wbh$data,wbh$conf,defpar(wbh$data,wbh$conf))
 
 library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)
 

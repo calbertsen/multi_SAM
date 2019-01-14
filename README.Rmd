@@ -25,7 +25,7 @@ data(nscodParameters)
 set.seed(9876)
 fit <- sam.fit(nscodData, nscodConf, nscodParameters,sim.condRE = FALSE)
 
-datSim <- simulate(fit,nsim=2)
+datSim <- simulate(fit,nsim=3)
 fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,nscodConf, nscodParameters)))
 
 ```
@@ -44,7 +44,7 @@ The dimension of the matrix is the number of stocks times the number of ages in 
 For instance, `suggestCorStructure(fitSim,nAgeClose=1)` creates a matrix where ages less than 1 appart are correlated between the stocks:
 
 ```{r}
-cs <- suggestCorStructure(fitSim,nAgeClose=1)
+cs <- suggestCorStructure(fitSim,nAgeClose=2)
 cs
 ```
 
