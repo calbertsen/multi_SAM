@@ -184,7 +184,9 @@ Type objective_function<Type>::operator() ()
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
-    ans += nllF(sam.confSets(s), paraSets(s), logFa, keepTmp, &of);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+    ans += nllF(cs, ps, logFa, keepTmp, &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
     // If simulate -> move grab new logF values and move them to the right place!         
@@ -272,7 +274,10 @@ Type objective_function<Type>::operator() ()
       array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
       logFa = logF.col(s);
       if(y > 0 && y < sam.dataSets(s).noYears){
-	vector<Type> predNnz = predNFun(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, y);
+	dataSet<Type> ds = sam.dataSets(s);
+	confSet cs = sam.confSets(s);
+	paraSet<Type> ps = paraSets(s);
+	vector<Type> predNnz = predNFun(ds, cs, ps, logNa, logFa, (int)y);
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
@@ -396,7 +401,10 @@ Type objective_function<Type>::operator() ()
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
-    ans += nllObs(sam.dataSets(s), sam.confSets(s), paraSets(s), logNa, logFa, keepTmp,  &of);
+    dataSet<Type> ds = sam.dataSets(s);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+    ans += nllObs(ds, cs, ps, logNa, logFa, keepTmp,  &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
