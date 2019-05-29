@@ -74,9 +74,9 @@ plotit.msam <- function(fit, what,
       xr <- xlim
     }
     x<-x[didx]
-    y<-y[didx,]
-    low<-low[didx,]
-    high<-high[didx,]
+    y<-y[didx,, drop = FALSE]
+    low<-low[didx,, drop = FALSE]
+    high<-high[didx,, drop = FALSE]
     if(add){
         for(i in 1:length(fit))
             lines(xAll, (y[,i]), lwd=3, col=col[i],...)
