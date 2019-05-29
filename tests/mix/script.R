@@ -29,7 +29,6 @@ sprat <- refit("sp2015tmb2")
 cbh <- refit("cbh2015_tmb")
 wbh <- refit("wbss_herring_2017_tmb")
 
-
 library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)
 
 },type='message')
