@@ -170,7 +170,7 @@ Type objective_function<Type>::operator() ()
     Type huge = 10.0;
     for (int i = 0; i < missing.size(); i++)
       ans -= dnorm(missing(i), Type(0.0), huge, true);  
-} 
+  } 
   
 
   ofall<Type> ofAll(nStocks);
@@ -251,8 +251,12 @@ Type objective_function<Type>::operator() ()
 	}
       }
     } 
-    
-    density::MVNORM_t<Type> neg_log_densityN(ncov);
+
+  Type fracMixN = 0.0;
+  for(int s = 0; s < nAreas; ++s)
+    fracMixN += sam.confSets(s).fracMixN / Type(nAreas);
+  
+  MVMIX_t<Type> neg_log_densityN(ncov, fracMixN);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
 
@@ -291,7 +295,7 @@ Type objective_function<Type>::operator() ()
 	 2) Get conditional distribution of stocks with simFlag == 0 (and keepN == 1)
 	 3) Simulate from marginal distribution
 	 4) Insert into logN at the right places
-       */
+      */
       // 1) Check if any simFlags are 0
       bool doSim = false;
       for(int s = 0; s < nAreas; ++s)
@@ -339,13 +343,13 @@ Type objective_function<Type>::operator() ()
 
 	  for(int i = 0; i < ccond.size(); ++i)
 	    for(int j = 0; j < cond.size(); ++j)
-		Sigma_NC(i,j) = ncov(ccond(i),cond(j));
+	      Sigma_NC(i,j) = ncov(ccond(i),cond(j));
 	  
 	  matrix<Type> meanCorrectionMat = Sigma_NC * Sigma_CC_inv;
 
 	  for(int i = 0; i < cond.size(); ++i)
 	    for(int j = 0; j < ccond.size(); ++j)
-		Sigma_CN(i,j) = ncov(cond(i),ccond(j));
+	      Sigma_CN(i,j) = ncov(cond(i),ccond(j));
 
 	  matrix<Type> newSigma = Sigma_NN - (matrix<Type>)(meanCorrectionMat * Sigma_CN);
 
