@@ -128,6 +128,24 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_MATRIX(logN);
   PARAMETER_CMOE_VECTOR(missing);
 
+  
+  ////////////////////////////////////////
+  /////////// Prepare forecast ///////////
+  ////////////////////////////////////////
+  int nStocks = logF.cols();
+  
+  for(int s = 0; s < nStocks; ++s){
+    // Resize arrays
+    prepareForForecast(sam.dataSets(s));
+    // Calculate forecast
+    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+    logNa = logN.col(s);
+    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+    logFa = logF.col(s);
+    sam.dataSets(s).forecast.calculateForecast(logFa,logNa, sam.dataSets(s), sam.confSets(s));
+  }
+
+  
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
@@ -136,7 +154,6 @@ Type objective_function<Type>::operator() ()
   Type ans = 0; //negative log-likelihood
 
     
-  int nStocks = logF.cols();
   vector<paraSet<Type> > paraSets(nStocks);
 
   for(int s = 0; s < nStocks; ++s){
@@ -184,9 +201,10 @@ Type objective_function<Type>::operator() ()
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    ans += nllF(cs, ps, logFa, keepTmp, &of);
+    ans += nllF(ds, cs, ps, logFa, keepTmp, &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
     // If simulate -> move grab new logF values and move them to the right place!         
