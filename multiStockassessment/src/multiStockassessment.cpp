@@ -187,7 +187,7 @@ Type objective_function<Type>::operator() ()
     Type huge = 10.0;
     for (int i = 0; i < missing.size(); i++)
       ans -= dnorm(missing(i), Type(0.0), huge, true);  
-} 
+  } 
   
 
   ofall<Type> ofAll(nStocks);
@@ -270,7 +270,7 @@ Type objective_function<Type>::operator() ()
       }
     } 
     
-    density::MVNORM_t<Type> neg_log_densityN(ncov);
+  density::MVNORM_t<Type> neg_log_densityN(ncov);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
 
@@ -301,15 +301,36 @@ Type objective_function<Type>::operator() ()
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
       }
     }
-    if(keepN.sum()>0)
+    if(keepN.sum()>0){
+      // forecat correction to recruitment
+      vector<Type> Nscale(predN.size());
+      Nscale.setZero();
+      Nscale += 1.0;
+      vector<Type> predNTmp = predN;
+
+      for(int s = 0; s < nAreas; ++s){
+	dataSet<Type> ds = sam.dataSets(s);
+	int ageOffset = sam.confSets(s).minAge - minAgeAll;
+	int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	if(ds.forecast.nYears > 0 &&
+	   ds.forecast.recModel(CppAD::Integer(ds.forecast.forecastYear(y))-1) != ds.forecast.asRecModel &&
+	   ds.forecast.forecastYear(y) > 0){
+	  Nscale(s * nages + ageOffset) = sqrt(ds.forecast.recruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
+	  predNTmp(s * nages + ageOffset) = log(ds.forecast.recruitmentMedian);	  
+	}
+      }
+      ans+=neg_log_densityN((newN-predNTmp) / Nscale, keepN) + (keepN * log(Nscale)).sum();	  
+    }else{	// end forecast correction to recruitment
       ans+=neg_log_densityN(newN-predN, keepN);
+    }
+      
     SIMULATE{
       /* Plan:
 	 1) If all sam.confSets(s).simFlag == 1, skip the simulation
 	 2) Get conditional distribution of stocks with simFlag == 0 (and keepN == 1)
 	 3) Simulate from marginal distribution
 	 4) Insert into logN at the right places
-       */
+      */
       // 1) Check if any simFlags are 0
       bool doSim = false;
       for(int s = 0; s < nAreas; ++s)
@@ -357,13 +378,13 @@ Type objective_function<Type>::operator() ()
 
 	  for(int i = 0; i < ccond.size(); ++i)
 	    for(int j = 0; j < cond.size(); ++j)
-		Sigma_NC(i,j) = ncov(ccond(i),cond(j));
+	      Sigma_NC(i,j) = ncov(ccond(i),cond(j));
 	  
 	  matrix<Type> meanCorrectionMat = Sigma_NC * Sigma_CC_inv;
 
 	  for(int i = 0; i < cond.size(); ++i)
 	    for(int j = 0; j < ccond.size(); ++j)
-		Sigma_CN(i,j) = ncov(cond(i),ccond(j));
+	      Sigma_CN(i,j) = ncov(cond(i),ccond(j));
 
 	  matrix<Type> newSigma = Sigma_NN - (matrix<Type>)(meanCorrectionMat * Sigma_CN);
 
