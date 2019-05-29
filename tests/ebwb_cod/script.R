@@ -7,7 +7,14 @@ capture.output({
 library(stockassessment)
 
 eb <- fitfromweb("EBC2014_final_tmb")
+conf <- defcon(eb$dat)
+conf[names(eb$conf)] <- eb$conf
+eb <- sam.fit(eb$dat,conf,defpar(eb$dat,conf))
+
 wb <- fitfromweb("wbcod_2014_tmb")
+conf <- defcon(wb$dat)
+conf[names(wb$conf)] <- wb$conf
+wb <- sam.fit(wb$dat,conf,defpar(wb$dat,conf))
 
 dat <- eb$data
 conf <- eb$conf
@@ -21,7 +28,8 @@ par <- defpar(dat,conf)
 eb2 <- sam.fit(dat,conf,par)
 
 dat <- wb$dat
-conf <- wb$conf
+conf <- defcon(dat)
+conf[names(wb$conf)] <- wb$conf
 conf$corFlag <- 2
 conf$keyVarObs <- matrix(c(0,1,2,2,2,2,2,2,
                            3,4,5,6,7,7,0,0,

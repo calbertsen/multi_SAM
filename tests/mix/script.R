@@ -23,8 +23,21 @@ capture.output({
 library(stockassessment)
 
 sprat <- fitfromweb("sp2015tmb2")
+conf <- defcon(sprat$dat)
+conf[names(sprat$conf)] <- sprat$conf
+sprat <- sam.fit(sprat$dat,conf, defpar(sprat$dat,conf))
+
 cbh <- fitfromweb("cbh2015_tmb")
+conf <- defcon(cbh$dat)
+conf[names(cbh$conf)] <- cbh$conf
+cbh <- sam.fit(cbh$dat,conf, defpar(cbh$dat,conf))
+
+
 wbh <- fitfromweb("wbss_herring_2017_tmb")
+conf <- defcon(wbh$dat)
+conf[names(wbh$conf)] <- wbh$conf
+wbh <- sam.fit(wbh$dat,conf, defpar(wbh$dat,conf))
+
 
 
 library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)
