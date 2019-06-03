@@ -6,30 +6,10 @@ collect_pars <- function(x) {
     ncase <- length(x)
     nparam <- length(x[[1]]$pl)
     for(i in 1:nparam){ # loop over different parameters
-        if(is.vector(x[[1]]$pl[[i]])){
-            vec <- numeric()
-            vdim <- numeric(ncase)
-            for(j in 1:ncase){
-                vdim[j] <- length(x[[j]]$pl[[i]])
-                vec <- c(vec,x[[j]]$pl[[i]])
-            }
-            vec <- as.array(vec)
-            attr(vec,"vdim") <- vdim
-            newparam[[i]] <- vec
-
+        if(is.vector(x[[1]]$pl[[i]])){            
+            newparam[[i]] <- combineVectors(lapply(x,function(yy) yy$pl[[i]]))
         }else if(is.matrix(x[[1]]$pl[[i]])){
-            vec <- numeric()
-            cdim <- numeric(ncase)
-            rdim <- numeric(ncase)
-            for(j in 1:ncase){
-                cdim[j] <- ncol(x[[j]]$pl[[i]])
-                rdim[j] <- nrow(x[[j]]$pl[[i]])
-                vec <- c(vec,as.vector(x[[j]]$pl[[i]]))
-            }
-            vec <- as.array(vec)
-            attr(vec,"cdim") <- cdim
-            attr(vec,"rdim") <- rdim
-            newparam[[i]] <- vec
+            newparam[[i]] <- combineMatrices(lapply(x,function(yy) yy$pl[[i]]))
         }else{
             stop("Type not implemented")
         }
