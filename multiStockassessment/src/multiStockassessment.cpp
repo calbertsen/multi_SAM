@@ -117,8 +117,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logSdLogTotalObs);
   PARAMETER_CMOE_VECTOR(transfIRARdist);
   PARAMETER_CMOE_VECTOR(sigmaObsParUS);
-  PARAMETER_CMOE_VECTOR(rec_loga);
-  PARAMETER_CMOE_VECTOR(rec_logb);
+  PARAMETER_CMOE_VECTOR(rec_pars);
   PARAMETER_CMOE_VECTOR(itrans_rho);
   PARAMETER_CMOE_VECTOR(logScale);
   PARAMETER_CMOE_VECTOR(logitReleaseSurvival);
@@ -165,8 +164,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logSdLogTotalObs = logSdLogTotalObs.col(s);
     paraSets(s).transfIRARdist = transfIRARdist.col(s); //transformed distances for IRAR cor obs structure
     paraSets(s).sigmaObsParUS = sigmaObsParUS.col(s); //choleski elements for unstructured cor obs structure
-    paraSets(s).rec_loga = rec_loga.col(s);
-    paraSets(s).rec_logb = rec_logb.col(s);
+    paraSets(s).rec_pars = rec_pars.col(s);
     paraSets(s).itrans_rho = itrans_rho.col(s);  
     paraSets(s).logScale = logScale.col(s);
     paraSets(s).logitReleaseSurvival = logitReleaseSurvival.col(s);
@@ -284,17 +282,17 @@ Type objective_function<Type>::operator() ()
     keepN.setZero();
     // Loop over stocks
     for(int s = 0; s < nAreas; ++s){
+      dataSet<Type> ds = sam.dataSets(s);
+      confSet cs = sam.confSets(s);
+      paraSet<Type> ps = paraSets(s);
       int ageOffset = sam.confSets(s).minAge - minAgeAll;
-      int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+      int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
       
       array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
       logNa = logN.col(s);
       array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
       logFa = logF.col(s);
-      if(y > 0 && y < sam.dataSets(s).noYears){
-	dataSet<Type> ds = sam.dataSets(s);
-	confSet cs = sam.confSets(s);
-	paraSet<Type> ps = paraSets(s);
+      if(y > 0 && y < ds.noYears + ds.forecast.nYears){
 	vector<Type> predNnz = predNFun(ds, cs, ps, logNa, logFa, (int)y);
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
@@ -302,7 +300,7 @@ Type objective_function<Type>::operator() ()
       }
     }
     if(keepN.sum()>0){
-      // forecat correction to recruitment
+      // forecast correction to recruitment
       vector<Type> Nscale(predN.size());
       Nscale.setZero();
       Nscale += 1.0;
@@ -315,14 +313,14 @@ Type objective_function<Type>::operator() ()
 	if(ds.forecast.nYears > 0 &&
 	   ds.forecast.recModel(CppAD::Integer(ds.forecast.forecastYear(y))-1) != ds.forecast.asRecModel &&
 	   ds.forecast.forecastYear(y) > 0){
-	  Nscale(s * nages + ageOffset) = sqrt(ds.forecast.recruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
-	  predNTmp(s * nages + ageOffset) = log(ds.forecast.recruitmentMedian);	  
+	  Nscale(s * nages + ageOffset) = sqrt(ds.forecast.logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
+	  predNTmp(s * nages + ageOffset) = ds.forecast.logRecruitmentMedian;
 	}
       }
       ans+=neg_log_densityN((newN-predNTmp) / Nscale, keepN) + (keepN * log(Nscale)).sum();	  
-    }else{	// end forecast correction to recruitment
-      ans+=neg_log_densityN(newN-predN, keepN);
-    }
+    }// else{	// end forecast correction to recruitment
+    //   ans+=neg_log_densityN(newN-predN, keepN);
+    // }
       
     SIMULATE{
       /* Plan:
