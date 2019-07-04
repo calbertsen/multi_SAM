@@ -306,6 +306,7 @@ Type objective_function<Type>::operator() ()
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
+	
       }
     }
     if(keepN.sum()>0){
@@ -319,7 +320,9 @@ Type objective_function<Type>::operator() ()
 	dataSet<Type> ds = sam.dataSets(s);
 	int ageOffset = sam.confSets(s).minAge - minAgeAll;
 	int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
-	if(ds.forecast.nYears > 0 &&
+	if(y > 0 &&
+	   y < ds.noYears + ds.forecast.nYears &&
+	   ds.forecast.nYears > 0 &&
 	   ds.forecast.recModel(CppAD::Integer(ds.forecast.forecastYear(y))-1) != ds.forecast.asRecModel &&
 	   ds.forecast.forecastYear(y) > 0){
 	  Nscale(s * nages + ageOffset) = sqrt(ds.forecast.logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
