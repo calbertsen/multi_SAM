@@ -312,6 +312,7 @@ forecast.msam <- function(fit,
         stocksimlist[[ss]] <- simlist
     }
     attr(stocksimlist,"fit") <- fit
+    attr(stocksimlist,"sdreport") <- sdr
     class(stocksimlist) <- "msamforecast"
     return(stocksimlist)
 }
