@@ -50,15 +50,18 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
     pars <- collect_pars(x)
     pars$RE <- rep(0,sum(lower.tri(corStructure)))
 
+    ## Prepare map for TMB
+    map0 <- collect_maps(x)
+    
     ## Create initial TMB Object
     ran <- c("logN", "logF", "missing")
-    obj <- TMB::MakeADFun(dat, pars, random=ran, DLL="multiStockassessment", ...)
+    obj <- TMB::MakeADFun(dat, pars, map0, random=ran, DLL="multiStockassessment", ...)
 
     ## Check for unused correlation parameters
     indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
     mvals <- 1:sum(lower.tri(corStructure))
     mvals[indx] <- NA
-    map <- list(RE = factor(mvals))
+    map <- c(map0, list(RE = factor(mvals)))
 
     ## Create TMB Object
     obj <- TMB::MakeADFun(dat, pars, map, random=ran, DLL="multiStockassessment", ...)
@@ -93,10 +96,10 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
         opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
         opt$objective <- obj$fn(opt$par)
     }
-
+    opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
-    sdrep <- TMB::sdreport(obj,opt$par)
+    sdrep <- TMB::sdreport(obj,opt$par, opt$he)
     ssdrep <- summary(sdrep)
 
     ## Do as in stockassessment package
