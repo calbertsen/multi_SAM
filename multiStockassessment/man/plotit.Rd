@@ -9,7 +9,7 @@
   trans = function(x) x, add = FALSE, ci = TRUE, cicol = gray(0.5,
   alpha = 0.5), addCI = NA, drop = 0, unnamed.basename = "current",
   xlim = NULL, ciAlpha = 0.3, col = .plotcols.crp(length(fit)),
-  extraLabel = NULL, ...)
+  extraLabel = NULL, addSingle = FALSE, addSingleCI = FALSE, ...)
 }
 \arguments{
 \item{fit}{msam fit}
@@ -45,6 +45,10 @@
 \item{col}{line colors}
 
 \item{extraLabel}{Not used}
+
+\item{addSingle}{add lines corresponding to single stock estimate}
+
+\item{addSingleCI}{Shade redion corresponding to single stock CI}
 
 \item{...}{Other arguments
 ##' @export}
