@@ -113,10 +113,10 @@ multisam.fit <- function(x,
         opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
         opt$objective <- obj$fn(opt$par)
     }
-
+    opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
-    sdrep <- TMB::sdreport(obj,opt$par)
+    sdrep <- TMB::sdreport(obj,opt$par, opt$he)
     ssdrep <- summary(sdrep)
 
     ## Do as in stockassessment package
