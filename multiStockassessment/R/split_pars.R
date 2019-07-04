@@ -26,3 +26,17 @@ combineMatrices <- function(x){
     vec    
 }
 
+splitParameter <- function(x){
+    if(!is.null(attr(x,"vdim"))){
+        return(splitVectors(x))
+    }else if(!is.null(attr(x,"cdim")) && !is.null(attr(x,"rdim"))){
+        return(splitMatrices(x))
+    }
+    stop("The object to split must have vdim or cdim and rdim attributes.")
+}
+
+combineParameter <- function(x){
+    if(is.matrix(x[[1]]))
+        return(combineMatrices(x))
+    return(combineVectors(x))
+}

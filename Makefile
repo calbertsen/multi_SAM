@@ -68,7 +68,7 @@ prepare_testmore_stockassessment: clean_testmore_stockassessment
 	@unzip sam.zip */testmore/* -d testmore_stockassessment/ > /dev/null
 	@rm sam.zip
 	@mv testmore_stockassessment/*/testmore/* testmore_stockassessment/
-	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep testmore_stockassessment/plots testmore_stockassessment/tables testmore_stockassessment/fromSEXP testmore_stockassessment/parallel
+	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep testmore_stockassessment/plots testmore_stockassessment/tables testmore_stockassessment/fromSEXP testmore_stockassessment/parallel testmore_stockassessment/forecast_*
 	@echo "lf <- list.files('testmore_stockassessment',recursive=TRUE,full.names=TRUE,pattern='script.R'); \
 	fn <- function(f){rl <- readLines(f);cat(c('success_symbol <- \'\u001B[0;32m\u263A\u001B[0;0m\'','failure_symbol <- \'\u001B[0;31m\u2639\u001B[0;0m\'',paste0('setwd(sub(\'script.R\',\'\',\"',f,'\"))'),'sink(\'/dev/null\',type=\'output\')','capture.output({',rl[!grepl('cat\\\\\\\\(',rl)],'library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)','cs<-suggestCorStructure(c(fit),nAgeClose=0)','mfit<-multisam.fit(c(fit),cs)','},type=\'message\')','sink()', \
 	'if(!isTRUE(all.equal(AIC(fit),AIC(mfit)))) stop(sprintf(\'AIC not equal %s vs %s %s\',round(AIC(fit),7),round(AIC(mfit),7),failure_symbol))','cat(sprintf(\'AIC OK %s\\\\\\\\n\',success_symbol))', \
