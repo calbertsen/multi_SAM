@@ -173,7 +173,7 @@ forecast.msam <- function(fit,
     if(deterministic){ ## 'Zero' variance of F process
         fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(2,nYears[i]))
     }else if(!processNoiseF){ ## Constant variance of F process
-        lapply(1:nStocks,function(i)rep(1,nYears[i]))
+        fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(1,nYears[i]))
     }
     ## When F model is used, fsdTimeScaleModel should be 1
     for(i in 1:nStocks)
