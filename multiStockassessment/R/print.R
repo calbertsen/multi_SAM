@@ -15,3 +15,16 @@ print.msam <- function(x, ...){
     invisible(x)
 }
 
+
+##' @method print msamforecast
+##' @export
+print.msamforecast <- function(x, ...){
+    sn <- getStockNames(attr(x,"fit"))
+    cat("\n")
+    for(i in 1:length(sn)){
+        cat(sprintf("Multi-SAM forecast: %s\n\n",sn[i]))
+        print(x[[i]])
+        cat("\n")
+    }
+    invisible(x)
+}
