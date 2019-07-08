@@ -12,6 +12,18 @@ plotit <- function(fit, what, ...){
     UseMethod("plotit")
 }
 
+##' @method plot msamforecast
+##' @export
+plot.msamforecast<-function(x, ...){
+  op<-par(mfrow=c(3,1))
+  ssbplot(x,...)
+  fbarplot(x, drop=0,...)
+  recplot(x,...)
+  par(op)
+}
+
+
+
 ##' Function to actually do the plotting
 ##' @rdname plotit
 ##' @method plotit msam
