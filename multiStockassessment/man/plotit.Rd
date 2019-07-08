@@ -2,6 +2,7 @@
 % Please edit documentation in R/plots.R
 \name{plotit.msam}
 \alias{plotit.msam}
+\alias{plotit.msamforecast}
 \title{Function to actually do the plotting}
 \usage{
 \method{plotit}{msam}(fit, what, x = lapply(attr(fit, "m_data")$sam,
@@ -10,6 +11,12 @@
   alpha = 0.5), addCI = NA, drop = 0, unnamed.basename = "current",
   xlim = NULL, ciAlpha = 0.3, col = .plotcols.crp(length(fit)),
   extraLabel = NULL, ...)
+
+\method{plotit}{msamforecast}(fit, what, x = fit$data$years,
+  ylab = what, xlab = "Years", ex = numeric(0), trans = exp,
+  add = FALSE, ci = TRUE, cicol = gray(0.5, alpha = 0.5),
+  addCI = NA, drop = 0, unnamed.basename = "current", xlim = NULL,
+  ...)
 }
 \arguments{
 \item{fit}{msam fit}
@@ -46,8 +53,7 @@
 
 \item{extraLabel}{Not used}
 
-\item{...}{Other arguments
-##' @export}
+\item{...}{Other arguments}
 }
 \description{
 Function to actually do the plotting
