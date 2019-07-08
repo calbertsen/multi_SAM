@@ -361,7 +361,7 @@ catchplot.msamforecast <- function(fit, obs.show=TRUE, drop=0, ...){
             points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
                    pch=4, lwd=2, cex=1.2, col=col[i])
     }
-   addForecast(fit,"catch")
+   addforecast(fit,"catch")
 }
 
 
