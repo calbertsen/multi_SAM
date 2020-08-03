@@ -5,6 +5,9 @@
 ##' @param full.data should a full data set for sam.fit be returned?
 ##' @param ... Other arguments not used
 ##' @return a list of lists.
+##' @importFrom stats simulate
+##' @method simulate msam
+##' @inheritParams stats::logLik
 ##' @author Christoffer Moesgaard Albertsen
 ##' @export
 simulate.msam <- function(object,

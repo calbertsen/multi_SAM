@@ -32,6 +32,7 @@ forecast.msam <- function(fit,
                           fval = NULL,
                           nextssb = NULL,
                           landval = NULL,
+                          findMSY = NULL,
                           nosim = NULL,
                           year.base = lapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-4:0)),
@@ -46,6 +47,8 @@ forecast.msam <- function(fit,
                           addTSB = FALSE,
                           biasCorrect = TRUE,
                           returnAllYears = FALSE,
+                          useUniroot = FALSE,
+                          nCatchAverageYears = rep(1,length(fit)),
                           ...){
     
     ## Handle year.base < max(fit$data$years)
@@ -80,6 +83,7 @@ forecast.msam <- function(fit,
     fval <- targetToList(fval)
     nextssb <- targetToList(nextssb)
     landval <- targetToList(landval)
+    findMSY <- targetToList(findMSY)
         
     
     ## Get number of forecast years
@@ -87,7 +91,8 @@ forecast.msam <- function(fit,
                        sapply(catchval,length),
                        sapply(fval, length),
                        sapply(nextssb, length),
-                       sapply(landval,length))
+                       sapply(landval,length),
+                       sapply(findMSY, length))
     lengthVec <- split(lengthVec, row(lengthVec))
     
     if(any(sapply(lengthVec,function(x) any(x > 0 & x < max(x)))))
@@ -106,11 +111,13 @@ forecast.msam <- function(fit,
             nextssb[[i]] <- rep(NA_real_, nYears[i])
         if(length(landval[[i]]) == 0)
             landval[[i]] <- rep(NA_real_, nYears[i])
+        if(length(findMSY[[i]]) == 0)
+            findMSY[[i]] <- rep(NA_real_, nYears[i])
     }
 
     
     tabList <- lapply(as.list(1:nStocks),
-                      function(i)rbind(fscale[[i]],fval[[i]],catchval[[i]],nextssb[[i]],landval[[i]]))
+                      function(i)rbind(fscale[[i]],fval[[i]],catchval[[i]],nextssb[[i]],landval[[i]],findMSY[[i]]))
     FModel <- lapply(tabList, function(tab)
         apply(tab,2, function(x){
             y <- which(!is.na(x))
@@ -204,6 +211,7 @@ forecast.msam <- function(fit,
 
     for(i in 1:nStocks)
         args$data$sam[[i]]$forecast <- list(nYears = as.numeric(nYears[i]),
+                                            nCatchAverageYears = as.numeric(nCatchAverageYears[i]),
                                             aveYears = as.numeric(ave.years[[i]]),
                                             forecastYear = as.numeric(c(rep(0,fit[[i]]$data$noYears),seq(1,nYears[i],length=nYears[i]))),
                                             FModel = as.numeric(FModel[[i]]),
@@ -213,8 +221,18 @@ forecast.msam <- function(fit,
                                             logRecruitmentMedian = as.numeric(recList[[i]]$logRecruitmentMedian),
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
-                                            simFlag = 0)
+                                            simFlag = c(0,0),
+                                            uniroot = as.numeric(useUniroot))
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
+
+    withFMSY <- which(sapply(findMSY,function(x)any(!is.na(x))))    
+    if(length(withFMSY) > 0){
+        mtmp <- rep(NA,length(findMSY))
+        mtmp[withFMSY] <- seq_along(withFMSY)
+        args$map$logFScaleMSY <- factor(mtmp)
+        return(args)
+    }
+
 
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)

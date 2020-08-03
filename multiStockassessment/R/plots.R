@@ -201,7 +201,10 @@ addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
 ##' @export
-fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE, ...){
+fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
+                          add=FALSE,
+                          ex=numeric(0),
+                          ...){
     args <- list(...)
     d <- attr(fit,"m_data")$sam
     fbarRange <- lapply(d,function(x){

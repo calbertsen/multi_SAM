@@ -5,7 +5,7 @@
 \title{Fbar plot for msam object}
 \usage{
 \method{fbarplot}{msam}(fit, partial = FALSE, drop = 0, page = NULL,
-  plot = TRUE, ...)
+  plot = TRUE, add = FALSE, ex = numeric(0), ...)
 }
 \arguments{
 \item{fit}{fitted msam object}
