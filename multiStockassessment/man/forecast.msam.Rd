@@ -5,14 +5,15 @@
 \title{Forecast of a multiStockassessment}
 \usage{
 forecast.msam(fit, fscale = NULL, catchval = NULL, fval = NULL,
-  nextssb = NULL, landval = NULL, nosim = NULL,
+  nextssb = NULL, landval = NULL, findMSY = NULL, nosim = NULL,
   year.base = lapply(fit, function(x) max(x$data$years)),
   ave.years = lapply(fit, function(x) max(x$data$years) + (-4:0)),
   rec.years = lapply(fit, function(x) max(x$data$years) + (-9:0)),
   label = NULL, overwriteSelYears = NULL, deterministic = FALSE,
   processNoiseF = TRUE, customSel = NULL, lagR = FALSE,
   splitLD = FALSE, addTSB = FALSE, biasCorrect = TRUE,
-  returnAllYears = FALSE, ...)
+  returnAllYears = FALSE, useUniroot = FALSE,
+  nCatchAverageYears = rep(1, length(fit)), ...)
 }
 \arguments{
 \item{fit}{}

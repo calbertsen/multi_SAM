@@ -86,9 +86,9 @@ plotit.msam <- function(fit, what,
       xr <- xlim
     }
     x<-x[didx]
-    y<-y[didx,]
-    low<-low[didx,]
-    high<-high[didx,]
+    y<-y[didx,, drop = FALSE]
+    low<-low[didx,, drop = FALSE]
+    high<-high[didx,, drop = FALSE]
     if(add){
         for(i in 1:length(fit))
             lines(xAll, (y[,i]), lwd=3, col=col[i],...)
@@ -201,7 +201,10 @@ addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
 ##' @export
-fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE, ...){
+fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
+                          add=FALSE,
+                          ex=numeric(0),
+                          ...){
     args <- list(...)
     d <- attr(fit,"m_data")$sam
     fbarRange <- lapply(d,function(x){
