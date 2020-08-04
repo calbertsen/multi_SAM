@@ -205,7 +205,7 @@ forecastMSY.msam <- function(fit,
 ##' @export
 referencepoints.msam <- function(fit,
                                  nYears = 100,
-                                 Fsequence = seq(1e-5,4, len = 200),
+                                 Fsequence = seq(0,4, len = 200),
                                  aveYears = lapply(fit,function(x)max(x$data$years)+(-4:0)),
                                  selYears = lapply(fit,function(x)max(x$data$years)),
                                  SPRpercent = c(0.35),
@@ -488,11 +488,11 @@ referencepoints.msam <- function(fit,
         ## SPRtab["Ext",c("Low","High")] <- NA
         ## YPRtab["Ext",c("Low","High")] <- NA
 
-        YPRseq <- toCI("logYPR")
-        SPRseq <- toCI("logSPR")
-        Yieldseq <- toCI("logYe")
-        Bseq <- toCI("logSe")
-        Rseq <- toCI("logRe")
+        YPRseq <- toCI(sprintf("SAM_%d_logYPR",i-1))
+        SPRseq <- toCI(sprintf("SAM_%d_logSPR",i-1))
+        Yieldseq <- toCI(sprintf("SAM_%d_logYe",i-1))
+        Bseq <- toCI(sprintf("SAM_%d_logSe",i-1))
+        Rseq <- toCI(sprintf("SAM_%d_logRe",i-1))
 
         rownames(YPRseq) <- rownames(SPRseq) <- rownames(Yieldseq) <- rownames(Bseq) <- rownames(Rseq) <- argsIn$data$referencepoint$Fsequence
 
@@ -503,7 +503,7 @@ referencepoints.msam <- function(fit,
                                   Biomass = Btab,
                                   Recruitment = Rtab
                                   ),
-                    graphs = list(F = argsIn$data$referencepoint$Fsequence,
+                    graphs = list(F = Fsequence[[i]],
                                   Yield = Yieldseq,
                                   YieldPerRecruit = YPRseq,
                                   SpawnersPerRecruit = SPRseq,
