@@ -50,19 +50,6 @@ svd_solve <- function(x){
 }
 
 
-##' @method addRecruitmentCurve msam
-##' @inheritParams stockassessment::addRecruitmentCurve
-##' @importFrom stockassessment addRecruitmentCurve
-##' @export
-addRecruitmentCurve.msam <- function(fit,
-                    CI = TRUE,
-                    col = rgb(0.6,0,0),
-                    cicol = rgb(0.6,0,0,0.3),
-                    plot = TRUE,
-                    ...){
-    
-}
-
 ##' @method forecastMSY msam
 ##' @inheritParams stockassessment::forecastMSY
 ##' @importFrom stockassessment forecastMSY
@@ -75,16 +62,16 @@ forecastMSY.msam <- function(fit,
                              jacobianHScale = 0.5,
                              nCatchAverageYears = 20,
                              ...){
-    argsIn <- forecast.msam(fit,
+    argsIn <- modelforecast.msam(fit,
                             findMSY = rep(1,nYears),
                             rec.years = rec.years,
                             processNoiseF = processNoiseF,
                             nCatchAverageYears = nCatchAverageYears)
     argsIn$DLL <- "multiStockassessment"
 
-
     args <- argsIn
     args$map$logFScaleMSY <- factor(rep(NA,length(fit)))
+   
     objForecast <- do.call(TMB::MakeADFun, args)
     objForecast$fn()
 
@@ -107,6 +94,7 @@ forecastMSY.msam <- function(fit,
     args$map <- args$map[names(args$map) != rp]
     args$map$implicitFunctionDelta <- NULL
 
+    
     objOptim <- do.call(TMB::MakeADFun, args)
 
     objOptim$fn(objOptim$par)
@@ -210,11 +198,15 @@ referencepoints.msam <- function(fit,
                                  selYears = lapply(fit,function(x)max(x$data$years)),
                                  SPRpercent = c(0.35),
                                  catchType = "catch",
-                                jacobianHScale = 0.5,
+                                 jacobianHScale = 0.5,
+                                 MSYreduction = c(0.05),
+                                 newtonSteps = 3,
+                                 optN = 20,
                                  ...){
 
     nStocks <- length(fit)
 
+     
     toList <- function(x){
         if(is.null(x))
             return(replicate(nStocks,numeric(0),FALSE))
@@ -247,6 +239,10 @@ referencepoints.msam <- function(fit,
     nYears <- toList(nYears)
     Fsequence <- toList(Fsequence)
     SPRpercent <- toList(SPRpercent)
+    optN <- toList(optN)
+    MSYreduction <- toList(MSYreduction)
+    MSYfraction <- lapply(MSYreduction, function(x) 1-x)
+   
 
     aveYears <- toList(aveYears)
     aveYears <- lapply(as.list(seq_along(fit)),function(i)match(aveYears[[i]], table =fit[[i]]$data$years) - 1)
@@ -265,7 +261,9 @@ referencepoints.msam <- function(fit,
                                                     selYears = selYears[[i]],
                                                     Fsequence = Fsequence[[i]],
                                                     xPercent = SPRpercent[[i]],
-                                                    catchType = catchType[[i]]-1
+                                                    catchType = catchType[[i]]-1,
+                                                    MSYRange = MSYfraction[[i]],
+                                                    optN = optN[[i]]
                                                     )
 
     args <- argsIn
@@ -348,38 +346,53 @@ referencepoints.msam <- function(fit,
         factor(mtmp)
     }
 
+    rpMap <- list()
+    rpMap$logScaleFmsy <- rp2map(rp, "logScaleFmsy")
+    rpMap$logScaleF01 <- rp2map(rp, "logScaleF01")
+    rpMap$logScaleFmax <- rp2map(rp, "logScaleFmax")
+    rpMap$logScaleFcrash <- rp2map(rp, "logScaleFcrash")
+    rpMap$logScaleFext <- rp2map(rp, "logScaleFext")
+    rpMap$logScaleFlim <- rp2map(rp, "logScaleFlim")
+   
     ## Referencepoints to estimate
-    args$map <- args$map[-which(names(args$map) %in% unique(unlist(rp)))]
+    args$map <- c(args$map[-which(names(args$map) %in% unique(unlist(rp)))],
+                  rpMap)
 
     args$parameters$logScaleFmsy[] <- -1
-    args$map$logScaleFmsy <- rp2map(rp, "logScaleFmsy")
     args$parameters$logScaleF01[] <- -1
-    args$map$logScaleF01 <- rp2map(rp, "logScaleF01")
     args$parameters$logScaleFmax[] <- -1
-    args$map$logScaleFmax <- rp2map(rp, "logScaleFmax")
     args$parameters$logScaleFcrash[] <- -1
-    args$map$logScaleFcrash <- rp2map(rp, "logScaleFcrash")
     args$parameters$logScaleFext[] <- -1
-    args$map$logScaleFext <- rp2map(rp, "logScaleFext")
     args$parameters$logScaleFxPercent <- combineVectors(lapply(seq_along(fit), function(i) rep(-1, length(SPRpercent[[i]]))))
     args$parameters$logScaleFlim[] <- -1
-    args$map$logScaleFlim <- rp2map(rp, "logScaleFlim")
     args$parameters$implicitFunctionDelta[] <- 1
 
-    objOptim <- do.call(TMB::MakeADFun, args)
+    
 
+    objOptim <- do.call(TMB::MakeADFun, args)
+    pStart <- vector("list", nStocks)
+ 
     ## Take inital look at YPR / SPR to determine if Fmax makes sense
     rep <- objOptim$report()
     tryAgain <- FALSE
     stockNames <- multiStockassessment:::getStockNames(fit)
     for(i in seq_along(stockNames)){
+        logFbar <- log(tail(fbartable(fit,returnList = TRUE)[[i]][,"Estimate"],1))
+        ## Fmax
         if(which.max(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) == length(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) && any(rp[[i]] %in% "logScaleFmax")){
             warning(sprintf("%s does not appear to have a well-defined Fmax. Fmax will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmax")]
             args$map$logScaleFmax[i] <- NA
             args$map$logScaleFmax <- factor(args$map$logScaleFmax)
             tryAgain <- TRUE
+        }else if(any(rp[[i]] %in% "logScaleFmax")){
+            indx <- which(is.finite(rep$logYPR[[i]]) & Fsequence[[i]] > 0)
+            ypr <- rep$logYPR[[i]][indx]
+            ff <- Fsequence[[i]][indx]
+            pStart[[i]]$logScaleFmax <- log(ff[which.max(ypr)]) - logFbar
         }
+
+        ## Fcrash
         if(any(rp[[i]] %in% "logScaleFcrash") && min(rep$logSe[[i]][is.finite(rep$logSe[[i]])], na.rm = TRUE) > -4){
             warning(sprintf("%s does not appear to have a well-defined Fcrash. Fcrash will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFcrash")]
@@ -387,26 +400,78 @@ referencepoints.msam <- function(fit,
             args$map$logScaleFcrash <- factor(args$map$logScaleFcrash)
             tryAgain <- TRUE
         }
+
+        ## Fmsy
         if(any(rp[[i]] %in% "logScaleFmsy") && which.max(rep$logYe[[i]][is.finite(rep$logYe[[i]])]) == length(rep$logYe[is.finite(rep$logYe[[i]])])){
             warning(sprintf("%s does not appear to have a well-defined Fmsy. Fmsy will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmsy")]
             args$map$logScaleFmsy[i] <- NA
             args$map$logScaleFmsy <- factor(args$map$logScaleFmsy)
             tryAgain <- TRUE
+        }else if(any(rp[[i]] %in% "logScaleFmsy")){
+            indx <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0)
+            ye <- rep$logYe[[i]][indx]
+            ff <- Fsequence[[i]][indx]
+            pStart[[i]]$logScaleFmsy <- log(ff[which.max(ye)]) - logFbar
+            if(any(rp[[i]] %in% "logScaleFmsyRange")){
+                indx2 <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] < ff[which.max(ye)])
+                ye2 <- rep$logYe[[i]][indx2]
+                ff2 <- Fsequence[[i]][indx2]
+                fmsy <- ff[which.max(ye)]
+                FmsyRangeLower <- sapply(MSYfraction[[i]], function(x){
+                    fL <- ff2[which.min((ye2 - x * max(ye))^2)]
+                    -log(-(log(fL) - log(fmsy)))
+                })
+                indx3 <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] > ff[which.max(ye)])
+                ye3 <- rep$logYe[[i]][indx3]
+                ff3 <- Fsequence[[i]][indx3]
+                fmsy <- ff[which.max(ye)]
+                FmsyRangeUpper <- sapply(MSYfraction[[i]], function(x){
+                    fL <- ff3[which.min((ye3 - x * max(ye))^2)]
+                    log(log(fL) - log(fmsy))
+                })
+                pStart[[i]]$logScaleFmsyRange <- rbind(FmsyRangeLower,
+                                                  FmsyRangeUpper)
+            }
         }
+        
+        ## F01
+        if(any(rp[[i]] %in% "logScaleF01")){
+            indx <- which(is.finite(rep$logYPR[[i]]) & Fsequence[[i]] > 0)
+            ypr <- rep$logYPR[[i]][indx]
+            ff <- Fsequence[[i]][indx]
+            pStart[[i]]$logScaleF01 <- log(ff[which.min((diff(ypr)/diff(ff) - 0.1 * diff(ypr)[1] / diff(ff)[1])^2)]) - logFbar
+        }
+        
+        ## Fx%
+        if(any(rp[[i]] %in% "logScaleFxPercent")){
+            indx <- which(is.finite(rep$logSPR[[i]]) & Fsequence[[i]] > 0)
+            spr <- rep$logSPR[[i]][indx]
+            ff <- Fsequence[[i]][indx]
+            pStart[[i]]$logScaleFxPercent <- sapply(SPRpercent[[i]],function(x){
+                log(ff[which.min((spr - x * spr[1])^2)]) - logFbar
+            })
+        }
+
     }
 
     if(tryAgain)                        
         objOptim <- do.call(TMB::MakeADFun, args)
 
-    opt <- nlminb(objOptim$par, objOptim$fn, objOptim$gr)#, objOptim$he)
+    pStart <- collect_pars(pStart)
+    
+    opt <- nlminb(pStart, objOptim$fn, objOptim$gr)#, objOptim$he)
 
     ## Object to do Delta method (nothing mapped (that's not mapped in fit$obj, nothing random, delta = 1)
     args <- argsIn
     ## Remove random
     args$random <- NULL
     ## Remvoe rp from map
-    args$map <- args$map[!(names(args$map) %in% unique(unlist(rp)))]
+    ## args$map <- args$map[!(names(args$map) %in% unique(unlist(rp)))]
+    ## Remember to handle different reference points for different stocks
+    args$map <- c(args$map[-which(names(args$map) %in% unique(unlist(rp)))],
+                  rpMap)
+
     ## Use optimized parameters
     args$parameters <- objOptim$env$parList(x = opt$par)
 
@@ -522,5 +587,20 @@ referencepoints.msam <- function(fit,
     attr(res,"m_sdr") <- sdr 
     class(res) <- "msam_sam_referencepoints"
     res
+    
+}
+
+
+
+##' @method addRecruitmentCurve msam
+##' @inheritParams stockassessment::addRecruitmentCurve
+##' @importFrom stockassessment addRecruitmentCurve
+##' @export
+addRecruitmentCurve.msam <- function(fit,
+                    CI = TRUE,
+                    col = rgb(0.6,0,0),
+                    cicol = rgb(0.6,0,0,0.3),
+                    plot = TRUE,
+                    ...){
     
 }

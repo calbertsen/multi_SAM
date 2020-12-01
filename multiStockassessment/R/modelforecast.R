@@ -26,7 +26,7 @@
 ##' @param ...
 ##' @return msamforecast
 ##' @export
-forecast.msam <- function(fit,
+modelforecast.msam <- function(fit,
                           fscale = NULL,
                           catchval = NULL,
                           fval = NULL,
