@@ -377,7 +377,7 @@ referencepoints.msam <- function(fit,
     tryAgain <- FALSE
     stockNames <- multiStockassessment:::getStockNames(fit)
     for(i in seq_along(stockNames)){
-        logFbar <- log(tail(fbartable(fit,returnList = TRUE)[[i]][,"Estimate"],1))
+        logFbar <- unname(log(tail(fbartable(fit,returnList = TRUE)[[i]][,"Estimate"],1)))
         ## Fmax
         if(which.max(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) == length(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) && any(rp[[i]] %in% "logScaleFmax")){
             warning(sprintf("%s does not appear to have a well-defined Fmax. Fmax will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
@@ -458,9 +458,18 @@ referencepoints.msam <- function(fit,
     if(tryAgain)                        
         objOptim <- do.call(TMB::MakeADFun, args)
 
-    pStart <- collect_pars(pStart)
+    p0 <- objOptim$par
+    for(ii in unique(unlist(lapply(pStart,names))))
+        p0[names(p0) %in% ii] <- combineParameter(lapply(pStart,function(x)x[[match(ii,names(x))]]))
+
     
-    opt <- nlminb(pStart, objOptim$fn, objOptim$gr)#, objOptim$he)
+    opt <- nlminb(p0, objOptim$fn, objOptim$gr, objOptim$he)
+    for(ii in seq_len(newtonSteps)){
+        g <- as.numeric( objOptim$gr(opt$par) )
+        h <- objOptim$he(opt$par)
+        opt$par <- opt$par - solve(h, g)
+        opt$objective <- objOptim$fn(opt$par)
+    }
 
     ## Object to do Delta method (nothing mapped (that's not mapped in fit$obj, nothing random, delta = 1)
     args <- argsIn
