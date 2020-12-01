@@ -35,14 +35,14 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
     dat0 <- collect_data(x)
     dat <- list(sam = dat0,
                 usePartialCor = as.integer(usePartialCors),
-                maxYearAll = max(unlist(lapply(dat0,function(dd)dd$years))),
-                minYearAll = min(unlist(lapply(dat0,function(dd)dd$years))),
-                maxAgeAll = max(unlist(lapply(dat0,function(dd)dd$maxAge))),
-                minAgeAll = min(unlist(lapply(dat0,function(dd)dd$minAge))),
+                maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years)))),
+                minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years)))),
+                maxAgeAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$maxAge)))),
+                minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge)))),
                 cons = boolMat2ConstraintList(corStructure),
                 fake_obs = numeric(0),
-                fake_stock = numeric(0),
-                fake_indx = numeric(0),
+                fake_stock = integer(0),
+                fake_indx = integer(0),
                 doResiduals = as.integer(FALSE)
                 )
 

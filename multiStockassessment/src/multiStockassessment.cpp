@@ -139,6 +139,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(logScaleFext);
   PARAMETER_CMOE_VECTOR(logScaleFxPercent);
   PARAMETER_VECTOR(logScaleFlim);
+  PARAMETER_CMOE_MATRIX(logScaleFmsyRange);
 
 
   PARAMETER_CMOE_MATRIX(logF); 
@@ -184,6 +185,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logScaleFext = logScaleFext(s);
     paraSets(s).logScaleFxPercent = logScaleFxPercent.col(s);
     paraSets(s).logScaleFlim = logScaleFlim(s);
+    paraSets(s).logScaleFmsyRange = logScaleFmsyRange.col(s);
   }
 
   

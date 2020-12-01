@@ -7,7 +7,7 @@ boolMat2ConstraintList <- function(mm){
     indx <- indx[indx[,1] > indx[,2],,drop=FALSE]
     cons <- list()
     for(i in unique(indx[,1]))
-        cons[[length(cons)+1]] <- c(i,sort(indx[indx[,1]==i,2],TRUE))-1
+        cons[[length(cons)+1]] <- as.numeric(c(i,sort(indx[indx[,1]==i,2],TRUE))-1)
     return(cons)
 }
 

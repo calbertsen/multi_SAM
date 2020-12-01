@@ -4,7 +4,7 @@ collect_maps <- function(x) {
 
     
     ncase <- length(x)
-    newpars <- multiStockassessment:::collect_pars(x)
+    newpars <- collect_pars(x)
     singleMaps <- lapply(x,function(xx)xx$obj$env$map)
     mapNames <- lapply(singleMaps,names)
     uniqueNames <- unique(unlist(mapNames))
