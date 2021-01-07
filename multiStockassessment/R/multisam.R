@@ -2,7 +2,8 @@
 ##'
 ##' @title Fit multiple SAM models with correlations
 ##' @param x samset from the stockassessment package
-##' @param corStructure symmetric boolean matrix. True if a (partial) correlation in survival should be estimated between the corresponding age/stock combination
+##' @param formula formula for covariance matrix covariates (See Details)
+##' @param corStructure symmetric boolean matrix. True if a (partial) correlation in survival should be fixed to zero between the corresponding age/stock combination
 ##' @param usePartialCors if TRUE corStructure describes the partial correlations. If FALSE corStructure describes correlations.
 ##' @param newtonsteps As for stockassessment::sam.fit
 ##' @param lower As for stockassessment::sam.fit
@@ -21,9 +22,18 @@
 ##'   obj <- multisam.fit(fits)
 ##' }
 ##' }
+##' @details
+##' Function to fit a multi-stock SAM model (Albertsen et al., 2018).
+##' @section Covariance covariates
+##' The covariance matrix for the abundance (N) process can be described through a formula, similar to linear models. As covariates, the formula can include 'Age', 'Stock', 'Index', and the name of any matrix in the data set of the original SAM fits with the same number of columns as the number of age groups (e.g., stockMeanWeight). In the latter case, column means are used.
+##'
+##' To fit the models from Albertsen et al. (2018), the formula '~ factor(Index)' should be used in combination with 'suggestCorStructure'. The default values will fit independent models.
+##' 
 ##' @importFrom stats nlminb optimHess
 ##' @importFrom methods is
 ##' @importFrom TMB MakeADFun sdreport
+##' @references
+##' Albertsen, C. M., Nielsen, A. and Thygesen, U. H. (2018) Connecting single-stock assessment models through correlated survival. ICES Journal of Marine Science, 75(1), 235-244. doi: 10.1093/icesjms/fsx114
 ##' @export
 multisam.fit <- function(x,
                          formula = ~-1,
@@ -57,15 +67,18 @@ multisam.fit <- function(x,
     pars <- collect_pars(x)
     pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
 
+    ## Prepare map for TMB
+    map0 <- collect_maps(x)
+    
     ## Create initial TMB Object
     ran <- c("logN", "logF", "missing")
-    obj <- TMB::MakeADFun(dat, pars, random=ran, DLL="multiStockassessment", ...)
+    obj <- TMB::MakeADFun(dat, pars, map0, random=ran, DLL="multiStockassessment", ...)
 
     ## Check for unused correlation parameters
     indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
     mvals <- seq_along(pars$RE)
     mvals[indx] <- NA
-    map <- list(RE = factor(mvals))
+    map <- c(map0, list(RE = factor(mvals)))
 
     ## Create TMB Object
     obj <- TMB::MakeADFun(dat, pars, map, random=ran, DLL="multiStockassessment", ...)

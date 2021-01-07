@@ -1,13 +1,15 @@
 success_symbol <- '\u001B[0;32m\u263A\u001B[0;0m'
 failure_symbol <- '\u001B[0;31m\u2639\u001B[0;0m'
+source("https://raw.githubusercontent.com/fishfollower/SAM/reference_points/stockassessment/R/reading.R")
+
 setwd(sub('script.R','',"tests/ebwb_cod/script.R"))
 sink('/dev/null',type='output')
 capture.output({
 ## Tests the combination of ALN likelihood with AR correlation structure
 library(stockassessment)
 
-eb <- fitfromweb("EBC2014_final_tmb")
-wb <- fitfromweb("wbcod_2014_tmb")
+eb <- refit("EBC2014_final_tmb")
+wb <- refit("wbcod_2014_tmb")
 
 dat <- eb$data
 conf <- eb$conf
@@ -40,7 +42,7 @@ cat("Eastern Baltic Cod Configuration 1:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(eb),nAgeClose=0)
-    mfitEB<-multisam.fit(c(eb),cs)
+    mfitEB<-multisam.fit(c(eb),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb),AIC(mfitEB)))) stop(sprintf('AIC not equal %s vs %s',round(AIC(eb),7),round(AIC(mfitEB),7),failure_symbol))
@@ -59,7 +61,7 @@ cat("Eastern Baltic Cod Configuration 2:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(eb2),nAgeClose=0)
-    mfitEB2<-multisam.fit(c(eb2),cs)
+    mfitEB2<-multisam.fit(c(eb2),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb2),AIC(mfitEB2)))) stop(sprintf('AIC not equal %s vs %s',round(AIC(eb2),7),round(AIC(mfitEB2),7),failure_symbol))
@@ -78,7 +80,7 @@ cat("Western Baltic Cod Configuration 1:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(wb),nAgeClose=0)
-    mfitWB<-multisam.fit(c(wb),cs)
+    mfitWB<-multisam.fit(c(wb),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(wb),AIC(mfitWB)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(wb),7),round(AIC(mfitWB),7),failure_symbol))
@@ -97,7 +99,7 @@ cat("Western Baltic Cod Configuration 2:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(wb2),nAgeClose=0)
-    mfitWB2<-multisam.fit(c(wb2),cs)
+    mfitWB2<-multisam.fit(c(wb2),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(wb2),AIC(mfitWB2)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(wb2),7),round(AIC(mfitWB2),7),failure_symbol))
@@ -116,7 +118,7 @@ cat("Eastern and Western Baltic Cod Combined 1:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(eb,wb),nAgeClose=0)
-    mfitEBWB<-multisam.fit(c(eb,wb),cs)
+    mfitEBWB<-multisam.fit(c(eb,wb),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb)+AIC(wb),AIC(mfitEBWB)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(eb)+AIC(wb),7),round(AIC(mfitEBWB),7),failure_symbol))
@@ -136,7 +138,7 @@ cat("Eastern and Western Baltic Cod Combined 2:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(eb2,wb2),nAgeClose=0)
-    mfitEB2WB2<-multisam.fit(c(eb2,wb2),cs)
+    mfitEB2WB2<-multisam.fit(c(eb2,wb2),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb2)+AIC(wb2),AIC(mfitEB2WB2)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(eb2)+AIC(wb2),7),round(AIC(mfitEB2WB2),7),failure_symbol))
@@ -156,7 +158,7 @@ cat("Western and Eastern Baltic Cod Combined 1:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(wb,eb),nAgeClose=0)
-    mfitWBEB<-multisam.fit(c(wb,eb),cs)
+    mfitWBEB<-multisam.fit(c(wb,eb),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb)+AIC(wb),AIC(mfitWBEB)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(eb)+AIC(wb),7),round(AIC(mfitWBEB),7),failure_symbol))
@@ -176,7 +178,7 @@ cat("Western and Eastern Baltic Cod Combined 1:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(wb2,eb2),nAgeClose=0)
-    mfitWB2EB2<-multisam.fit(c(wb2,eb2),cs)
+    mfitWB2EB2<-multisam.fit(c(wb2,eb2),~-1,cs)
 },type='message')
 sink()   
 if(!isTRUE(all.equal(AIC(eb2)+AIC(wb2),AIC(mfitWB2EB2)))) stop(sprintf('AIC not equal %s vs %s %s',round(AIC(eb2)+AIC(wb2),7),round(AIC(mfitWB2EB2),7),failure_symbol))
@@ -197,7 +199,7 @@ cat("Eastern and Western Baltic Cod Combined and Correlated:\n")
 sink('/dev/null',type='output')
 capture.output({
     cs<-suggestCorStructure(c(wb2,eb2),nAgeClose=1)
-    mfitWB2EB2_1 <-multisam.fit(c(wb2,eb2),cs, newtonsteps = 0)
+    mfitWB2EB2_1 <-multisam.fit(c(wb2,eb2),~ factor(Index),cs, newtonsteps = 0)
 },type='message')
 sink()   
 if(!(logLik(mfitWB2EB2) < logLik(mfitWB2EB2_1))) stop(sprintf("log-likelihood did not increase %s vs %s",logLik(mfitWB2EB2),logLik(mfitWB2EB2_1)))
