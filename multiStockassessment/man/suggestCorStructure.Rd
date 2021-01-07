@@ -4,9 +4,15 @@
 \alias{suggestCorStructure}
 \title{Suggest correlation structure}
 \usage{
-suggestCorStructure(x, nAgeClose = 1, noConnection = FALSE,
-  onlyCloseAge = TRUE, noCorInArea = TRUE, onlyCorInArea = FALSE,
-  noCorBetween = matrix(0, 0, 2))
+suggestCorStructure(
+  x,
+  nAgeClose = 1,
+  noConnection = FALSE,
+  onlyCloseAge = TRUE,
+  noCorInArea = TRUE,
+  onlyCorInArea = FALSE,
+  noCorBetween = matrix(0, 0, 2)
+)
 }
 \arguments{
 \item{x}{a samset}

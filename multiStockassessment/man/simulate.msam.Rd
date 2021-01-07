@@ -4,8 +4,7 @@
 \alias{simulate.msam}
 \title{Simulate from a msam object}
 \usage{
-\method{simulate}{msam}(object, nsim = 1, seed = NULL,
-  full.data = TRUE, ...)
+\method{simulate}{msam}(object, nsim = 1, seed = NULL, full.data = TRUE, ...)
 }
 \arguments{
 \item{object}{msam object result from multisam.fit}

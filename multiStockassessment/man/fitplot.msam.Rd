@@ -4,9 +4,13 @@
 \alias{fitplot.msam}
 \title{Fit plot}
 \usage{
-\method{fitplot}{msam}(fit, stock, log = TRUE,
-  fleets = lapply(attr(fit, "m_data")$sam, function(x) unique(x$aux[,
-  "fleet"])), ...)
+\method{fitplot}{msam}(
+  fit,
+  stock,
+  log = TRUE,
+  fleets = lapply(attr(fit, "m_data")$sam, function(x) unique(x$aux[, "fleet"])),
+  ...
+)
 }
 \arguments{
 \item{fit}{msam object}

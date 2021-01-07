@@ -15,6 +15,9 @@ addTrans <- Vectorize(function(name,alpha=1){
     do.call(grDevices::rgb,arg)
 })
 
+is.samset <- function(x){
+    return(inherits(x,"samset"))
+}
 is.msam <- function(x){
     return(inherits(x,"msam"))
 }
@@ -48,8 +51,8 @@ par2list <- function(x){
 }
     
 getStockNames <- function(x){
-    if(!is.msam(x))
-        stop("x must be an msam object")
+    if(!is.msam(x) && !is.samset(x))
+        stop("x must be an msam object or a samset")
     stocknames <- names(x)
     if(is.null(stocknames))
         stocknames <- paste("Stock",1:length(x))

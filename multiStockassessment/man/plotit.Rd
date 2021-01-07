@@ -4,12 +4,26 @@
 \alias{plotit.msam}
 \title{Function to actually do the plotting}
 \usage{
-\method{plotit}{msam}(fit, what, x = lapply(attr(fit, "m_data")$sam,
-  function(x) x$years), ylab = what, xlab = "Years", ex = numeric(0),
-  trans = function(x) x, add = FALSE, ci = TRUE, cicol = gray(0.5,
-  alpha = 0.5), addCI = NA, drop = 0, unnamed.basename = "current",
-  xlim = NULL, ciAlpha = 0.3, col = .plotcols.crp(length(fit)),
-  extraLabel = NULL, ...)
+\method{plotit}{msam}(
+  fit,
+  what,
+  x = lapply(attr(fit, "m_data")$sam, function(x) x$years),
+  ylab = what,
+  xlab = "Years",
+  ex = numeric(0),
+  trans = function(x) x,
+  add = FALSE,
+  ci = TRUE,
+  cicol = gray(0.5, alpha = 0.5),
+  addCI = NA,
+  drop = 0,
+  unnamed.basename = "current",
+  xlim = NULL,
+  ciAlpha = 0.3,
+  col = .plotcols.crp(length(fit)),
+  extraLabel = NULL,
+  ...
+)
 }
 \arguments{
 \item{fit}{msam fit}

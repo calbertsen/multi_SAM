@@ -80,6 +80,7 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(maxAgeAll);
   DATA_INTEGER(minAgeAll);
   DATA_STRUCT(cons, cov_constraints);
+  DATA_MATRIX(X);
 
 
   // Related to residuals
@@ -123,6 +124,10 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logScale);
   PARAMETER_CMOE_VECTOR(logitReleaseSurvival);
   PARAMETER_CMOE_VECTOR(logitRecapturePhi);
+  PARAMETER_CMOE_VECTOR(sepFalpha);
+  PARAMETER_CMOE_VECTOR(sepFlogitRho);
+  PARAMETER_CMOE_VECTOR(sepFlogSd);
+  PARAMETER_CMOE_VECTOR(predVarObs);
 
   PARAMETER_CMOE_MATRIX(logF); 
   PARAMETER_CMOE_MATRIX(logN);
@@ -153,7 +158,11 @@ Type objective_function<Type>::operator() ()
     paraSets(s).itrans_rho = itrans_rho.col(s);  
     paraSets(s).logScale = logScale.col(s);
     paraSets(s).logitReleaseSurvival = logitReleaseSurvival.col(s);
-    paraSets(s).logitRecapturePhi = logitRecapturePhi.col(s);    
+    paraSets(s).logitRecapturePhi = logitRecapturePhi.col(s);
+    paraSets(s).sepFalpha = sepFalpha.col(s);    
+    paraSets(s).sepFlogitRho = sepFlogitRho.col(s);    
+    paraSets(s).sepFlogSd = sepFlogSd.col(s);    
+    paraSets(s).predVarObs = predVarObs.col(s);    
   }
 
   // patch missing 
@@ -219,7 +228,7 @@ Type objective_function<Type>::operator() ()
   }
   REPORT(A);
 
-  matrix<Type> L = constructL(nages,nAreas,RE,cons);
+  matrix<Type> L = constructL(nages,nAreas,RE, X,cons);
     
   // Get covariance matrix with arbitrary scale
   matrix<Type> Sigma = L * L.transpose();

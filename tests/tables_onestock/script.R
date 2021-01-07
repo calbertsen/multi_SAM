@@ -1,5 +1,7 @@
 success_symbol <- '\u001B[0;32m\u263A\u001B[0;0m'
 failure_symbol <- '\u001B[0;31m\u2639\u001B[0;0m'
+source("https://raw.githubusercontent.com/fishfollower/SAM/reference_points/stockassessment/R/reading.R")
+
 setwd(sub('script.R','',"tests/tables_onestock/script.R"))
 sink('/dev/null',type='output')
 capture.output({
@@ -18,7 +20,7 @@ fit<-sam.fit(nscodData,nscodConf,par)
 
 library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)
 cs<-suggestCorStructure(c(fit),nAgeClose=0)
-mfit<-multisam.fit(c(fit),cs)
+mfit<-multisam.fit(c(fit),~-1,cs)
 },type='message')
 sink()
 

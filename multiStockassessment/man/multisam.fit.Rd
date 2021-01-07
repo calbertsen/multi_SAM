@@ -4,13 +4,23 @@
 \alias{multisam.fit}
 \title{Fit multiple SAM models with correlations}
 \usage{
-multisam.fit(x, corStructure, usePartialCors = TRUE, newtonsteps = 3,
-  lower = NULL, upper = NULL, ...)
+multisam.fit(
+  x,
+  formula = ~-1,
+  corStructure = suggestCorStructure(x, nAgeClose = Inf, noCorInArea = FALSE),
+  usePartialCors = TRUE,
+  newtonsteps = 3,
+  lower = NULL,
+  upper = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{samset from the stockassessment package}
 
-\item{corStructure}{symmetric boolean matrix. True if a (partial) correlation in survival should be estimated between the corresponding age/stock combination}
+\item{formula}{formula for covariance matrix covariates (See Details)}
+
+\item{corStructure}{symmetric boolean matrix. True if a (partial) correlation in survival should be fixed to zero between the corresponding age/stock combination}
 
 \item{usePartialCors}{if TRUE corStructure describes the partial correlations. If FALSE corStructure describes correlations.}
 
@@ -28,6 +38,9 @@ A list of class msam and samset
 \description{
 Fit multiple SAM models with correlated survival processes.
 }
+\details{
+Function to fit a multi-stock SAM model (Albertsen et al., 2018).
+}
 \examples{
 \donttest{
 if(require(stockassessment)){
@@ -39,6 +52,9 @@ if(require(stockassessment)){
   obj <- multisam.fit(fits)
 }
 }
+}
+\references{
+Albertsen, C. M., Nielsen, A. and Thygesen, U. H. (2018) Connecting single-stock assessment models through correlated survival. ICES Journal of Marine Science, 75(1), 235-244. doi: 10.1093/icesjms/fsx114
 }
 \author{
 Christoffer Moesgaard Albertsen
