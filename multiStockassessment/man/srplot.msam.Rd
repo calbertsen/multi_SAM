@@ -4,8 +4,13 @@
 \alias{srplot.msam}
 \title{Stock-recruitment plot}
 \usage{
-\method{srplot}{msam}(fit, textcol = "red", add = FALSE,
-  col = .plotcols.crp(length(fit)), ...)
+\method{srplot}{msam}(
+  fit,
+  textcol = "red",
+  add = FALSE,
+  col = .plotcols.crp(length(fit)),
+  ...
+)
 }
 \arguments{
 \item{fit}{msam object}

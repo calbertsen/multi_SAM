@@ -4,8 +4,16 @@
 \alias{multisam.fit}
 \title{Fit multiple SAM models with correlations}
 \usage{
-multisam.fit(x, corStructure, usePartialCors = TRUE, newtonsteps = 3,
-  lower = NULL, upper = NULL, ...)
+multisam.fit(
+  x,
+  formula = ~-1,
+  corStructure = suggestCorStructure(x, nAgeClose = Inf, noCorInArea = FALSE),
+  usePartialCors = TRUE,
+  newtonsteps = 3,
+  lower = NULL,
+  upper = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{samset from the stockassessment package}

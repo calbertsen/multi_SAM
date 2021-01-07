@@ -25,7 +25,13 @@
 ##' @importFrom methods is
 ##' @importFrom TMB MakeADFun sdreport
 ##' @export
-multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=NULL,upper=NULL,...){
+multisam.fit <- function(x,
+                         formula = ~-1,
+                         corStructure = suggestCorStructure(x,nAgeClose = Inf,noCorInArea=FALSE),
+                         usePartialCors=TRUE,
+                         newtonsteps=3,
+                         lower=NULL,
+                         upper=NULL,...){
     ## Check input
     requireNamespace("TMB")
     if(!methods::is(x,"samset"))
@@ -40,6 +46,7 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
                 maxAgeAll = max(unlist(lapply(dat0,function(dd)dd$maxAge))),
                 minAgeAll = min(unlist(lapply(dat0,function(dd)dd$minAge))),
                 cons = boolMat2ConstraintList(corStructure),
+                X = build_cov_design(formula, x),
                 fake_obs = numeric(0),
                 fake_stock = numeric(0),
                 fake_indx = numeric(0),
@@ -48,7 +55,7 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
 
     ## Prepare parameters for TMB
     pars <- collect_pars(x)
-    pars$RE <- rep(0,sum(lower.tri(corStructure)))
+    pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
 
     ## Create initial TMB Object
     ran <- c("logN", "logF", "missing")
@@ -56,7 +63,7 @@ multisam.fit <- function(x,corStructure,usePartialCors=TRUE,newtonsteps=3,lower=
 
     ## Check for unused correlation parameters
     indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
-    mvals <- 1:sum(lower.tri(corStructure))
+    mvals <- seq_along(pars$RE)
     mvals[indx] <- NA
     map <- list(RE = factor(mvals))
 

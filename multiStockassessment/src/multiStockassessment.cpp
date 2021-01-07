@@ -80,6 +80,7 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(maxAgeAll);
   DATA_INTEGER(minAgeAll);
   DATA_STRUCT(cons, cov_constraints);
+  DATA_MATRIX(X);
 
 
   // Related to residuals
@@ -219,7 +220,7 @@ Type objective_function<Type>::operator() ()
   }
   REPORT(A);
 
-  matrix<Type> L = constructL(nages,nAreas,RE,cons);
+  matrix<Type> L = constructL(nages,nAreas,RE, X,cons);
     
   // Get covariance matrix with arbitrary scale
   matrix<Type> Sigma = L * L.transpose();

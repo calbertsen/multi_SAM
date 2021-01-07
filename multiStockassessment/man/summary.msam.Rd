@@ -4,8 +4,7 @@
 \alias{summary.msam}
 \title{Summary of msam object}
 \usage{
-\method{summary}{msam}(object, returnList = FALSE, digits = c(0, 0, 3),
-  ...)
+\method{summary}{msam}(object, returnList = FALSE, digits = c(0, 0, 3), ...)
 }
 \arguments{
 \item{object}{msam object}

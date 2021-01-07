@@ -12,19 +12,23 @@ struct cov_constraints {
   }
 };
 
+/* Structure to define covariance design matrices */
+
 
 template<class Type>
-matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, cov_constraints<Type> cons){
+matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, matrix<Type> X, cov_constraints<Type> cons){
 
     int nAge = nages * nAreas;
     matrix<Type> llt(nAge,nAge);
     llt.setIdentity();
     int i,j,k=0;
-    for(i=0;i<llt.cols();i++){
-      for(j=0;j<llt.rows();j++){
-	if(i<j){llt(j,i)=RE(k++);} // LAge becomes lower triangular
+    vector<Type> REX = X * RE;
+    if(RE.size() > 0)
+      for(i=0;i<llt.cols();i++){
+	for(j=0;j<llt.rows();j++){
+	  if(i<j){llt(j,i)=REX(k++);} // LAge becomes lower triangular
+	}
       }
-    }
 
     for(int i = 0; i < llt.rows(); ++i)
       llt.row(i) /= norm((vector<Type>)llt.row(i));

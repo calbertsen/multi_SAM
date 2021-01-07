@@ -5,11 +5,23 @@
 \alias{tableit.msam}
 \title{Table helper}
 \usage{
-tableit(fit, what, x = lapply(attr(fit, "m_data")$sam, function(x)
-  x$years), trans = function(x) x, returnList = FALSE, ...)
+tableit(
+  fit,
+  what,
+  x = lapply(attr(fit, "m_data")$sam, function(x) x$years),
+  trans = function(x) x,
+  returnList = FALSE,
+  ...
+)
 
-\method{tableit}{msam}(fit, what, x = lapply(attr(fit, "m_data")$sam,
-  function(x) x$years), trans = function(x) x, returnList = FALSE, ...)
+\method{tableit}{msam}(
+  fit,
+  what,
+  x = lapply(attr(fit, "m_data")$sam, function(x) x$years),
+  trans = function(x) x,
+  returnList = FALSE,
+  ...
+)
 }
 \arguments{
 \item{fit}{msam object}
