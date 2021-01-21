@@ -128,11 +128,6 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(sepFlogSd);
   PARAMETER_CMOE_VECTOR(predVarObs);
 
-  PARAMETER_CMOE_VECTOR(sepFalpha);
-  PARAMETER_CMOE_VECTOR(sepFlogitRho);
-  PARAMETER_CMOE_VECTOR(sepFlogSd);
-  PARAMETER_CMOE_VECTOR(predVarObs);
-
   // Forecast FMSY
   PARAMETER_VECTOR(logFScaleMSY);
   PARAMETER_VECTOR(implicitFunctionDelta);

@@ -194,7 +194,7 @@ forecastMSY.msam <- function(fit,
 referencepoints.msam <- function(fit,
                                  nYears = 100,
                                  Fsequence = seq(0,4, len = 200),
-                                 aveYears = lapply(fit,function(x)max(x$data$years)+(-4:0)),
+                                 aveYears = lapply(fit,function(x)max(x$data$years)+(-9:0)),
                                  selYears = lapply(fit,function(x)max(x$data$years)),
                                  SPRpercent = c(0.35),
                                  catchType = "catch",
@@ -553,7 +553,7 @@ referencepoints.msam <- function(fit,
         })
         rn <- toRowNames(rownames(Ftab))
         rn[is.na(rn)] <- sapply(SPRpercent[[i]],function(x)sprintf("%s%%",x * 100))    
-        rownames(Ftab) <- rownames(Btab) <- rownames(Rtab) <- rownames(Ytab) <- rownames(SPRtab) <- rownames(YPRtab) <- rn
+        rownames(Ftab) <- rownames(Btab) <- rownames(Rtab) <- rownames(Ytab) <- rownames(SPRtab) <- rownames(YPRtab) <- unname(rn)
 
         ## Ftab["Ext",c("Low","High")] <- NA
         ## Btab["Ext",c("Low","High")] <- NA

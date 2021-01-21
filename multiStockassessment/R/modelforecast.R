@@ -15,7 +15,7 @@
 ##' @param rec.years 
 ##' @param label 
 ##' @param overwriteSelYears 
-##' @param deterministic 
+##' @param deterministicF 
 ##' @param processNoiseF 
 ##' @param customSel 
 ##' @param lagR 
@@ -37,11 +37,12 @@ modelforecast.msam <- function(fit,
                           nosim = NULL,
                           year.base = lapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-4:0)),
-                          rec.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
+                          rec.years = lapply(fit,function(x)c()),
                           label = NULL,
                           overwriteSelYears = NULL,
                           deterministicF = FALSE,
                           processNoiseF = TRUE,
+                          resampleFirst = !is.null(nosim) && nosim > 0,
                           customSel = NULL,
                           lagR = FALSE,
                           splitLD = FALSE,
@@ -49,7 +50,8 @@ modelforecast.msam <- function(fit,
                           biasCorrect = TRUE,
                           returnAllYears = FALSE,
                           useUniroot = FALSE,
-                          nCatchAverageYears = rep(1,length(fit)),                          
+                          nCatchAverageYears = rep(1,length(fit)),
+                          returnObj = FALSE,
                           hcrConf = lapply(fit, function(x)numeric(0)),
                           ...){
     
@@ -183,7 +185,7 @@ modelforecast.msam <- function(fit,
     ## Get F process time scale model
     ## By default, scale as random walk
     fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(0,nYears[i]))
-    if(deterministic){ ## 'Zero' variance of F process
+    if(deterministicF){ ## 'Zero' variance of F process
         fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(2,nYears[i]))
     }else if(!processNoiseF){ ## Constant variance of F process
         fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(1,nYears[i]))
