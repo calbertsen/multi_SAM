@@ -33,13 +33,14 @@ modelforecast.msam <- function(fit,
                           nextssb = NULL,
                           landval = NULL,
                           findMSY = NULL,
+                          hcr = NULL,
                           nosim = NULL,
                           year.base = lapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-4:0)),
                           rec.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
                           label = NULL,
                           overwriteSelYears = NULL,
-                          deterministic = FALSE,
+                          deterministicF = FALSE,
                           processNoiseF = TRUE,
                           customSel = NULL,
                           lagR = FALSE,
@@ -48,7 +49,8 @@ modelforecast.msam <- function(fit,
                           biasCorrect = TRUE,
                           returnAllYears = FALSE,
                           useUniroot = FALSE,
-                          nCatchAverageYears = rep(1,length(fit)),
+                          nCatchAverageYears = rep(1,length(fit)),                          
+                          hcrConf = lapply(fit, function(x)numeric(0)),
                           ...){
     
     ## Handle year.base < max(fit$data$years)
@@ -59,7 +61,7 @@ modelforecast.msam <- function(fit,
     ## }
     
     ## Checks
-    if(deterministic && length(fscale) > 0 && any(!is.na(fscale)) && is.null(customSel))
+    if(deterministicF && length(fscale) > 0 && any(!is.na(fscale)) && is.null(customSel))
         warning("Forecasted F values may depend on the last estimated F vector and can therefore have uncertainty. Provide a custom selectivity to circumvent this.")
 
     
@@ -84,6 +86,7 @@ modelforecast.msam <- function(fit,
     nextssb <- targetToList(nextssb)
     landval <- targetToList(landval)
     findMSY <- targetToList(findMSY)
+    hcr <- targetToList(hcr)
         
     
     ## Get number of forecast years
@@ -92,7 +95,8 @@ modelforecast.msam <- function(fit,
                        sapply(fval, length),
                        sapply(nextssb, length),
                        sapply(landval,length),
-                       sapply(findMSY, length))
+                       sapply(findMSY, length),
+                       sapply(hcr, length))
     lengthVec <- split(lengthVec, row(lengthVec))
     
     if(any(sapply(lengthVec,function(x) any(x > 0 & x < max(x)))))
@@ -113,11 +117,13 @@ modelforecast.msam <- function(fit,
             landval[[i]] <- rep(NA_real_, nYears[i])
         if(length(findMSY[[i]]) == 0)
             findMSY[[i]] <- rep(NA_real_, nYears[i])
+        if(length(hcr[[i]]) == 0)
+            hcr[[i]] <- rep(NA_real_, nYears[i])
     }
 
     
     tabList <- lapply(as.list(1:nStocks),
-                      function(i)rbind(fscale[[i]],fval[[i]],catchval[[i]],nextssb[[i]],landval[[i]],findMSY[[i]]))
+                      function(i)rbind(fscale[[i]],fval[[i]],catchval[[i]],nextssb[[i]],landval[[i]],findMSY[[i]], hcr[[i]]))
     FModel <- lapply(tabList, function(tab)
         apply(tab,2, function(x){
             y <- which(!is.na(x))
@@ -222,7 +228,8 @@ modelforecast.msam <- function(fit,
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
                                             simFlag = c(0,0),
-                                            uniroot = as.numeric(useUniroot))
+                                            uniroot = as.numeric(useUniroot),
+                                            hcrConf = hcrConf[[i]])
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
     withFMSY <- which(sapply(findMSY,function(x)any(!is.na(x))))    
@@ -236,105 +243,113 @@ modelforecast.msam <- function(fit,
 
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)
-    obj$fn(attr(fit,"m_opt")$par)
-    ## Get results
-    ADIndex <- obj$env$ADreportIndex()
-    IndxKeep <- c("logfbar","logssb","logR","logCatch","logtsb","logLagR","logLand","logDis","loglandfbar","logdisfbar")[c(TRUE,TRUE,TRUE,TRUE,addTSB,lagR,splitLD,splitLD,splitLD,splitLD)]
-    stockNames <- paste0("SAM_",0:(nStocks-1))
-    ADIndexUse <- list()
-    for(i in 1:nStocks){
-        tmp <- ADIndex[paste0(stockNames[i],"_",IndxKeep)]
-        ADIndexUse <- c(ADIndexUse,lapply(tmp, utils::tail, n = nYears[i] + 1 + (fit[[i]]$data$noYears-1) * as.numeric(returnAllYears)))
+
+    if(returnObj)
+        return(obj)
+
+    if(!is.null(nosim) && nosim > 0){
+
+
+    }else{    
+        obj$fn(attr(fit,"m_opt")$par)
+        ## Get results
+        ADIndex <- obj$env$ADreportIndex()
+        IndxKeep <- c("logfbar","logssb","logR","logCatch","logtsb","logLagR","logLand","logDis","loglandfbar","logdisfbar")[c(TRUE,TRUE,TRUE,TRUE,addTSB,lagR,splitLD,splitLD,splitLD,splitLD)]
+        stockNames <- paste0("SAM_",0:(nStocks-1))
+        ADIndexUse <- list()
+        for(i in 1:nStocks){
+            tmp <- ADIndex[paste0(stockNames[i],"_",IndxKeep)]
+            ADIndexUse <- c(ADIndexUse,lapply(tmp, utils::tail, n = nYears[i] + 1 + (fit[[i]]$data$noYears-1) * as.numeric(returnAllYears)))
+        }
+        ADNames <- sapply(IndxKeep,function(i) grep(i,names(ADIndex)))
+        sdr <- TMB::sdreport(obj, attr(fit,"m_opt")$par, attr(fit,"m_opt")$he,
+                             bias.correct= biasCorrect,
+                             skip.delta.method = biasCorrect,
+                             bias.correct.control = list(sd = TRUE,
+                                                         split = ADIndexUse
+                                                         )
+                             )
+        ssdr <- summary(sdr)
+        stocksimlist <- list()
+        for(ss in 1:nStocks){
+            simlist <- list()
+            for(i in 0:(length(FModel[[ss]]))){
+                y<-year.base[[ss]]+i            
+                simlist[[i+1]] <- list(sim=NA, fbar=NA, catch=NA, ssb=NA, rec=NA,
+                                       cwF=NA, catchatage=NA, land=NA, fbarL=NA, tsb=NA, year=y)
+            }
+            attr(simlist, "fit")<-fit[[ss]]    
+
+            toCI <- function(x, trans = exp){
+                trans(x %*% matrix(c(1,0,1,-2,1,2), nrow = 2, ncol =3))
+            }
+
+            indx <- 1:2
+            if(biasCorrect)
+                indx <- 3:4
+
+            toStockVarName <- function(ss,x)sprintf("SAM_%d_%s",ss-1,x)
+            fbar <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logfbar"),indx])
+            rec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logR"),indx])
+            if(lagR)
+                rec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLagR"),indx])
+            ssb <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logssb"),indx])
+            catch <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logCatch"),indx])
+            ## caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect)))) 
+            tab <- cbind(fbar,rec,ssb,catch)
+            if(splitLD){
+                land <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLand"),indx])
+                fbarL <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"loglandfbar"),indx])
+                dis <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logDis"),indx])
+                fbarD <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logdisfbar"),indx])
+                tab<-cbind(tab,fbarL,fbarD,land,dis)
+            }
+            if(addTSB){
+                tsb <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logtsb"),indx])
+                tab<-cbind(tab,tsb)
+            }
+            
+            ## Handle cwF !!
+            
+            ## Row and column names on table
+            futureYears <- unlist(lapply(simlist, function(xx)xx$year))
+
+            rownames(tab) <- sort(unique(c(fit[[ss]]$data$years, futureYears)))
+            fullTable <- tab
+            
+            tab <- tab[as.numeric(rownames(tab)) %in% futureYears, , drop = FALSE]
+            
+            nam <- c("median","low","high")
+            basename<-c("fbar:","rec:","ssb:","catch:")
+            if(splitLD){
+                basename<-c(basename,"fbarL:","fbarD:","Land:","Discard:")    
+            }
+            if(addTSB){
+                basename<-c(basename,"tsb:")    
+            }
+            ## if(!missing(customWeights)){
+            ##     basename<-c(basename,"cwF:")    
+            ## }
+
+            colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
+            if(returnAllYears || !biasCorrect)
+                colnames(fullTable) <- colnames(tab)
+            attr(simlist, "tab")<-tab
+            shorttab<-t(tab[,grep("median",colnames(tab))])
+            rownames(shorttab)<-sub(":median","",paste0(label,if(!is.null(label))":",rownames(shorttab)))
+            attr(simlist, "shorttab")<-shorttab
+            attr(simlist, "label") <- label    
+            ## attr(simlist, "caytable")<-caytable
+            attr(simlist, "fulltab") <- fullTable
+            class(simlist) <- "samforecast"
+            stocksimlist[[ss]] <- simlist
+        }
+        attr(stocksimlist,"fit") <- fit
+        attr(stocksimlist,"sdreport") <- sdr
+        class(stocksimlist) <- "msamforecast"
+        return(stocksimlist)
     }
-    ADNames <- sapply(IndxKeep,function(i) grep(i,names(ADIndex)))
-    sdr <- TMB::sdreport(obj, attr(fit,"m_opt")$par, attr(fit,"m_opt")$he,
-                         bias.correct= biasCorrect,
-                         skip.delta.method = biasCorrect,
-                         bias.correct.control = list(sd = TRUE,
-                                                     split = ADIndexUse
-                                                     )
-                         )
-    ssdr <- summary(sdr)
-    stocksimlist <- list()
-    for(ss in 1:nStocks){
-        simlist <- list()
-        for(i in 0:(length(FModel[[ss]]))){
-            y<-year.base[[ss]]+i            
-            simlist[[i+1]] <- list(sim=NA, fbar=NA, catch=NA, ssb=NA, rec=NA,
-                                   cwF=NA, catchatage=NA, land=NA, fbarL=NA, tsb=NA, year=y)
-        }
-        attr(simlist, "fit")<-fit[[ss]]    
-
-        toCI <- function(x, trans = exp){
-            trans(x %*% matrix(c(1,0,1,-2,1,2), nrow = 2, ncol =3))
-        }
-
-        indx <- 1:2
-        if(biasCorrect)
-            indx <- 3:4
-
-        toStockVarName <- function(ss,x)sprintf("SAM_%d_%s",ss-1,x)
-        fbar <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logfbar"),indx])
-        rec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logR"),indx])
-        if(lagR)
-            rec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLagR"),indx])
-        ssb <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logssb"),indx])
-        catch <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logCatch"),indx])
-        ## caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect)))) 
-        tab <- cbind(fbar,rec,ssb,catch)
-        if(splitLD){
-            land <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLand"),indx])
-            fbarL <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"loglandfbar"),indx])
-            dis <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logDis"),indx])
-            fbarD <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logdisfbar"),indx])
-            tab<-cbind(tab,fbarL,fbarD,land,dis)
-        }
-        if(addTSB){
-            tsb <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logtsb"),indx])
-            tab<-cbind(tab,tsb)
-        }
-        
-        ## Handle cwF !!
-        
-        ## Row and column names on table
-        futureYears <- unlist(lapply(simlist, function(xx)xx$year))
-
-        rownames(tab) <- sort(unique(c(fit[[ss]]$data$years, futureYears)))
-        fullTable <- tab
-  
-        tab <- tab[as.numeric(rownames(tab)) %in% futureYears, , drop = FALSE]
-        
-        nam <- c("median","low","high")
-        basename<-c("fbar:","rec:","ssb:","catch:")
-        if(splitLD){
-            basename<-c(basename,"fbarL:","fbarD:","Land:","Discard:")    
-        }
-        if(addTSB){
-            basename<-c(basename,"tsb:")    
-        }
-        ## if(!missing(customWeights)){
-        ##     basename<-c(basename,"cwF:")    
-        ## }
-
-        colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
-        if(returnAllYears || !biasCorrect)
-            colnames(fullTable) <- colnames(tab)
-        attr(simlist, "tab")<-tab
-        shorttab<-t(tab[,grep("median",colnames(tab))])
-        rownames(shorttab)<-sub(":median","",paste0(label,if(!is.null(label))":",rownames(shorttab)))
-        attr(simlist, "shorttab")<-shorttab
-        attr(simlist, "label") <- label    
-        ## attr(simlist, "caytable")<-caytable
-        attr(simlist, "fulltab") <- fullTable
-        class(simlist) <- "samforecast"
-        stocksimlist[[ss]] <- simlist
-    }
-    attr(stocksimlist,"fit") <- fit
-    attr(stocksimlist,"sdreport") <- sdr
-    class(stocksimlist) <- "msamforecast"
-    return(stocksimlist)
 }
-
     
 
 

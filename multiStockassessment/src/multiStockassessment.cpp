@@ -131,6 +131,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(sepFalpha);
   PARAMETER_CMOE_VECTOR(sepFlogitRho);
   PARAMETER_CMOE_VECTOR(sepFlogSd);
+  PARAMETER_CMOE_VECTOR(predVarObs);
 
   // Forecast FMSY
   PARAMETER_VECTOR(logFScaleMSY);
@@ -179,8 +180,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).sepFalpha = sepFalpha.col(s);
     paraSets(s).sepFlogitRho = sepFlogitRho.col(s);
     paraSets(s).sepFlogSd = sepFlogSd.col(s);
-    paraSets(s).predVarObs = predVarObs.col(s);    
-
+    paraSets(s).predVarObs = predVarObs.col(s);
     // Forecast FMSY
     paraSets(s).logFScaleMSY = logFScaleMSY(s);
     paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
@@ -201,13 +201,13 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   
   for(int s = 0; s < nStocks; ++s){
-    // Resize arrays
-    prepareForForecast(sam.dataSets(s));
     // Calculate forecast
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
     logNa = logN.col(s);
     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
     logFa = logF.col(s);
+    // Resize arrays
+    prepareForForecast(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa);
     sam.dataSets(s).forecast.calculateForecast(logFa,logNa, sam.dataSets(s), sam.confSets(s), paraSets(s));
   }
 
@@ -312,7 +312,38 @@ Type objective_function<Type>::operator() ()
   density::MVNORM_t<Type> neg_log_densityN(ncov);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
-
+    // Handle simulation of F for forecast and HCR
+    SIMULATE{
+      // Simulate new F for forecast and HCR
+     for(int s = 0; s < nAreas; ++s){
+       if(sam.dataSets(s).forecast.nYears > 0){	 
+	 dataSet<Type> ds = sam.dataSets(s);
+	 confSet cs = sam.confSets(s);
+	 paraSet<Type> ps = paraSets(s);
+	 int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
+	 if(y > 0 && y < ds.noYears + ds.forecast.nYears){
+	   array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+	   logNa = logN.col(s);
+	   array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+	   logFa = logF.col(s);	 
+	   matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
+	   MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
+	   int nYears = ds.forecast.nYears;
+	   int fi = y - ds.forecast.forecastYear.size() + nYears;
+	   // Update forecast
+	   ds.forecast.updateForecast(fi, logFa, logNa, ds, cs, ps);
+	   // Simulate F
+	   // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
+	   if(ds.forecast.simFlag(0) == 0){
+	     Type timeScale = ds.forecast.forecastCalculatedLogSdCorrection(fi);
+	     logF.col(s).col(y) = (vector<Type>)ds.forecast.forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;
+	     logFa = logF.col(s);	 
+	   }	   
+	 }	 
+       }
+     }
+    }
+    
     // Vector for predictions
     vector<Type> predN(ncov.rows());
     predN.setZero();

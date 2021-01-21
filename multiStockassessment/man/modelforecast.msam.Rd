@@ -5,15 +5,16 @@
 \title{Forecast of a multiStockassessment}
 \usage{
 modelforecast.msam(fit, fscale = NULL, catchval = NULL, fval = NULL,
-  nextssb = NULL, landval = NULL, findMSY = NULL, nosim = NULL,
-  year.base = lapply(fit, function(x) max(x$data$years)),
+  nextssb = NULL, landval = NULL, findMSY = NULL, hcr = NULL,
+  nosim = NULL, year.base = lapply(fit, function(x) max(x$data$years)),
   ave.years = lapply(fit, function(x) max(x$data$years) + (-4:0)),
   rec.years = lapply(fit, function(x) max(x$data$years) + (-9:0)),
-  label = NULL, overwriteSelYears = NULL, deterministic = FALSE,
+  label = NULL, overwriteSelYears = NULL, deterministicF = FALSE,
   processNoiseF = TRUE, customSel = NULL, lagR = FALSE,
   splitLD = FALSE, addTSB = FALSE, biasCorrect = TRUE,
   returnAllYears = FALSE, useUniroot = FALSE,
-  nCatchAverageYears = rep(1, length(fit)), ...)
+  nCatchAverageYears = rep(1, length(fit)), hcrConf = lapply(fit,
+  function(x) numeric(0)), ...)
 }
 \arguments{
 \item{fit}{}
@@ -40,8 +41,6 @@ modelforecast.msam(fit, fscale = NULL, catchval = NULL, fval = NULL,
 
 \item{overwriteSelYears}{}
 
-\item{deterministic}{}
-
 \item{processNoiseF}{}
 
 \item{customSel}{}
@@ -55,6 +54,8 @@ modelforecast.msam(fit, fscale = NULL, catchval = NULL, fval = NULL,
 \item{biasCorrect}{}
 
 \item{returnAllYears}{}
+
+\item{deterministic}{}
 }
 \value{
 msamforecast
