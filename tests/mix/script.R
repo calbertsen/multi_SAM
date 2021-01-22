@@ -1,8 +1,6 @@
 success_symbol <- '\u001B[0;32m\u263A\u001B[0;0m'
 failure_symbol <- '\u001B[0;31m\u2639\u001B[0;0m'
 
-source("https://raw.githubusercontent.com/fishfollower/SAM/reference_points/stockassessment/R/reading.R")
-
 
 testFun <- function(fl,mf){
     if(!isTRUE(all.equal(Reduce("+",lapply(fl,AIC)),AIC(mf)))) stop(sprintf('AIC not equal %s vs %s',round(Reduce("+",lapply(fl,AIC)),7),round(AIC(mf),7),failure_symbol))
@@ -25,9 +23,9 @@ capture.output({
 ## Tests the combination of ALN likelihood with AR correlation structure
 library(stockassessment)
 
-sprat <- refit("sp2015tmb2")
-cbh <- refit("cbh2015_tmb")
-wbh <- refit("wbss_herring_2017_tmb")
+sprat <- stockassessment:::refit("sp2015tmb2")
+cbh <- stockassessment:::refit("cbh2015_tmb")
+wbh <- stockassessment:::refit("wbss_herring_2017_tmb")
 
 library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)
 
@@ -78,3 +76,17 @@ sink()
 testFun(c(sprat,cbh,wbh),mfitSCW)
 
 
+if(FALSE){
+
+    rpS <- referencepoints(mfitS)
+    rpC <- referencepoints(mfitC)
+    rpW <- referencepoints(mfitW)
+    rp <- referencepoints(mfitSCW)
+
+    all.equal(rpS[[1]]$tables$F, rp[[1]]$tables$F)
+
+    all.equal(rpC[[1]]$tables$F, rp[[2]]$tables$F)
+
+    all.equal(rpW[[1]]$tables$F, rp[[3]]$tables$F)
+
+}

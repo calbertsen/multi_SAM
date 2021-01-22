@@ -10,6 +10,16 @@ INCLHPPFILES := $(wildcard ${PACKAGE}/inst/include/*.hpp)
 NAMESPACEFILE := ${PACKAGE}/NAMESPACE
 RCHECK := ${PACKAGE}.Rcheck
 
+ifeq (testone,$(firstword $(MAKECMDGOALS)))
+  ARG := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(ARG):;@:)
+endif
+
+ifeq (testone,$(firstword $(MAKECMDGOALS)))
+  ARG := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(ARG):;@:)
+endif
+
 .PHONY: all doc build check install test
 
 all: doc updateStockassessment build check install test testmore_stockassessment README.md
@@ -56,6 +66,10 @@ test:
 		echo "\033[1;33mRunning $$scrpt\033[0;0m"; \
 		$(R) --slave -f $$scrpt ;\
 	done
+
+testone:
+	@echo "\033[0;32mRunning test ${ARG}\033[0;0m"
+	@$(R) --slave -f tests/${ARG}/script.R
 
 clean_testmore_stockassessment:
 	@echo "\033[0;32mCleaning testmore_stockassessment\033[0;0m"

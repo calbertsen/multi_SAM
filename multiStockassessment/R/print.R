@@ -28,3 +28,17 @@ print.msamforecast <- function(x, ...){
     }
     invisible(x)
 }
+
+##' @method print msam_referencepoints
+##' @export
+print.msam_referencepoints <- function(x, ...){
+    sn <- names(x)
+    cat("\n")
+    for(i in 1:length(sn)){
+        cat(sprintf("Multi-SAM reference points: %s\n\n",sn[i]))
+        print(x[[i]])
+        cat("\n")
+    }
+    invisible(x)
+}
+

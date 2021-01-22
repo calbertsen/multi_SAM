@@ -111,7 +111,6 @@ forecastMSY.msam <- function(fit,
     fnTestStart <- apply(testStart,2, fn)
     opt <- nlminb(testStart[which(order(fnTestStart) == 1)], fn, control = nlminb.control)
 
-
     ## Object to do Delta method (no map, no random, delta = 1)
     args <- argsIn
     args$parameters <- objOptim$env$parList(x = opt$par)
@@ -222,7 +221,7 @@ referencepoints.msam <- function(fit,
     ## Get joint precision
     jointPrecision <- TMB::sdreport(attr(fit,"m_obj"),
                                     attr(fit,"m_opt")$par,
-                                    solve(attr(fit,"m_sdrep")$cov.fixed),
+                                    svd_solve(attr(fit,"m_sdrep")$cov.fixed),
                                     getJointPrecision = TRUE)$jointPrecision
 
     ## Prepare arguments to calculate reference points (fix parameters and latent variables, delta = 1)
@@ -273,6 +272,7 @@ referencepoints.msam <- function(fit,
     map0 <- args$map
     fix <- names(args$parameters) ## setdiff(names(args$parameters), args$random)
     args$map <- lapply(args$parameters[fix], function(x)factor(x*NA))
+    args$map$logScaleFmsyRange <- NULL
 
     rp <- vector("list",length=nStocks)
     for(i in seq_along(fit)){
@@ -285,56 +285,64 @@ referencepoints.msam <- function(fit,
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
-                         ## "logScaleFext",
+                         "logScaleFext",
                          "logScaleFxPercent",
-                         "logScaleFlim")
+                         "logScaleFlim",
+                         "logScaleFmsyRange")
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(3,62)){ # constant mean, AR
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
-                         "logScaleFxPercent")
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange")
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(64)){ # Pow CMP
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
-                         "logScaleFxPercent"
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(65)){ # Pow Non-CMP
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
-                         "logScaleFxPercent"
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(68,69) && fit[[i]]$pl$rec_par[3] > 0){ ## depensatory recruitment; Fcrash does not work.
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
-                         ## "logScaleFext",
-                         "logScaleFxPercent"
+                         "logScaleFext",
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(90)){
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
-                         ## "logScaleFext",
-                         "logScaleFxPercent"
+                         "logScaleFext",
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(91,92)){
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
                          ##"logScaleFcrash",
-                         ## "logScaleFext",
-                         "logScaleFxPercent"
+                         "logScaleFext",
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }else{
             rp[[i]] <- c("logScaleFmsy",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
-                         ## "logScaleFext",
-                         "logScaleFxPercent"
+                         "logScaleFext",
+                         "logScaleFxPercent",
+                         "logScaleFmsyRange"
                          )
         }
     }
@@ -352,11 +360,11 @@ referencepoints.msam <- function(fit,
     rpMap$logScaleFmax <- rp2map(rp, "logScaleFmax")
     rpMap$logScaleFcrash <- rp2map(rp, "logScaleFcrash")
     rpMap$logScaleFext <- rp2map(rp, "logScaleFext")
-    rpMap$logScaleFlim <- rp2map(rp, "logScaleFlim")
+    rpMap$logScaleFlim <- rp2map(rp, "logScaleFlim")    
    
     ## Referencepoints to estimate
     args$map <- c(args$map[-which(names(args$map) %in% unique(unlist(rp)))],
-                  rpMap)
+                  rpMap[which(names(rpMap) %in% unique(unlist(rp)))])
 
     args$parameters$logScaleFmsy[] <- -1
     args$parameters$logScaleF01[] <- -1
@@ -364,14 +372,24 @@ referencepoints.msam <- function(fit,
     args$parameters$logScaleFcrash[] <- -1
     args$parameters$logScaleFext[] <- -1
     args$parameters$logScaleFxPercent <- combineVectors(lapply(seq_along(fit), function(i) rep(-1, length(SPRpercent[[i]]))))
+    if(length(MSYfraction) > 0){
+        args$parameters$logScaleFmsyRange <- combineMatrices(lapply(seq_along(fit), function(i){
+            if(any(rp[[i]] == "logScaleFmsyRange")){
+                rbind(log(-log(MSYfraction[[i]])),
+                      log(log(1+(1-MSYfraction[[i]]))))
+            }else{
+                matrix(0,2,0)
+            }
+        }
+        ))
+    }
     args$parameters$logScaleFlim[] <- -1
     args$parameters$implicitFunctionDelta[] <- 1
 
-    
-
     objOptim <- do.call(TMB::MakeADFun, args)
     pStart <- vector("list", nStocks)
- 
+    ##pStart$logScaleFmsyRange <- replicate(nStocks, matrix(0,2,0), simplify = FALSE)
+        
     ## Take inital look at YPR / SPR to determine if Fmax makes sense
     rep <- objOptim$report()
     tryAgain <- FALSE
@@ -384,6 +402,8 @@ referencepoints.msam <- function(fit,
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmax")]
             args$map$logScaleFmax[i] <- NA
             args$map$logScaleFmax <- factor(args$map$logScaleFmax)
+            rpMap$logScaleFmax[i] <- NA
+            rpMap$logScaleFmax <- factor(rpMap$logScaleFmax)
             tryAgain <- TRUE
         }else if(any(rp[[i]] %in% "logScaleFmax")){
             indx <- which(is.finite(rep$logYPR[[i]]) & Fsequence[[i]] > 0)
@@ -398,15 +418,19 @@ referencepoints.msam <- function(fit,
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFcrash")]
             args$map$logScaleFcrash[i] <- NA
             args$map$logScaleFcrash <- factor(args$map$logScaleFcrash)
+            rpMap$logScaleFcrash[i] <- NA
+            rpMap$logScaleFcrash <- factor(rpMap$logScaleFcrash)
             tryAgain <- TRUE
         }
-
+        
         ## Fmsy
         if(any(rp[[i]] %in% "logScaleFmsy") && which.max(rep$logYe[[i]][is.finite(rep$logYe[[i]])]) == length(rep$logYe[is.finite(rep$logYe[[i]])])){
             warning(sprintf("%s does not appear to have a well-defined Fmsy. Fmsy will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmsy")]
             args$map$logScaleFmsy[i] <- NA
             args$map$logScaleFmsy <- factor(args$map$logScaleFmsy)
+            rpMap$logScaleFmsy[i] <- NA
+            rpMap$logScaleFmsy <- factor(rpMap$logScaleFmsy)
             tryAgain <- TRUE
         }else if(any(rp[[i]] %in% "logScaleFmsy")){
             indx <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0)
@@ -452,13 +476,12 @@ referencepoints.msam <- function(fit,
                 log(ff[which.min((spr - x * spr[1])^2)]) - logFbar
             })
         }
-
     }
 
     if(tryAgain)                        
         objOptim <- do.call(TMB::MakeADFun, args)
-
-    p0 <- objOptim$par
+    
+    p0 <- objOptim$par    
     for(ii in unique(unlist(lapply(pStart,names))))
         p0[names(p0) %in% ii] <- combineParameter(lapply(pStart,function(x)x[[match(ii,names(x))]]))
 
@@ -505,7 +528,9 @@ referencepoints.msam <- function(fit,
     ## Object to do sdreport (delta = 0)
     args <- argsIn
     ## Remvoe rp from map
-    args$map <- args$map[!(names(args$map) %in% unique(unlist(rp)))]
+    ## args$map <- args$map[!(names(args$map) %in% unique(unlist(rp)))]
+    args$map <- c(args$map[-which(names(args$map) %in% unique(unlist(rp)))],
+                  rpMap)
     ## Use optimized parameters
     args$parameters <- objOptim$env$parList(x = opt$par)
     args$parameters$implicitFunctionDelta[] <- 0
@@ -542,17 +567,23 @@ referencepoints.msam <- function(fit,
                    "sq"="Status quo",
                    "0"="Zero catch",
                    "msy"="MSY",
+                   "msyRange"="xMR",
                    "max"="Max",
                    "01"="0.1",
                    "crash"="Crash",
                    "ext"="Ext",
-                   "xPercent"=NA,
+                   "xPercent"="xP",
                    "lim"="lim",
                    x
                    )               
         })
         rn <- toRowNames(rownames(Ftab))
-        rn[is.na(rn)] <- sapply(SPRpercent[[i]],function(x)sprintf("%s%%",x * 100))    
+        rn[which(rn == "xP")] <- sapply(SPRpercent[[i]],function(x)sprintf("%s%%",x * 100))
+        rn[which(rn == "xMR")] <- sapply(MSYreduction,function(x){
+            c(sprintf("MSY %s%% reduction range (Lower)",x * 100),
+              sprintf("MSY %s%% reduction range (Upper)",x * 100))
+        })
+
         rownames(Ftab) <- rownames(Btab) <- rownames(Rtab) <- rownames(Ytab) <- rownames(SPRtab) <- rownames(YPRtab) <- unname(rn)
 
         ## Ftab["Ext",c("Low","High")] <- NA
@@ -594,7 +625,7 @@ referencepoints.msam <- function(fit,
     names(res) <- getStockNames(fit)
     attr(res,"m_opt") <- opt
     attr(res,"m_sdr") <- sdr 
-    class(res) <- "msam_sam_referencepoints"
+    class(res) <- "msam_referencepoints"
     res
     
 }

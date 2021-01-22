@@ -5,7 +5,7 @@ sink('/dev/null',type='output')
 capture.output({
     library(stockassessment)
 
-    eb <- stockassessment:::refit("EBC2014_final_tmb")
+    eb <- stockassessment:::refit("BW_2018")
 
     library(multiStockassessment, ,quietly=TRUE,warn.conflicts=FALSE)
 
@@ -17,7 +17,7 @@ capture.output({
 },type='message')
 sink()
 
-cat("\n\nEBC2014_final_tmb\n\n")
+cat("\n\nBW_2018 RW recruitment\n\n")
 
 if(!isTRUE(all.equal(AIC(eb),AIC(mfitEB)))){
     cat(sprintf('AIC not equal %s vs %s\n',round(AIC(eb),7),round(AIC(mfitEB),7),failure_symbol))
@@ -109,7 +109,7 @@ capture.output({
 },type='message')
 sink()
 
-cat("\n\nBW_2018\n\n")
+cat("\n\nBW_2018 Ricker recruitment\n\n")
 
 if(!isTRUE(all.equal(AIC(eb2),AIC(mfitEB2)))){
     cat(sprintf('AIC not equal %s vs %s\n',round(AIC(eb2),7),round(AIC(mfitEB2),7),failure_symbol))
@@ -137,7 +137,7 @@ if(!isTRUE(all.equal(attr(logLik(eb2),'df'),attr(logLik(mfitEB2),'df'),tolerance
     cat(sprintf('logLik df OK %s\n',success_symbol))
 }
 
-tst <- all.equal(rp2$tables$F,mrp2[[1]]$tables$F,tolerance=1e-5)
+tst <- all.equal(rp2$tables$F,mrp2[[1]]$tables$F,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint F table not equal: %s %s\n',tst,failure_symbol))
 }else{
@@ -145,7 +145,7 @@ if(!isTRUE(tst)){
 }
 
 
-tst <- all.equal(rp2$tables$Yield,mrp2[[1]]$tables$Yield,tolerance=1e-5)
+tst <- all.equal(rp2$tables$Yield,mrp2[[1]]$tables$Yield,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint Yield table not equal: %s %s\n',tst,failure_symbol))
 }else{
@@ -153,7 +153,7 @@ if(!isTRUE(tst)){
 }
 
 
-tst <- all.equal(rp2$tables$YieldPerRecruit,mrp2[[1]]$tables$YieldPerRecruit,tolerance=1e-5)
+tst <- all.equal(rp2$tables$YieldPerRecruit,mrp2[[1]]$tables$YieldPerRecruit,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint YieldPerRecruit table not equal: %s %s\n',tst,failure_symbol))
 }else{
@@ -161,7 +161,7 @@ if(!isTRUE(tst)){
 }
 
 
-tst <- all.equal(rp2$tables$SpawnersPerRecruit,mrp2[[1]]$tables$SpawnersPerRecruit,tolerance=1e-5)
+tst <- all.equal(rp2$tables$SpawnersPerRecruit,mrp2[[1]]$tables$SpawnersPerRecruit,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint SpawnersPerRecruit table not equal: %s %s\n',tst,failure_symbol))
 }else{
@@ -169,7 +169,7 @@ if(!isTRUE(tst)){
 }
 
 
-tst <- all.equal(rp2$tables$Biomass,mrp2[[1]]$tables$Biomass,tolerance=1e-5)
+tst <- all.equal(rp2$tables$Biomass,mrp2[[1]]$tables$Biomass,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint Biomass table not equal: %s %s\n',tst,failure_symbol))
 }else{
@@ -177,7 +177,7 @@ if(!isTRUE(tst)){
 }
 
 
-tst <- all.equal(rp2$tables$Recruitment,mrp2[[1]]$tables$Recruitment,tolerance=1e-5)
+tst <- all.equal(rp2$tables$Recruitment,mrp2[[1]]$tables$Recruitment,tolerance=1e-5, check.attributes = FALSE)
 if(!isTRUE(tst)){
     cat(sprintf('Referencepoint Recruitment table not equal: %s %s\n',tst,failure_symbol))
 }else{
