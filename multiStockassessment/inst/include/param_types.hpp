@@ -17,7 +17,7 @@ struct cmoe_vector{
     dat = vector<vector<Type> >(ncol_);
     int indx = 0;
     for(int i = 0; i < nv; ++i){
-      int n = (int)REAL(dimsS)[i];
+      int n = INTEGER(dimsS)[i];
       //) = vector<Type>(n);
       vector<Type> tmp(n);
       for(int j = 0; j < n; ++j){
@@ -147,8 +147,8 @@ struct cmoe_matrix{
     dat = vector<matrix<Type> >(ncol_);
     int indx = 0;
     for(int i = 0; i < nv; ++i){
-      int nr = REAL(dimrS)[i];
-      int nc = REAL(dimcS)[i];
+      int nr = INTEGER(dimrS)[i];
+      int nc = INTEGER(dimcS)[i];
       //) = vector<Type>(n);
       matrix<Type> tmp(nr,nc);
       for(int k = 0; k < nc; ++k)

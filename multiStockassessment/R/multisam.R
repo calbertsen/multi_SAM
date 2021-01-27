@@ -51,15 +51,15 @@ multisam.fit <- function(x,
     dat0 <- collect_data(x)
     dat <- list(sam = dat0,
                 usePartialCor = as.integer(usePartialCors),
-                maxYearAll = max(unlist(lapply(dat0,function(dd)dd$years))),
-                minYearAll = min(unlist(lapply(dat0,function(dd)dd$years))),
-                maxAgeAll = max(unlist(lapply(dat0,function(dd)dd$maxAge))),
-                minAgeAll = min(unlist(lapply(dat0,function(dd)dd$minAge))),
+                maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years)))),
+                minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years)))),
+                maxAgeAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$maxAge)))),
+                minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge)))),
                 cons = boolMat2ConstraintList(corStructure),
                 X = build_cov_design(formula, x),
                 fake_obs = numeric(0),
-                fake_stock = numeric(0),
-                fake_indx = numeric(0),
+                fake_stock = integer(0),
+                fake_indx = integer(0),
                 doResiduals = as.integer(FALSE)
                 )
 
@@ -113,19 +113,19 @@ multisam.fit <- function(x,
         opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
         opt$objective <- obj$fn(opt$par)
     }
-
+    opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
-    sdrep <- TMB::sdreport(obj,opt$par)
+    sdrep <- TMB::sdreport(obj,opt$par, opt$he)
     ssdrep <- summary(sdrep)
 
     ## Do as in stockassessment package
     # Last two states
-    idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"))
+    idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
     sdrep$estY <- sdrep$value[idx]
     sdrep$covY <- sdrep$cov[idx,idx]
 
-    idx <- c(which(names(sdrep$value)=="beforeLastLogN"),which(names(sdrep$value)=="beforeLastLogF"))
+    idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
     sdrep$estYm1 <- sdrep$value[idx]
     sdrep$covYm1 <- sdrep$cov[idx,idx]
 
@@ -158,7 +158,13 @@ multisam.fit <- function(x,
     attr(res,"m_high") <- upper2
     attr(res,"corStructure") <- corStructure
     attr(res,"partialCors") <- usePartialCors
-    attr(res,"correlationParameters") <- ssdrep[rownames(ssdrep)=="RE",]
+    corpars <- ssdrep[rownames(ssdrep)=="RE",]
+    if(!is.null(obj$env$map$RE)){
+        corpars <- corpars[obj$env$map$RE,]
+        corpars[is.na(corpars)] <- 0
+    }
+    rownames(corpars) <- colnames(dat$X)
+    attr(res,"correlationParameters") <- corpars
     class(res) <- c("msam","samset")
     return(res)
 }

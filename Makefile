@@ -10,6 +10,16 @@ INCLHPPFILES := $(wildcard ${PACKAGE}/inst/include/*.hpp)
 NAMESPACEFILE := ${PACKAGE}/NAMESPACE
 RCHECK := ${PACKAGE}.Rcheck
 
+ifeq (testone,$(firstword $(MAKECMDGOALS)))
+  ARG := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(ARG):;@:)
+endif
+
+ifeq (testone,$(firstword $(MAKECMDGOALS)))
+  ARG := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  $(eval $(ARG):;@:)
+endif
+
 .PHONY: all doc build check install test
 
 all: doc updateStockassessment build check install test testmore_stockassessment README.md
@@ -57,6 +67,10 @@ test:
 		$(R) --slave -f $$scrpt ;\
 	done
 
+testone:
+	@echo "\033[0;32mRunning test ${ARG}\033[0;0m"
+	@$(R) --slave -f tests/${ARG}/script.R
+
 clean_testmore_stockassessment:
 	@echo "\033[0;32mCleaning testmore_stockassessment\033[0;0m"
 	@rm -r -f testmore_stockassessment
@@ -68,7 +82,7 @@ prepare_testmore_stockassessment: clean_testmore_stockassessment
 	@unzip sam.zip */testmore/* -d testmore_stockassessment/ > /dev/null
 	@rm sam.zip
 	@mv testmore_stockassessment/*/testmore/* testmore_stockassessment/
-	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep testmore_stockassessment/plots testmore_stockassessment/tables testmore_stockassessment/fromSEXP testmore_stockassessment/parallel
+	@rm -r testmore_stockassessment/SAM-${SAM_BRANCH} testmore_stockassessment/revdep testmore_stockassessment/plots testmore_stockassessment/tables testmore_stockassessment/fromSEXP testmore_stockassessment/parallel testmore_stockassessment/jacobian testmore_stockassessment/forecast_*
 	@echo "lf <- list.files('testmore_stockassessment',recursive=TRUE,full.names=TRUE,pattern='script.R'); \
 	fn <- function(f){rl <- readLines(f);cat(c('success_symbol <- \'\u001B[0;32m\u263A\u001B[0;0m\'','failure_symbol <- \'\u001B[0;31m\u2639\u001B[0;0m\'',paste0('setwd(sub(\'script.R\',\'\',\"',f,'\"))'),'sink(\'/dev/null\',type=\'output\')','capture.output({',rl[!grepl('cat\\\\\\\\(',rl)],'library(multiStockassessment,quietly=TRUE,warn.conflicts=FALSE)','lso <- ls()','sfitNames <- lso[sapply(lso, function(xx) class(eval(parse(text=xx)))) == \"sam\"]','sfits <- lapply(sfitNames, function(x) eval(parse(text = x)))','mfits <- lapply(sfits, function(fit){','\tcs<-suggestCorStructure(c(fit),nAgeClose=0)','\tmultisam.fit(c(fit),~-1,cs)','})','},type=\'message\')','sink()', \
 	'for(i in seq_along(sfitNames)){', \

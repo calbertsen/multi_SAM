@@ -1,6 +1,5 @@
 success_symbol <- '\u001B[0;32m\u263A\u001B[0;0m'
 failure_symbol <- '\u001B[0;31m\u2639\u001B[0;0m'
-source("https://raw.githubusercontent.com/fishfollower/SAM/reference_points/stockassessment/R/reading.R")
 
 setwd(sub('script.R','',"tests/ebwb_cod/script.R"))
 sink('/dev/null',type='output')
@@ -8,8 +7,8 @@ capture.output({
 ## Tests the combination of ALN likelihood with AR correlation structure
 library(stockassessment)
 
-eb <- refit("EBC2014_final_tmb")
-wb <- refit("wbcod_2014_tmb")
+eb <- stockassessment:::refit("EBC2014_final_tmb")
+wb <- stockassessment:::refit("wbcod_2014_tmb")
 
 dat <- eb$data
 conf <- eb$conf
@@ -23,7 +22,8 @@ par <- defpar(dat,conf)
 eb2 <- sam.fit(dat,conf,par)
 
 dat <- wb$dat
-conf <- wb$conf
+conf <- defcon(dat)
+conf[names(wb$conf)] <- wb$conf
 conf$corFlag <- 2
 conf$keyVarObs <- matrix(c(0,1,2,2,2,2,2,2,
                            3,4,5,6,7,7,0,0,
@@ -45,16 +45,31 @@ capture.output({
     mfitEB<-multisam.fit(c(eb),~-1,cs)
 },type='message')
 sink()   
-if(!isTRUE(all.equal(AIC(eb),AIC(mfitEB)))) stop(sprintf('AIC not equal %s vs %s',round(AIC(eb),7),round(AIC(mfitEB),7),failure_symbol))
-cat(sprintf('AIC OK %s\n',success_symbol))
-if(!isTRUE(all.equal(logLik(eb),logLik(mfitEB),check.attributes=FALSE))) stop(sprintf('logLik not equal %s vs %s %s',round(logLik(eb),7),round(logLik(mfitEB),7),failure_symbol))
-cat(sprintf('logLik OK %s\n',success_symbol))
-if(!isTRUE(all.equal(nobs(eb),nobs(mfitEB),check.attributes=FALSE))) stop(sprintf('nobs not equal %s vs %s %s',round(nobs(eb),7),round(nobs(mfitEB),7),failure_symbol))
-cat(sprintf('nobs OK %s\n',success_symbol))
-if(!isTRUE(all.equal(BIC(eb),BIC(mfitEB)))) stop(sprintf('BIC not equal %s vs %s',round(BIC(eb),7),round(BIC(mfitEB),7),failure_symbol))
-cat(sprintf('BIC OK %s\n',success_symbol))
-if(!isTRUE(all.equal(attr(logLik(eb),'df'),attr(logLik(mfitEB),'df'),tolerance=1e-6))) stop(sprintf('logLik df not equal %s vs %s %s',round(attr(logLik(eb),'df'),7),round(attr(logLik(mfitEB),'df'),7),failure_symbol))
-cat(sprintf('logLik df OK %s\n',success_symbol))
+if(!isTRUE(all.equal(AIC(eb),AIC(mfitEB)))){
+    cat(sprintf('AIC not equal %s vs %s\n',round(AIC(eb),7),round(AIC(mfitEB),7),failure_symbol))
+}else{
+    cat(sprintf('AIC OK %s\n',success_symbol))
+}
+if(!isTRUE(all.equal(logLik(eb),logLik(mfitEB),check.attributes=FALSE))){
+    cat(sprintf('logLik not equal %s vs %s %s\n',round(logLik(eb),7),round(logLik(mfitEB),7),failure_symbol))
+}else{
+    cat(sprintf('logLik OK %s\n',success_symbol))
+}
+if(!isTRUE(all.equal(nobs(eb),nobs(mfitEB),check.attributes=FALSE))){
+    cat(sprintf('nobs not equal %s vs %s %s\n',round(nobs(eb),7),round(nobs(mfitEB),7),failure_symbol))
+}else{
+    cat(sprintf('nobs OK %s\n',success_symbol))
+}
+if(!isTRUE(all.equal(BIC(eb),BIC(mfitEB)))){
+    cat(sprintf('BIC not equal %s vs %s\n',round(BIC(eb),7),round(BIC(mfitEB),7),failure_symbol))
+}else{
+    cat(sprintf('BIC OK %s\n',success_symbol))
+}
+if(!isTRUE(all.equal(attr(logLik(eb),'df'),attr(logLik(mfitEB),'df'),tolerance=1e-6))){
+    cat(sprintf('logLik df not equal %s vs %s %s\n',round(attr(logLik(eb),'df'),7),round(attr(logLik(mfitEB),'df'),7),failure_symbol))
+}else{
+    cat(sprintf('logLik df OK %s\n',success_symbol))
+}
 
 ### EB
 cat("Eastern Baltic Cod Configuration 2:\n")

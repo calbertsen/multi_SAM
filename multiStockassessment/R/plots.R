@@ -12,6 +12,23 @@ plotit <- function(fit, what, ...){
     UseMethod("plotit")
 }
 
+##' @method plot msamforecast
+##' @export
+plot.msamforecast<-function(x, ...){
+  op<-par(mfrow=c(3,1))
+  ssbplot(x,...)
+  fbarplot(x, drop=0,...)
+  recplot(x,...)
+  par(op)
+}
+
+##' @method plot msam_hcr
+##' @export
+plot.msam_hcr<-function(x, ...){
+  plot(x$forecast)
+}
+
+
 ##' Function to actually do the plotting
 ##' @rdname plotit
 ##' @method plotit msam
@@ -35,7 +52,7 @@ plotit <- function(fit, what, ...){
 ##' @param col line colors
 ##' @param extraLabel Not used
 ##' @param ... Other arguments
-##' ##' @export
+##' @export
 plotit.msam <- function(fit, what,
                         x=lapply(attr(fit,"m_data")$sam,function(x)x$years),
                         ylab=what,
@@ -99,6 +116,86 @@ plotit.msam <- function(fit, what,
     legend("bottom",legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
 }
 
+
+##' @rdname plotit
+##' @method plotit msamforecast
+##' @export
+plotit.msamforecast <- function(fit,
+                                what,
+                                x=fit$data$years,
+                                ylab=what,
+                                xlab="Years",
+                                ex=numeric(0),
+                                trans=exp,
+                                add=FALSE,
+                                ci=TRUE,
+                                cicol=gray(.5,alpha=.5),
+                                addCI=NA,
+                                drop=0,
+                                unnamed.basename="current",
+                                xlim=NULL,
+                                ...){
+    xy <- unlist(lapply(fit, function(xx) unlist(lapply(xx,function(yy)yy$year))))
+    thisfit <- attr(fit,"fit")
+    xr <- range(attr(thisfit,"m_data")$maxYearAll,attr(thisfit,"m_data")$minYearAll, xy)
+    what2 <- switch(what,
+                    logfbar = "fbar",
+                    logR = "rec",
+                    logLagR = "rec",
+                    logssb = "ssb",
+                    logCatch = "catch",
+                    logtsb = "tsb",
+                    what)
+    
+    if(length(ex) == 0){
+        if(ci){
+            ex <- sapply(1:length(fit),function(i){
+                x <- attr(fit[[i]],"tab")
+                range(x[,paste(what2,"low", sep=":")],x[,paste(what2,"high", sep=":")])
+            })
+        }else{
+            ex <- sapply(1:length(fit),function(i){
+                x <- attr(fit[[i]],"tab")
+                range(x[,paste(what2,"median", sep=":")])
+            })         
+        }
+    }
+    plotit(thisfit, what=what, ylab=ylab, xlab=xlab, ex=ex, trans=trans, add=add, ci=ci, cicol=cicol, drop=drop, xlim=xr,...)
+}
+
+
+##' @rdname addforecast
+addforecast<-function(fit, what, dotcol="black", dotpch=19, dotcex=1.5, intervalcol=gray(.5,alpha=.5),...){
+    UseMethod("addforecast")
+}
+
+##' @rdname addforecast
+##' @method addforecast msamforecast
+##' @export
+addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)), dotpch=19, dotcex=1.5, intervalcol=addTrans(dotcol,0.5),...){
+    xlist <- lapply(fit,attr, which = "tab")
+    ylist <- lapply(xlist,function(x) as.numeric(rownames(x)))
+    dummy <- sapply(1:length(xlist),function(s){
+        y <- ylist[[s]]
+        sapply(1:length(ylist[[s]]),
+               function(i){
+                   x <- xlist[[s]]
+                   xx<-c(x[i,paste(what,"low", sep=":")],x[i,paste(what,"high", sep=":")]);
+                   units = par(c('usr', 'pin'))
+                   xx_to_inches = with(units, pin[2L]/diff(usr[3:4]))
+                   if(abs(xx_to_inches * diff(xx))>0.01){
+                       arrows(y[i],xx[1],y[i],xx[2],lwd=3, col=intervalcol[s], angle=90, code=3, length=.1)
+                   }
+               }
+               )
+    })
+    for(s in 1:length(ylist)){
+        y <- ylist[[s]]
+        x <- xlist[[s]]
+        points(y,x[,paste(what,"median", sep=":")], pch=dotpch, cex=dotcex, col=dotcol[s])
+    }
+}
+
 ##' Fbar plot for msam object
 ##'
 ##' @param fit fitted msam object
@@ -109,7 +206,10 @@ plotit.msam <- function(fit, what,
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
 ##' @export
-fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL,...){
+fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
+                          add=FALSE,
+                          ex=numeric(0),
+                          ...){
     args <- list(...)
     d <- attr(fit,"m_data")$sam
     fbarRange <- lapply(d,function(x){
@@ -126,21 +226,48 @@ fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL,...){
     exx <- if(partial){unlist(fmatsInPage)}else{numeric(0)}
     fit2 <- fit
     names(fit2) <- paste0(gsub("[[:space:]]","~",getStockNames(fit)),":~",
-                         unlist(lapply(fbarRange,function(x)attr(x,"label"))))
-    plotit(fit2, "logfbar", ylab=expression(bar(F)), trans=exp, ex=exx, drop=drop, ...)
-    if(partial){
-        if(is.null(args$col)){
-            col <- .plotcols.crp(length(fit))
-        }else{
-            col <- args$col
-        }
-        for(i in 1:length(fit)){
-            idxx <- 1:(length(d[[i]]$years)-drop)
-            matplot(d[[i]]$years[idxx],
-                    fmatsInPage[[i]][idxx,], add=TRUE, type="b", col=col[i], pch=as.character(page[[i]]))
+                                      unlist(lapply(fbarRange,function(x)attr(x,"label"))))
+    if(plot){
+        plotit(fit2, "logfbar", ylab=expression(bar(F)), trans=exp, ex=c(ex,exx), drop=drop, add=add, ...)
+        if(partial){
+            if(is.null(args$col)){
+                col <- .plotcols.crp(length(fit))
+            }else{
+                col <- args$col
+            }
+            for(i in 1:length(fit)){
+                idxx <- 1:(length(d[[i]]$years)-drop)
+                matplot(d[[i]]$years[idxx],
+                        fmatsInPage[[i]][idxx,], add=TRUE, type="b", col=col[i], pch=as.character(page[[i]]))
+            }
         }
     }
+    invisible(list(fbarRange = fbarRange, fbarlab = expression(bar(F)),
+              exx = exx, drop = drop, page = page,
+              fmatsInPage = fmatsInPage, d = d, col = col,
+              stocknames = names(fit2)))
+}
 
+##' @export
+fbarplot.msamforecast <- function(fit,partial = FALSE, drop=0, page=NULL,...){
+    fitlocal <- attr(fit,"fit")
+    tmp <- fbarplot(fitlocal,partial=partial,drop=drop,page=page,plot=FALSE,...)
+    fit2 <- fit
+    names(attr(fit2,"fit")) <- tmp$stocknames
+    plotit(fit2, "logfbar", ylab=tmp$fbarlab, trans=exp, ex=tmp$exx, drop=tmp$drop, ...)
+    if(partial){
+        for(i in 1:length(fit)){
+            idxx <- 1:(length(tmp$d[[i]]$years)-tmp$drop)
+            matplot(tmp$d[[i]]$years[idxx],
+                    tmp$fmatsInPage[[i]][idxx,], add=TRUE, type="b", col=tmp$col[i], pch=as.character(tmp$page[[i]]))
+        }
+    }
+    addforecast(fit2,"fbar")
+}
+
+##' @export
+fbarplot.msam_hcr <- function(fit, ...){
+    fbarplot(fit$forecast, ...)
 }
 
 ##' SSB plot
@@ -154,6 +281,17 @@ ssbplot.msam <- function(fit, ...){
     plotit(fit, "logssb", ylab="SSB", trans = exp, ...)
 }
 
+##' @export
+ssbplot.msamforecast <- function(fit, ...){
+    plotit(fit, "logssb", ylab="SSB", trans = exp, ...)
+    addforecast(fit,"ssb")
+}
+
+##' @export
+ssbplot.msam_hcr <- function(fit, ...){
+    ssbplot(fit$forecast, ...)
+}
+
 ##' TSB plot
 ##'
 ##' @param fit msam object
@@ -163,6 +301,19 @@ ssbplot.msam <- function(fit, ...){
 ##' @export
 tsbplot.msam <- function(fit,...){
     plotit(fit, "logtsb", ylab="TSB", trans=exp,...)
+}
+
+##' @export
+tsbplot.msamforecast <- function(fit, ...){
+    if(!all(sapply(fit,function(x) any(colnames(attr(x,"tab")) == "tsb:median"))))
+        stop("The forecast was not made with addTSB = TRUE")
+    plotit(fit, "logtsb", ylab="TSB", trans = exp, ...)
+    addforecast(fit,"tsb")
+}
+
+##' @export
+tsbplot.msam_hcr <- function(fit, ...){
+    tsbplot(fit$forecast, ...)
 }
 
 ##' Recruitment plot
@@ -179,7 +330,27 @@ recplot.msam <- function(fit,...){
     plotit(fit2, "logR", ylab="Recruits", trans=exp,...)
 }
 
+##' @export
+recplot.msamforecast <- function(fit, lagR = FALSE, ...){
+    fit2 <- fit    
+    fitlocal <- attr(fit,"fit")
+    if(lagR){
+        names(attr(fit2,"fit")) <- paste0(gsub("[[:space:]]","~",getStockNames(fitlocal)),":~Age~",
+                                  unlist(lapply(attr(fitlocal,"m_data")$sam,function(x)x$minAge+1)))
+        what <- "logLagR"
+    }else{
+        names(attr(fit2,"fit")) <- paste0(gsub("[[:space:]]","~",getStockNames(fitlocal)),":~Age~",
+                                  unlist(lapply(attr(fitlocal,"m_data")$sam,function(x)x$minAge)))
+        what <- "logR" 
+    }
+        plotit(fit2, what, trans=exp,...)
+        addforecast(fit2, "rec")
+}
 
+##' @export
+recplot.msam_hcr <- function(fit, ...){
+    recplot(fit$forecast, ...)
+}
 
 
 ##' Catch plot
@@ -206,8 +377,33 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
             points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
                    pch=4, lwd=2, cex=1.2, col=col[i])
     }
+    obs <- list(x=x,y=rowSums(outer(rownames(CW), colnames(CW), Vectorize(.goget))*CW, na.rm=TRUE))
+    invisible(list(drop=drop,obs=obs))
 }
 
+
+##' @export
+catchplot.msamforecast <- function(fit, obs.show=TRUE, drop=0, ...){
+    args <- list(...)
+    ctab <- catchtable(attr(fit,"fit"), returnList = TRUE,obs.show=TRUE)
+    plotit(fit, "logCatch", ylab="Catch", trans=exp, drop=drop,...)
+    if(obs.show){
+        if(is.null(args$col)){
+            col <- .plotcols.crp(length(fit))
+        }else{
+            col <- args$col
+        }
+        for(i in 1:length(fit))
+            points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
+                   pch=4, lwd=2, cex=1.2, col=col[i])
+    }
+   addforecast(fit,"catch")
+}
+
+##' @export
+catchplot.msam_hcr <- function(fit, ...){
+    catchplot(fit$forecast, ...)
+}
 
 ##' Parameter plot
 ##'
