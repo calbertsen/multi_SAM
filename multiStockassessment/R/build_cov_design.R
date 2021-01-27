@@ -30,6 +30,17 @@ safe_values <- function(mf){
     r
 }
 
+## J <- function(x){
+##     cat(ls(env=parent.env(environment())),sep="\n")
+##     x2 <- paste(as.character(match.call())[2],"J",sep="_")
+##     eval(parse(text = x2))
+## }
+## K <- function(x){
+##     x2 <- paste(as.character(match.call())[2],"K",sep="_")
+##     eval(parse(text = x2))
+## }
+
+
 build_cov_design <- function(formula, x){
     
     if(!inherits(x, "samset"))
@@ -54,13 +65,41 @@ build_cov_design <- function(formula, x){
             return(x-y)
         return(paste(x,y,sep=":"))
     }
-    designDat <- as.data.frame(lapply(XX, function(x){
+    oFunJ <- function(x,y){
+        if(is.numeric(x))
+            return(x)
+        return(paste(x))
+    }
+    oFunK <- function(x,y){
+        if(is.numeric(x))
+            return(y)
+        return(paste(y))
+    }
+    designDatC <- as.data.frame(lapply(XX, function(x){
         m <- outer(x,x,oFun)
         m[lower.tri(m, diag = FALSE)]
     }))
+    designDatJ <- as.data.frame(lapply(XX, function(x){
+        m <- outer(x,x,oFunJ)
+        m[lower.tri(m, diag = FALSE)]
+    }))
+    colnames(designDatJ) <- paste0(colnames(designDatJ),"_J")
+    designDatK <- as.data.frame(lapply(XX, function(x){
+        m <- outer(x,x,oFunK)
+        m[lower.tri(m, diag = FALSE)]
+    }))
+    colnames(designDatK) <- paste0(colnames(designDatK),"_K")
+    
+    designDat <- cbind(designDatC, designDatJ, designDatK)
     designDat$Index <- seq_len(nrow(designDat))
     designDat$WithinStock <- unlist(lapply(strsplit(as.character(designDat$Stock),":"),function(x)as.numeric(x[1]==x[2])))
-    mf <- safe_values(model.frame(formula, data = designDat, na.action = NULL))
+
+    
+    ## formula <- as.formula(gsub("^(J|K)(\\()(.+)(\\))",
+    ##                            "\\3_\\1",
+    ##                            as.character(formula)))
+
+    mf <- safe_values(model.frame(formula,designDat, na.action = NULL))
     tt <- terms(mf)
     mm <- model.matrix(tt,mf)
     attr(mm, "terms") <- tt

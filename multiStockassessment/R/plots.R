@@ -22,6 +22,11 @@ plot.msamforecast<-function(x, ...){
   par(op)
 }
 
+##' @method plot msam_hcr
+##' @export
+plot.msam_hcr<-function(x, ...){
+  plot(x$forecast)
+}
 
 
 ##' Function to actually do the plotting
@@ -249,7 +254,6 @@ fbarplot.msamforecast <- function(fit,partial = FALSE, drop=0, page=NULL,...){
     tmp <- fbarplot(fitlocal,partial=partial,drop=drop,page=page,plot=FALSE,...)
     fit2 <- fit
     names(attr(fit2,"fit")) <- tmp$stocknames
-    cat(names(fit2))
     plotit(fit2, "logfbar", ylab=tmp$fbarlab, trans=exp, ex=tmp$exx, drop=tmp$drop, ...)
     if(partial){
         for(i in 1:length(fit)){
@@ -259,6 +263,11 @@ fbarplot.msamforecast <- function(fit,partial = FALSE, drop=0, page=NULL,...){
         }
     }
     addforecast(fit2,"fbar")
+}
+
+##' @export
+fbarplot.msam_hcr <- function(fit, ...){
+    fbarplot(fit$forecast, ...)
 }
 
 ##' SSB plot
@@ -276,6 +285,11 @@ ssbplot.msam <- function(fit, ...){
 ssbplot.msamforecast <- function(fit, ...){
     plotit(fit, "logssb", ylab="SSB", trans = exp, ...)
     addforecast(fit,"ssb")
+}
+
+##' @export
+ssbplot.msam_hcr <- function(fit, ...){
+    ssbplot(fit$forecast, ...)
 }
 
 ##' TSB plot
@@ -297,6 +311,10 @@ tsbplot.msamforecast <- function(fit, ...){
     addforecast(fit,"tsb")
 }
 
+##' @export
+tsbplot.msam_hcr <- function(fit, ...){
+    tsbplot(fit$forecast, ...)
+}
 
 ##' Recruitment plot
 ##'
@@ -329,7 +347,10 @@ recplot.msamforecast <- function(fit, lagR = FALSE, ...){
         addforecast(fit2, "rec")
 }
 
-
+##' @export
+recplot.msam_hcr <- function(fit, ...){
+    recplot(fit$forecast, ...)
+}
 
 
 ##' Catch plot
@@ -379,6 +400,10 @@ catchplot.msamforecast <- function(fit, obs.show=TRUE, drop=0, ...){
    addforecast(fit,"catch")
 }
 
+##' @export
+catchplot.msam_hcr <- function(fit, ...){
+    catchplot(fit$forecast, ...)
+}
 
 ##' Parameter plot
 ##'

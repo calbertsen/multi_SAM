@@ -29,6 +29,12 @@ print.msamforecast <- function(x, ...){
     invisible(x)
 }
 
+##' @method print msam_hcr
+##' @export
+print.msam_hcr <- function(x, ...){
+    print(x$forecast)
+}
+
 ##' @method print msam_referencepoints
 ##' @export
 print.msam_referencepoints <- function(x, ...){

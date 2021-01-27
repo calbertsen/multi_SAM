@@ -1,3 +1,14 @@
+## Change targets to lists if specified
+targetToList <- function(x, nStocks){
+    if(is.null(x))
+        return(replicate(nStocks,numeric(0),FALSE))
+    if(is.list(x))
+        return(x)
+    if(is.vector(x)) ## Same target for all stocks
+        x <- matrix(x, nStocks, length(x), byrow = TRUE)
+    if(is.matrix(x))
+        return(split(x, row(x)))
+}
 
 
 
@@ -35,9 +46,9 @@ modelforecast.msam <- function(fit,
                           findMSY = NULL,
                           hcr = NULL,
                           nosim = NULL,
-                          year.base = lapply(fit,function(x)max(x$data$years)),
+                          year.base = sapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-4:0)),
-                          rec.years = lapply(fit,function(x)c()),
+                          rec.years = lapply(fit,function(x)numeric(0)),
                           label = NULL,
                           overwriteSelYears = NULL,
                           deterministicF = FALSE,
@@ -47,7 +58,7 @@ modelforecast.msam <- function(fit,
                           lagR = FALSE,
                           splitLD = FALSE,
                           addTSB = FALSE,
-                          biasCorrect = TRUE,
+                          biasCorrect = FALSE,
                           returnAllYears = FALSE,
                           useUniroot = FALSE,
                           nCatchAverageYears = rep(1,length(fit)),
@@ -69,26 +80,14 @@ modelforecast.msam <- function(fit,
     
     
     nStocks <- length(fit)
-
-    ## Change targets to lists if specified
-    targetToList <- function(x){
-        if(is.null(x))
-            return(replicate(nStocks,numeric(0),FALSE))
-        if(is.list(x))
-            return(x)
-        if(is.vector(x)) ## Same target for all stocks
-            x <- matrix(x, nStocks, length(x), byrow = TRUE)
-        if(is.matrix(x))
-            return(split(x, row(x)))
-    }
     
-    fscale <- targetToList(fscale)
-    catchval <- targetToList(catchval)
-    fval <- targetToList(fval)
-    nextssb <- targetToList(nextssb)
-    landval <- targetToList(landval)
-    findMSY <- targetToList(findMSY)
-    hcr <- targetToList(hcr)
+    fscale <- targetToList(fscale, nStocks)
+    catchval <- targetToList(catchval, nStocks)
+    fval <- targetToList(fval, nStocks)
+    nextssb <- targetToList(nextssb, nStocks)
+    landval <- targetToList(landval, nStocks)
+    findMSY <- targetToList(findMSY, nStocks)
+    hcr <- targetToList(hcr, nStocks)
         
     
     ## Get number of forecast years
@@ -250,8 +249,114 @@ modelforecast.msam <- function(fit,
         return(obj)
 
     if(!is.null(nosim) && nosim > 0){
+        if(all(year.base==sapply(fit, function(x) max(x$data$years)))){
+            est <- attr(fit,"m_sdrep")$estY
+            cov <- attr(fit,"m_sdrep")$covY
+        }else{
+            stop("year.base before last assessment year is not implemented yet")
+        }        
+        ## if(year.base==(max(fit$data$years)-1)){
+        ##     stop("year.base before last assessment year is not implemented yet")
+        ##     est <- attr(fit,"m_sdrep")$estYm1
+        ##     cov <- attr(fit,"m_sdrep")$covYm1
+        ## }
+        nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
+        stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
+        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == year.base[i]))
+        doSim <- function(){            
+            sim0 <- rmvnorm(1, mu=est, Sigma=cov * as.numeric(resampleFirst))
+            estList0 <- split(as.vector(sim0), nfSplit)
+            p <- obj$env$last.par.best
+            ## Only works when year.base is last assessment year
+            indxN <- local({
+                ii <- which(names(p) %in% "logN")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
+                indxS <- splitMatrices(ii)
+                as.vector(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+            })
+            indxF <- local({
+                ii <- which(names(p) %in% "logF")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
+                indxS <- splitMatrices(ii)
+                as.vector(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+            })
+            p[indxN] <- estList0$LogN
+            p[indxF] <- estList0$LogF
+            obj$simulate(par = p)
+        }                
+        simvals <- replicate(nosim, doSim(), simplify = FALSE)
+        stocksimlist <- vector("list",nStocks)
+        for(ss in 1:nStocks){
+            simlist <- vector("list",length(FModel[[ss]]) + 1)
+            for(i in 0:(length(FModel[[ss]]))){
+                y<-year.base[ss]+i
+                ii <- i0[ss] + i
+                simlist[[i+1]] <- list(sim = do.call("rbind",lapply(simvals,function(x) c(x$logN[[ss]][,ii], x$logF[[ss]][,ii]))),
+                                       fbar = sapply(simvals,function(x) exp(x$logfbar[[ss]][ii])),
+                                       catch = sapply(simvals,function(x) exp(x$logCatch[[ss]][ii])),
+                                       ssb = sapply(simvals,function(x) exp(x$logssb[[ss]][ii])),
+                                       rec = sapply(simvals,function(x) exp(x$logN[[ss]][1,ii])),
+                                       cwF = rep(NA_real_, nosim),
+                                       catchatage = do.call("cbind",lapply(simvals,function(x) exp(x$logCatchAge[[ss]][,ii]))),
+                                       land = sapply(simvals,function(x) exp(x$logLand[[ss]][ii])),
+                                       fbarL = sapply(simvals,function(x) exp(x$logfbarL[[ss]][ii])),
+                                       tsb = sapply(simvals,function(x) exp(x$logtsb[[ss]][ii])),
+                                       year=y)
+                rownames(simlist[[i+1]]$catchatage) <- seq(fit[[ss]]$conf$minAge,fit[[ss]]$conf$maxAge,1)
+                
+            }
+            attr(simlist, "fit")<-fit[[ss]]
+            collect <- function(x){
+                quan <- quantile(x, c(.50,.025,.975, na.rm = TRUE))
+                c(median=quan[1], low=quan[2], high=quan[3])
+            }
 
-
+            fbar <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbar))),3)
+            fbarL <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbarL))),3)  
+            rec <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$rec))))
+            ssb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$ssb))))
+            tsb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$tsb))))
+            catch <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$catch))))
+            land <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$land))))  
+            caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect)))) 
+            tab <- cbind(fbar,rec,ssb,catch)
+            if(splitLD){
+                tab<-cbind(tab,fbarL,fbar-fbarL,land,catch-land)
+            }
+            if(addTSB){
+                tab<-cbind(tab,tsb)
+            }
+            ## if(!missing(customWeights)) tab <- cbind(tab,cwF=round(do.call(rbind, lapply(simlist, function(xx)collect(xx$cwF))),3))
+            rownames(tab) <- unlist(lapply(simlist, function(xx)xx$year))
+            nam <- c("median","low","high")
+            basename<-c("fbar:","rec:","ssb:","catch:")
+            if(splitLD){
+                basename<-c(basename,"fbarL:","fbarD:","Land:","Discard:")    
+            }
+            if(addTSB){
+                basename<-c(basename,"tsb:")    
+            }
+            ## if(!missing(customWeights)){
+            ##     basename<-c(basename,"cwF:")    
+            ## }
+            colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
+            
+            attr(simlist, "tab")<-tab
+            shorttab<-t(tab[,grep("median",colnames(tab))])
+            rownames(shorttab)<-sub(":median","",paste0(label,if(!is.null(label))":",rownames(shorttab)))
+            attr(simlist, "shorttab")<-shorttab
+            attr(simlist, "label") <- label    
+            attr(simlist, "caytable")<-caytable
+            class(simlist) <- "samforecast"
+            stocksimlist[[ss]] <- simlist
+        }
+        names(stocksimlist) <- getStockNames(fit)
+        attr(stocksimlist,"fit") <- fit
+        attr(stocksimlist,"sdreport") <- NA
+        class(stocksimlist) <- "msamforecast"
+        return(stocksimlist)
     }else{    
         obj$fn(attr(fit,"m_opt")$par)
         ## Get results
@@ -272,7 +377,7 @@ modelforecast.msam <- function(fit,
                                                          )
                              )
         ssdr <- summary(sdr)
-        stocksimlist <- list()
+        stocksimlist <- vector("list",nStocks)
         for(ss in 1:nStocks){
             simlist <- list()
             for(i in 0:(length(FModel[[ss]]))){
@@ -346,6 +451,7 @@ modelforecast.msam <- function(fit,
             class(simlist) <- "samforecast"
             stocksimlist[[ss]] <- simlist
         }
+        names(stocksimlist) <- getStockNames(fit)
         attr(stocksimlist,"fit") <- fit
         attr(stocksimlist,"sdreport") <- sdr
         class(stocksimlist) <- "msamforecast"

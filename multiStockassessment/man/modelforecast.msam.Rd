@@ -6,13 +6,13 @@
 \usage{
 modelforecast.msam(fit, fscale = NULL, catchval = NULL, fval = NULL,
   nextssb = NULL, landval = NULL, findMSY = NULL, hcr = NULL,
-  nosim = NULL, year.base = lapply(fit, function(x) max(x$data$years)),
+  nosim = NULL, year.base = sapply(fit, function(x) max(x$data$years)),
   ave.years = lapply(fit, function(x) max(x$data$years) + (-4:0)),
-  rec.years = lapply(fit, function(x) c()), label = NULL,
+  rec.years = lapply(fit, function(x) numeric(0)), label = NULL,
   overwriteSelYears = NULL, deterministicF = FALSE,
   processNoiseF = TRUE, resampleFirst = !is.null(nosim) && nosim > 0,
   customSel = NULL, lagR = FALSE, splitLD = FALSE, addTSB = FALSE,
-  biasCorrect = TRUE, returnAllYears = FALSE, useUniroot = FALSE,
+  biasCorrect = FALSE, returnAllYears = FALSE, useUniroot = FALSE,
   nCatchAverageYears = rep(1, length(fit)), returnObj = FALSE,
   hcrConf = lapply(fit, function(x) numeric(0)), ...)
 }

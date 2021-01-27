@@ -245,7 +245,6 @@ Type objective_function<Type>::operator() ()
     // If simulate -> move grab new logF values and move them to the right place!         
     logF.col(s) = logFa.matrix();
   }
-
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
@@ -311,7 +310,7 @@ Type objective_function<Type>::operator() ()
     SIMULATE{
       // Simulate new F for forecast and HCR
      for(int s = 0; s < nAreas; ++s){
-       if(sam.dataSets(s).forecast.nYears > 0){	 
+       if(sam.dataSets(s).forecast.nYears > 0){
 	 dataSet<Type> ds = sam.dataSets(s);
 	 confSet cs = sam.confSets(s);
 	 paraSet<Type> ps = paraSets(s);
@@ -326,15 +325,16 @@ Type objective_function<Type>::operator() ()
 	   int nYears = ds.forecast.nYears;
 	   int fi = y - ds.forecast.forecastYear.size() + nYears;
 	   // Update forecast
-	   ds.forecast.updateForecast(fi, logFa, logNa, ds, cs, ps);
-	   // Simulate F
-	   // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
-	   if(ds.forecast.simFlag(0) == 0){
-	     Type timeScale = ds.forecast.forecastCalculatedLogSdCorrection(fi);
-	     logF.col(s).col(y) = (vector<Type>)ds.forecast.forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;
-	     logFa = logF.col(s);	 
-	   }	   
-	 }	 
+	   if(fi > 0){
+	     ds.forecast.updateForecast(fi, logFa, logNa, ds, cs, ps);
+	     // Simulate F
+	     // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
+	     if(ds.forecast.simFlag(0) == 0){
+	       Type timeScale = ds.forecast.forecastCalculatedLogSdCorrection(fi);
+	       logF.col(s).col(y) = (vector<Type>)ds.forecast.forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;	 
+	     }	   
+	   }	 
+	 }
        }
      }
     }
@@ -401,19 +401,41 @@ Type objective_function<Type>::operator() ()
       */
       // 1) Check if any simFlags are 0
       bool doSim = false;
-      for(int s = 0; s < nAreas; ++s)
-	if(sam.confSets(s).simFlag(1) == 0){
-	  doSim = true;
-	  break;
+      for(int s = 0; s < nAreas; ++s){
+	int nYears = sam.dataSets(s).forecast.nYears;
+	if(nYears > 0){
+	  int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	  int fi = y - sam.dataSets(s).forecast.forecastYear.size() + nYears;
+	  if(sam.confSets(s).simFlag(1) == 0 ||
+	     (fi > 0 && sam.dataSets(s).forecast.simFlag(1) == 0)){
+	    doSim = true;
+	    break;
+	  }
+	}else{
+	  if(sam.confSets(s).simFlag(1) == 0){
+	    doSim = true;
+	    break;
+	  }
 	}
+      }
       if(doSim){
 	// 2) Get conditional distribution of stocks with simFlag == 0 (and keepN = 1)
 	vector<int> notCondOn(ncov.cols());
 	notCondOn.setZero();
 	for(int i = 0; i < notCondOn.size(); ++i){
 	  int s = (int)i / (int)nages;
-	  if(sam.confSets(s).simFlag(1) == 0 && keepN(i) == 1)
+	  int nYears = sam.dataSets(s).forecast.nYears;
+	  if(nYears > 0){
+	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	    int fi = y - sam.dataSets(s).forecast.forecastYear.size() + nYears;
+	    if((sam.confSets(s).simFlag(1) == 0 ||
+		(fi > 0 && sam.dataSets(s).forecast.simFlag(1) == 0)) &&
+	       keepN(i) == 1){
+	      notCondOn(i) = 1;
+	    }
+	  }else if(sam.confSets(s).simFlag(1) == 0 && keepN(i) == 1){
 	    notCondOn(i) = 1;
+	  }
 	}
 
 	int nAll = ncov.cols();

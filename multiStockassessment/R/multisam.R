@@ -121,11 +121,11 @@ multisam.fit <- function(x,
 
     ## Do as in stockassessment package
     # Last two states
-    idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"))
+    idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
     sdrep$estY <- sdrep$value[idx]
     sdrep$covY <- sdrep$cov[idx,idx]
 
-    idx <- c(which(names(sdrep$value)=="beforeLastLogN"),which(names(sdrep$value)=="beforeLastLogF"))
+    idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
     sdrep$estYm1 <- sdrep$value[idx]
     sdrep$covYm1 <- sdrep$cov[idx,idx]
 
@@ -158,7 +158,13 @@ multisam.fit <- function(x,
     attr(res,"m_high") <- upper2
     attr(res,"corStructure") <- corStructure
     attr(res,"partialCors") <- usePartialCors
-    attr(res,"correlationParameters") <- ssdrep[rownames(ssdrep)=="RE",]
+    corpars <- ssdrep[rownames(ssdrep)=="RE",]
+    if(!is.null(obj$env$map$RE)){
+        corpars <- corpars[obj$env$map$RE,]
+        corpars[is.na(corpars)] <- 0
+    }
+    rownames(corpars) <- colnames(dat$X)
+    attr(res,"correlationParameters") <- corpars
     class(res) <- c("msam","samset")
     return(res)
 }
