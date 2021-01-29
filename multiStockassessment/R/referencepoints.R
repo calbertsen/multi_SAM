@@ -393,7 +393,7 @@ referencepoints.msam <- function(fit,
     ## Take inital look at YPR / SPR to determine if Fmax makes sense
     rep <- objOptim$report()
     tryAgain <- FALSE
-    stockNames <- multiStockassessment:::getStockNames(fit)
+    stockNames <- getStockNames(fit)
     for(i in seq_along(stockNames)){
         logFbar <- unname(log(tail(fbartable(fit,returnList = TRUE)[[i]][,"Estimate"],1)))
         ## Fmax

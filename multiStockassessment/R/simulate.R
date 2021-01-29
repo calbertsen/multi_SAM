@@ -26,7 +26,7 @@ simulate.msam <- function(object,
     obj <- attr(object,"m_obj")
     par <- obj$env$last.par.best
     dots <- list(...)
-    sn <- multiStockassessment:::getStockNames(object)
+    sn <- getStockNames(object)
     if(full.data){
         ret <- replicate(nsim, {
             allDat <- lapply(object,function(x)x$data)
