@@ -42,7 +42,7 @@ multisam.fit <- function(x,
                          newtonsteps=3,
                          lower=NULL,
                          upper=NULL,
-                         nlminb.control = list(trace=1, eval.max=20000, iter.max=20000)
+                         nlminb.control = list(trace=1, eval.max=20000, iter.max=20000),
                          ...){
     ## Check input
     requireNamespace("TMB")
