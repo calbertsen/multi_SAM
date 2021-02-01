@@ -41,7 +41,9 @@ multisam.fit <- function(x,
                          usePartialCors=TRUE,
                          newtonsteps=3,
                          lower=NULL,
-                         upper=NULL,...){
+                         upper=NULL,
+                         nlminb.control = list(trace=1, eval.max=20000, iter.max=20000)
+                         ...){
     ## Check input
     requireNamespace("TMB")
     if(!methods::is(x,"samset"))
@@ -97,9 +99,7 @@ multisam.fit <- function(x,
     for(nn in names(upper)) upper2[names(obj$par)==nn]=upper[[nn]]
     
     opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
-                         control=list(trace=1,
-                                      eval.max=2000,
-                                      iter.max=1000),
+                         control=nlminb.control,
                          lower=lower2,
                          upper=upper2)
 
