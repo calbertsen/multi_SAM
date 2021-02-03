@@ -205,6 +205,7 @@ addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)
 ##' @param ... plotting arguments
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fbarplot
+##' @method fbarplot msam
 ##' @export
 fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
                           add=FALSE,
@@ -248,6 +249,7 @@ fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
               stocknames = names(fit2)))
 }
 
+##' @method fbarplot msamforecast
 ##' @export
 fbarplot.msamforecast <- function(fit,partial = FALSE, drop=0, page=NULL,...){
     fitlocal <- attr(fit,"fit")
@@ -265,6 +267,7 @@ fbarplot.msamforecast <- function(fit,partial = FALSE, drop=0, page=NULL,...){
     addforecast(fit2,"fbar")
 }
 
+##' @method fbarplot msam_hcr
 ##' @export
 fbarplot.msam_hcr <- function(fit, ...){
     fbarplot(fit$forecast, ...)
@@ -276,17 +279,20 @@ fbarplot.msam_hcr <- function(fit, ...){
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment ssbplot
+##' @method ssbplot msam
 ##' @export
 ssbplot.msam <- function(fit, ...){
     plotit(fit, "logssb", ylab="SSB", trans = exp, ...)
 }
 
+##' @method ssbplot msamforecast
 ##' @export
 ssbplot.msamforecast <- function(fit, ...){
     plotit(fit, "logssb", ylab="SSB", trans = exp, ...)
     addforecast(fit,"ssb")
 }
 
+##' @method ssbplot msam_hcr
 ##' @export
 ssbplot.msam_hcr <- function(fit, ...){
     ssbplot(fit$forecast, ...)
@@ -298,11 +304,13 @@ ssbplot.msam_hcr <- function(fit, ...){
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment tsbplot
+##' @method tsbplot msam
 ##' @export
 tsbplot.msam <- function(fit,...){
     plotit(fit, "logtsb", ylab="TSB", trans=exp,...)
 }
 
+##' @method tsbplot msamforecast
 ##' @export
 tsbplot.msamforecast <- function(fit, ...){
     if(!all(sapply(fit,function(x) any(colnames(attr(x,"tab")) == "tsb:median"))))
@@ -311,6 +319,7 @@ tsbplot.msamforecast <- function(fit, ...){
     addforecast(fit,"tsb")
 }
 
+##' @method tsbplot msam_hcr
 ##' @export
 tsbplot.msam_hcr <- function(fit, ...){
     tsbplot(fit$forecast, ...)
@@ -322,6 +331,7 @@ tsbplot.msam_hcr <- function(fit, ...){
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment recplot
+##' @method recplot msam
 ##' @export
 recplot.msam <- function(fit,...){
     fit2 <- fit
@@ -330,6 +340,7 @@ recplot.msam <- function(fit,...){
     plotit(fit2, "logR", ylab="Recruits", trans=exp,...)
 }
 
+##' @method recplot msamforecast
 ##' @export
 recplot.msamforecast <- function(fit, lagR = FALSE, ...){
     fit2 <- fit    
@@ -347,6 +358,7 @@ recplot.msamforecast <- function(fit, lagR = FALSE, ...){
         addforecast(fit2, "rec")
 }
 
+##' @method recplot msam_hcr
 ##' @export
 recplot.msam_hcr <- function(fit, ...){
     recplot(fit$forecast, ...)
@@ -362,6 +374,7 @@ recplot.msam_hcr <- function(fit, ...){
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment catchplot
 ##' @importFrom graphics points polygon
+##' @method catchplot msam
 ##' @export
 catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
     args <- list(...)
@@ -382,6 +395,7 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
 }
 
 
+##' @method catchplot msamforecast
 ##' @export
 catchplot.msamforecast <- function(fit, obs.show=TRUE, drop=0, ...){
     args <- list(...)
@@ -400,6 +414,7 @@ catchplot.msamforecast <- function(fit, obs.show=TRUE, drop=0, ...){
    addforecast(fit,"catch")
 }
 
+##' @method catchplot msam_hcr
 ##' @export
 catchplot.msam_hcr <- function(fit, ...){
     catchplot(fit$forecast, ...)
@@ -412,6 +427,7 @@ catchplot.msam_hcr <- function(fit, ...){
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment parplot
+##' @method parplot msam
 ##' @export
 parplot.msam <- function(fit, cor.report.limit=0.95, ...){
     stop("Not implemented")
@@ -427,6 +443,7 @@ parplot.msam <- function(fit, cor.report.limit=0.95, ...){
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment srplot
+##' @method srplot msam
 ##' @export
 srplot.msam <- function(fit,textcol="red",add=FALSE,
                         col = .plotcols.crp(length(fit)), ...){
@@ -458,6 +475,7 @@ srplot.msam <- function(fit,textcol="red",add=FALSE,
 ##' @param ... extra arguments for plotting
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment fitplot plotby
+##' @method fitplot msam
 ##' @export
 fitplot.msam <- function(fit,
                          stock,

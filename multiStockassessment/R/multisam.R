@@ -40,6 +40,7 @@ multisam.fit <- function(x,
                          corStructure = suggestCorStructure(x,nAgeClose = Inf,noCorInArea=FALSE),
                          usePartialCors=TRUE,
                          newtonsteps=3,
+                         nlminb.control = list(trace=1, eval.max=20000, iter.max=20000),
                          lower=NULL,
                          upper=NULL,...){
     ## Check input
@@ -97,9 +98,7 @@ multisam.fit <- function(x,
     for(nn in names(upper)) upper2[names(obj$par)==nn]=upper[[nn]]
     
     opt <- stats::nlminb(obj$par, obj$fn, obj$gr,
-                         control=list(trace=1,
-                                      eval.max=2000,
-                                      iter.max=1000),
+                         control=nlminb.control,
                          lower=lower2,
                          upper=upper2)
 
@@ -158,13 +157,18 @@ multisam.fit <- function(x,
     attr(res,"m_high") <- upper2
     attr(res,"corStructure") <- corStructure
     attr(res,"partialCors") <- usePartialCors
+    attr(res,"lower") <- lower2
+    attr(res,"upper") <- upper2
+    attr(res,"newtonsteps") <- newtonsteps
+    attr(res,"nlminb.control") <- nlminb.control
+    attr(res,"dotargs") <- list(...)
     corpars <- ssdrep[rownames(ssdrep)=="RE",]
     if(!is.null(obj$env$map$RE)){
         corpars <- corpars[obj$env$map$RE,]
-        corpars[is.na(corpars)] <- 0
+        ##corpars[is.na(corpars)] <- 0
     }
     rownames(corpars) <- colnames(dat$X)
-    attr(res,"correlationParameters") <- corpars
+    attr(res,"corParameters") <- corpars
     class(res) <- c("msam","samset")
     return(res)
 }

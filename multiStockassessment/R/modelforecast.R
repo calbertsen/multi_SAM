@@ -36,6 +36,8 @@ targetToList <- function(x, nStocks){
 ##' @param returnAllYears 
 ##' @param ...
 ##' @return msamforecast
+##' @importFrom stockassessment modelforecast
+##' @method modelforecast msam
 ##' @export
 modelforecast.msam <- function(fit,
                           fscale = NULL,

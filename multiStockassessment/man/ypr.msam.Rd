@@ -4,9 +4,14 @@
 \alias{ypr.msam}
 \title{Yield per recruit calculation}
 \usage{
-\method{ypr}{msam}(fit, Flimit = 2, Fdelta = 0.01,
-  aveYears = lapply(attr(fit, "m_data")$sam, function(x) min(15,
-  length(x$years))), ageLimit = 100, ...)
+\method{ypr}{msam}(
+  fit,
+  Flimit = 2,
+  Fdelta = 0.01,
+  aveYears = lapply(attr(fit, "m_data")$sam, function(x) min(15, length(x$years))),
+  ageLimit = 100,
+  ...
+)
 }
 \arguments{
 \item{fit}{msam object}

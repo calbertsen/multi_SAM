@@ -4,8 +4,7 @@
 \alias{catchtable.msam}
 \title{Catch Table}
 \usage{
-\method{catchtable}{msam}(fit, obs.show = FALSE, returnList = FALSE,
-  ...)
+\method{catchtable}{msam}(fit, obs.show = FALSE, returnList = FALSE, ...)
 }
 \arguments{
 \item{fit}{msam object}
