@@ -195,9 +195,9 @@ holdout.msam <- function(fit, nYears, forecastYears = 1, ncores = 1, ...){
     })
     names(tab) <- getStockNames(fit)
     
-    attr(r,"tab") <- tab
-    attr(r,"fit") <- fit
-    class(r) <- c("msam_holdout")
+    attr(runs,"tab") <- tab
+    attr(runs,"fit") <- fit
+    class(runs) <- c("msam_holdout")
     
-    r
+    runs
 }
