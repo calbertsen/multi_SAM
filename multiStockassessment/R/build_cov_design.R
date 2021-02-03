@@ -41,8 +41,7 @@ safe_values <- function(mf){
 ## }
 
 
-build_cov_design <- function(formula, x){
-    
+build_cov_design <- function(formula, x, type = NA){
     if(!inherits(x, "samset"))
         return("x must be a samset")
 
@@ -75,18 +74,26 @@ build_cov_design <- function(formula, x){
             return(y)
         return(paste(y))
     }
+    m0 <- outer(XX$Age, XX$Age, oFun)
+    if(is.na(type)){                    # Keep lower tri
+        indx <- sort(which(lower.tri(m0, diag = FALSE)))
+    }else if(type == 1 || type == 2){   # Keep all but diagonal
+        indx <- sort(which(lower.tri(m0, diag = FALSE) | upper.tri(m0, diag = FALSE)))
+    }else{                              # Keep all
+        indx <- 1:length(m0)
+    }              
     designDatC <- as.data.frame(lapply(XX, function(x){
         m <- outer(x,x,oFun)
-        m[lower.tri(m, diag = FALSE)]
+        m[indx]
     }))
     designDatJ <- as.data.frame(lapply(XX, function(x){
         m <- outer(x,x,oFunJ)
-        m[lower.tri(m, diag = FALSE)]
+        m[indx]
     }))
     colnames(designDatJ) <- paste0(colnames(designDatJ),"_J")
     designDatK <- as.data.frame(lapply(XX, function(x){
         m <- outer(x,x,oFunK)
-        m[lower.tri(m, diag = FALSE)]
+        m[indx]
     }))
     colnames(designDatK) <- paste0(colnames(designDatK),"_K")
     

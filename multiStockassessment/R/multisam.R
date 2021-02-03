@@ -42,7 +42,9 @@ multisam.fit <- function(x,
                          newtonsteps=3,
                          nlminb.control = list(trace=1, eval.max=20000, iter.max=20000),
                          lower=NULL,
-                         upper=NULL,...){
+                         upper=NULL,
+                         community_formula = ~-1,
+                         community_type = 1, ...){
     ## Check input
     requireNamespace("TMB")
     if(!methods::is(x,"samset"))
@@ -58,6 +60,8 @@ multisam.fit <- function(x,
                 minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge)))),
                 cons = boolMat2ConstraintList(corStructure),
                 X = build_cov_design(formula, x),
+                XCon = build_cov_design(community_formula,  x, type = community_type),
+                ConConf = as.integer(community_type),
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
@@ -67,7 +71,7 @@ multisam.fit <- function(x,
     ## Prepare parameters for TMB
     pars <- collect_pars(x)
     pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
-
+    pars$betaCon <- numeric(ncol(dat$XCon))
     ## Prepare map for TMB
     map0 <- collect_maps(x)
     

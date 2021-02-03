@@ -81,7 +81,9 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(minAgeAll);
   DATA_STRUCT(cons, cov_constraints);
   DATA_MATRIX(X);
+  DATA_MATRIX(XCon);
 
+  DATA_INTEGER(ConConf);
 
   // Related to residuals
   DATA_VECTOR(fake_obs);
@@ -153,7 +155,8 @@ Type objective_function<Type>::operator() ()
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
   PARAMETER_VECTOR(RE);
-
+  PARAMETER_VECTOR(betaCon); // (nages*nAreas) x (nages*nAreas)
+   
   int nStocks = logF.cols();
   
   vector<paraSet<Type> > paraSets(nStocks);
@@ -189,7 +192,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logScaleFlim = logScaleFlim(s);
     paraSets(s).logScaleFmsyRange = logScaleFmsyRange.col(s);
   }
-
+  
   
   ////////////////////////////////////////
   /////////// Prepare forecast ///////////
@@ -251,7 +254,27 @@ Type objective_function<Type>::operator() ()
   int nAreas = sam.dataSets.size();
 
   int nages = (maxAgeAll - minAgeAll + 1);
- 
+
+  matrix<Type> AlphaCon(nages*nAreas,nages*nAreas);
+  AlphaCon.setZero();
+  vector<Type> betaConX = (matrix<Type>)XCon * (vector<Type>)betaCon;
+  int k = 0;
+  if(betaConX.size() > 0){
+    for(int i = 0; i < AlphaCon.cols(); ++i){
+      for(int j = 0; j < AlphaCon.rows(); ++j){
+	if(ConConf == 1 && i == j){
+	  AlphaCon(j,i) = 0.0;
+	}else if(ConConf == 2 && i == j){
+	  AlphaCon(j,i) = 1.0;
+	}else{
+	  AlphaCon(j,i) = betaConX(k++);
+	}
+      }
+    }
+  }
+  REPORT(AlphaCon);
+  REPORT(betaConX);
+  
   matrix<Type> A(nages*nAreas,nages*nAreas);
   A.setZero();
   // Create matrix A of variances to scale
@@ -340,6 +363,8 @@ Type objective_function<Type>::operator() ()
     }
     
     // Vector for predictions
+    vector<Type> lastN(ncov.rows());
+    lastN.setZero();
     vector<Type> predN(ncov.rows());
     predN.setZero();
     vector<Type> newN(ncov.rows());
@@ -364,9 +389,10 @@ Type objective_function<Type>::operator() ()
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
-	
+	lastN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y-1);	
       }
     }
+    predN -= AlphaCon * lastN;
     if(keepN.sum()>0){
       // forecast correction to recruitment
       vector<Type> Nscale(predN.size());

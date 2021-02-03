@@ -16,7 +16,7 @@ fitSim <- do.call("c",lapply(datSim,function(x)sam.fit(x,nscodConf, nscodParamet
 library(multiStockassessment)
 
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
-obj <- multisam.fit(fitSim,cs)
+obj <- multisam.fit(fitSim,~factor(Index), cs)
 
 fbarplot(obj)
 ssbplot(obj)

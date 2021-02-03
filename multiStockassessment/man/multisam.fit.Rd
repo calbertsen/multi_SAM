@@ -13,6 +13,8 @@ multisam.fit(
   nlminb.control = list(trace = 1, eval.max = 20000, iter.max = 20000),
   lower = NULL,
   upper = NULL,
+  community_formula = ~-1,
+  community_type = 1,
   ...
 )
 }
