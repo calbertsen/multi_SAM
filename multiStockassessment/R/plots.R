@@ -390,7 +390,7 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
             points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
                    pch=4, lwd=2, cex=1.2, col=col[i])
     }
-    obs <- list(x=x,y=rowSums(outer(rownames(CW), colnames(CW), Vectorize(.goget))*CW, na.rm=TRUE))
+    obs <- list(x=as.numeric(rownames(ctab[[i]])),y=rowSums(outer(rownames(CW), colnames(CW), Vectorize(.goget))*CW, na.rm=TRUE))
     invisible(list(drop=drop,obs=obs))
 }
 
