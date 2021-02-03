@@ -148,7 +148,7 @@ holdout.msam <- function(fit, nYears, forecastYears = 1, ncores = 1, ...){
         if(!any(match(c("fscale","catchval","fval","nextssb","landval","findMSY","hcr"), names(fargs), FALSE)))
             fargs$fscale = rep(NA, pmin(length(years),forecastYears))
         
-        do.call(modelforecast.msam, fargs)
+        do.call(multiStockassessment:::modelforecast.msam, fargs)
     }
 
     obs <- catchtable(fit, obs.show = TRUE, returnList = TRUE)
