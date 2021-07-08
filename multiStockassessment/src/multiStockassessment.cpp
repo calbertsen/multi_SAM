@@ -34,6 +34,19 @@
 #include <SAM.hpp>
 #include "../inst/include/multiSAM.hpp"
 
+template<class Type>
+vector<Type> toLogProportion(vector<Type> x){
+  vector<Type> r(x.size());
+  r.setZero();
+  Type lps = 0.0;
+  for(int i = 0; i < x.size(); ++i){
+    r(i) = x(i);
+    lps = logspace_add2(lps,x(i));
+  }
+  r -= lps;
+  return r;
+}
+  
 
 // template<class VT, class Type>
 // struct fake_data_indicator :
@@ -70,7 +83,8 @@ Type objective_function<Type>::operator() ()
 
 
   DATA_STRUCT(sam,sam_data);
-
+  DATA_STRUCT(sharedObs,shared_obs);
+  
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
@@ -148,17 +162,25 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_MATRIX(logF); 
   PARAMETER_CMOE_MATRIX(logN);
   PARAMETER_CMOE_VECTOR(missing);
-
-  
   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
   PARAMETER_VECTOR(RE);
   PARAMETER_VECTOR(betaCon); // (nages*nAreas) x (nages*nAreas)
-   
-  int nStocks = logF.cols();
+
+  PARAMETER_VECTOR(shared_logSdObs);
+  PARAMETER_CMOE_VECTOR(shared_logFscale);
+  // PARAMETER_VECTOR(shared_lfsMean);
+  PARAMETER_VECTOR(shared_lfsSd);
+  // PARAMETER_VECTOR(shared_lfsRho);
+  PARAMETER_VECTOR(shared_logitMissingVulnerability);
+
+  PARAMETER_CMOE_VECTOR(initLogN);
+  PARAMETER_CMOE_VECTOR(initLogF);
   
+  int nStocks = logF.cols();
+ 
   vector<paraSet<Type> > paraSets(nStocks);
 
   for(int s = 0; s < nStocks; ++s){
@@ -192,7 +214,21 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logScaleFlim = logScaleFlim(s);
     paraSets(s).logScaleFmsyRange = logScaleFmsyRange.col(s);
   }
-  
+
+  // for(int s = 0; s < logF.cols(); ++s){  
+  //   if(shared_logFscale.col(s).size() > 0){    
+  //     matrix<Type> logF0 = logF.col(0);
+  //     matrix<Type> logFs = logF.col(0);
+  //     for(int i = 0; i < logF0.cols(); ++i){	  
+  // 	for(int j = 0; j < logF0.rows(); ++j){	  
+  // 	  //ans -= dnorm(logFs(j,i), logF0(j,i) + shared_logFscale.col(s)(i), Type(0.01), true);
+  // 	  //ans -= dnorm(logFs(j,i), Type(0.0), Type(0.01), true);
+  // 	  logFs(j,i) = logF0(j,i) + shared_logFscale.col(s)(i);
+  // 	}
+  //     }
+  //     logF.col(s) = logFs;
+  //   }
+  // }
   
   ////////////////////////////////////////
   /////////// Prepare forecast ///////////
@@ -210,7 +246,7 @@ Type objective_function<Type>::operator() ()
   }
 
 
-  Type ans = 0; //negative log-likelihood
+  Type ans = 0.0; //negative log-likelihood
   
   // patch missing 
   int idxmis = 0;
@@ -220,18 +256,40 @@ Type objective_function<Type>::operator() ()
   	sam.dataSets(s).logobs(i) = missing(idxmis++);
       }    
     }
+
+  // patch missing vulnerability keys
+  idxmis = 0;
+  for(int i = 0; i < sharedObs.keyFleetStock.rows(); ++i)
+    for(int j = 0; j < sharedObs.keyFleetStock.cols(); ++j)
+      if(isNA(sharedObs.keyFleetStock(i,j))){
+  	sharedObs.keyFleetStock(i,j) = invlogit(shared_logitMissingVulnerability(idxmis++));
+      }    
+    
   
   // add wide prior for missing random effects, but _only_ when computing ooa residuals
   if(doResiduals){
     Type huge = 10.0;
     for (int i = 0; i < missing.size(); i++)
-      ans -= dnorm(missing(i), Type(0.0), huge, true);  
+      ans -= dnorm(missing(i), Type(0.0), huge, true);
   } 
   
   ofall<Type> ofAll(nStocks);
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
+
+  // Initial parameter contribution
+  for(int s = 0; s < nStocks; ++s){
+    if(initLogF.col(s).size() > 0){
+      if(shared_logFscale.col(s).size() == 0){
+	for(int a = 0; a < initLogF.col(s).size(); ++a)
+	  ans -= dnorm(logF.col(s)(a,0), initLogF.col(s)(a), Type(0.01), true);
+      }else{
+	ans -= dnorm(shared_logFscale.col(s)(0), initLogF.col(s)(0), Type(0.01), true);
+      }
+    }
+  }
+  
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -242,15 +300,64 @@ Type objective_function<Type>::operator() ()
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    ans += nllF(ds, cs, ps, logFa, keepTmp, &of);
-    ofAll.addToReport(of.report,s);
-    moveADREPORT(&of,this,s);
-    // If simulate -> move grab new logF values and move them to the right place!         
-    logF.col(s) = logFa.matrix();
+    if(shared_logFscale.col(s).size() == 0){ // Not using shared logF selectivity
+      ans += nllF(ds, cs, ps, logFa, keepTmp, &of);
+      ofAll.addToReport(of.report,s);
+      moveADREPORT(&of,this,s);
+      // If simulate -> move grab new logF values and move them to the right place!         
+      logF.col(s) = logFa.matrix();
+    }else{			// Using shared logF selectivity
+      matrix<Type> logF0 = logF.col(0);
+      matrix<Type> logFs = logF.col(s);
+      for(int i = 0; i < shared_logFscale.col(s).size(); ++i){
+	if(i > 0){
+	  //ans -= dnorm(shared_logFscale.col(s)(i) - shared_lfsMean(s-1), invlogit(shared_lfsRho(s-1)) * (shared_logFscale.col(s)(i-1) - shared_lfsMean(s-1)), exp(shared_lfsSd(s-1)), true);
+	  ans -= dnorm(shared_logFscale.col(s)(i), shared_logFscale.col(s)(i-1), exp(shared_lfsSd(s-1)), true);
+	}else if(initLogF.col(s).size() == 0){
+	  // Type logsd = shared_lfsSd(s-1) - 0.5 * logspace_add2(log(2.0)+shared_lfsRho(s-1),Type(0.0)) - logspace_add2(shared_lfsRho(s-1),Type(0.0));
+	  // ans -= dnorm(shared_logFscale.col(s)(0),shared_lfsMean(s-1),exp(logsd),true);
+	  ans -= dnorm(shared_logFscale.col(s)(0),Type(0.0),Type(2.0),true);
+	}
+	for(int j = 0; j < logF0.rows(); ++j){	  
+	  ans -= dnorm(logFs(j,i), logF0(j,i) + shared_logFscale.col(s)(i), Type(0.01), true);
+	}
+	// Implement simulation of logF with shared selectivity!
+      }
+    }
   }
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
+   
+  // Initial parameter contribution
+  for(int s = 0; s < nStocks; ++s){
+    if(initLogN.col(s).size() == logN.col(s).rows()){ // Initial value per age
+      for(int a = 0; a < initLogN.col(s).size(); ++a)
+	ans -= dnorm(logN.col(s)(a,0), initLogN.col(s)(a), Type(0.01), true);   
+    }else if(initLogN.col(s).size() == 1){			// Initial value for "back-in-time" recruitment assuming first year M and F were constant back in time
+      //predN(0) = initLogN.col(s)(0);
+      confSet conf = sam.confSets(s);
+      dataSet<Type> dat = sam.dataSets(s);
+      paraSet<Type> par = paraSets(s);
+      array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+      logNa = logN.col(s);
+      array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+      logFa = logF.col(s);	 
+
+      Type logssb0 = ssbi(dat, conf, logNa, logFa, 0, true);
+      ans -= dnorm(logssb0, initLogN.col(s)(0), Type(0.01), true);
+      
+      // ans -= dnorm(logNa(0,0), initLogN.col(s)(0), Type(0.01), true);
+      for(int a = 1; a < logNa.rows(); ++a){
+      	Type m = logNa(a-1,0) - dat.natMor(0,a-1);
+      	if(conf.keyLogFsta(0,a-1)>(-1))
+      	  m -= exp(logFa(conf.keyLogFsta(0,a-1),0));	
+      	ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
+      }
+    }
+  }      
+  //////////////////////////////////////////
+  
   int nAreas = sam.dataSets.size();
 
   int nages = (maxAgeAll - minAgeAll + 1);
@@ -562,6 +669,17 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
 
+  ans += sharedObservation(sharedObs,
+		    sam.dataSets,
+		    sam.confSets,
+		    paraSets,
+		    logF,
+		    logN,
+		    shared_logSdObs,
+		    minYearAll,
+		    minAgeAll,
+		    this);
+  
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
   /////////////////////////////////////
@@ -586,6 +704,17 @@ Type objective_function<Type>::operator() ()
   //////////////////////////////////////////////////////
   if(isDouble<Type>::value && this->current_parallel_region<0)
     moveREPORT(this->report,ofAll.report);
+
+  getTotals(sam.dataSets,
+	    sam.confSets,
+	    paraSets,
+	    logF,
+	    logN,
+	    minYearAll,
+	    maxYearAll,
+	    minAgeAll,
+	    maxAgeAll,
+	    this);
   
   return ans;
 }

@@ -23,6 +23,8 @@
   ciAlpha = 0.3,
   col = .plotcols.crp(length(fit)),
   extraLabel = NULL,
+  addTotal = FALSE,
+  onlyTotal = FALSE,
   ...
 )
 

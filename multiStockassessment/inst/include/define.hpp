@@ -23,3 +23,34 @@ struct sam_data {
 
 
 
+
+template<class Type>
+struct shared_obs {
+  int hasSharedObs;
+  vector<int> fleetTypes;
+  vector<int> maxAgePlusGroup;
+  array<int> aux;
+  vector<Type> logobs;
+  matrix<Type> keyFleetStock;
+
+  shared_obs() : hasSharedObs(0),
+		 fleetTypes(),
+		 maxAgePlusGroup(),
+		 aux(),
+		 logobs(),
+		 keyFleetStock() {};
+  shared_obs(SEXP x) {
+    using tmbutils::asArray;
+    if(Rf_isNull(getListElement(x,"hasSharedObs")) ||
+       (int)*REAL(getListElement(x,"hasSharedObs")) == 0){
+      hasSharedObs = 0;
+    }else{
+      hasSharedObs = (int)*REAL(getListElement(x,"hasSharedObs"));
+      fleetTypes = asVector<int>(getListElement(x,"fleetTypes"));
+      maxAgePlusGroup = asVector<int>(getListElement(x,"maxAgePlusGroup"));
+      aux = asArray<int>(getListElement(x,"aux"));   
+      logobs = asVector<Type>(getListElement(x,"logobs"));
+      keyFleetStock = asMatrix<Type>(getListElement(x,"keyFleetStock"));   
+    }
+  };
+};

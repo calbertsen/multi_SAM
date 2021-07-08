@@ -69,8 +69,13 @@ plotit.msam <- function(fit, what,
                         ciAlpha = 0.3,
                         col = .plotcols.crp(length(fit)),
                         extraLabel=NULL,
+                        addTotal = FALSE,
+                        onlyTotal = FALSE,
                         ...){
-    tabList <- tableit(fit=fit,what=what,x=x,trans=trans, returnList = TRUE)
+    dotargs <- list(...)
+    tabList <- tableit(fit=fit,what=what,x=x,trans=trans, returnList = TRUE, addTotal = addTotal || onlyTotal)
+    if(onlyTotal)
+        tabList <- tabList[match("Total",names(tabList))]
     tab <- cbindYearTables(tabList)
 
     xTab <- as.numeric(rownames(tab))
@@ -83,7 +88,8 @@ plotit.msam <- function(fit, what,
     high[xindx,] <- tab[,(0:(length(tabList)-1))*3 + 3,drop=FALSE]
     
     didx <- 1:(nrow(tab)-drop)
- 
+
+    
     
     if(missing(xlim)){
         xr <- range(unlist(x))
@@ -98,8 +104,22 @@ plotit.msam <- function(fit, what,
         for(i in 1:length(fit))
             lines(xAll, (y[,i]), lwd=3, col=col[i],...)
     }else{
-        plot(xAll, NA*xAll, xlab=xlab, ylab=ylab, type="n", lwd=3, xlim=xr,
-             ylim=range(c((low),(high),0,ex),na.rm=TRUE), las=1,...)
+        parg <- c(list(x = xAll, y = NA * xAll), dotargs)
+        if(is.null(parg$xlab))
+            parg$xlab = xlab
+        if(is.null(parg$ylab))
+            parg$ylab = ylab
+        if(is.null(parg$type))
+            parg$type = "n"
+        if(is.null(parg$lwd))
+            parg$lwd = 3
+        if(is.null(parg$xlim))
+            parg$xlim = xr
+        if(is.null(parg$las))
+            parg$las = 1
+        if(is.null(parg$ylim))
+            parg$ylim = range(c((low),(high),0,ex),na.rm=TRUE)
+        do.call("plot", parg)
         grid(col="black")
         for(i in 1:length(fit))
             lines(xAll, (y[,i]), lwd=3, col=col[i], ...)
@@ -113,7 +133,8 @@ plotit.msam <- function(fit, what,
         }
     }
     stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))
-    legend("bottom",legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
+    if(!onlyTotal)
+        legend("bottom",legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
 }
 
 
@@ -390,7 +411,8 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
             points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
                    pch=4, lwd=2, cex=1.2, col=col[i])
     }
-    obs <- list(x=as.numeric(rownames(ctab[[i]])),y=rowSums(outer(rownames(CW), colnames(CW), Vectorize(.goget))*CW, na.rm=TRUE))
+    CW <- lapply(attr(fit,"m_data")$sam,function(x)x$catchMeanWeight)
+    obs <- list(x=as.numeric(rownames(ctab[[i]])),y=ctab[[i]][,"sop.catch"], na.rm=TRUE)
     invisible(list(drop=drop,obs=obs))
 }
 

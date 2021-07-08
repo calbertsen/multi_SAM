@@ -10,11 +10,22 @@ multisam.fit(
   corStructure = suggestCorStructure(x, nAgeClose = Inf, noCorInArea = FALSE),
   usePartialCors = TRUE,
   newtonsteps = 3,
+  rm.unidentified = FALSE,
   nlminb.control = list(trace = 1, eval.max = 20000, iter.max = 20000),
   lower = NULL,
   upper = NULL,
+  starting = NULL,
   community_formula = ~-1,
   community_type = 1,
+  shared_data = NULL,
+  shared_conf = NULL,
+  shared_keys = character(0),
+  shared_selectivity = FALSE,
+  shared_stockrecruitment = FALSE,
+  shared_oneFScaleSd = FALSE,
+  shared_initN = FALSE,
+  initN = 0,
+  initF = FALSE,
   ...
 )
 }

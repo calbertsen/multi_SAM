@@ -3,3 +3,5 @@
 #include "constructL.hpp"
 #include "define.hpp"
 #include "report_help.hpp"
+#include "sharedObs.hpp"
+#include "get_totals.hpp"

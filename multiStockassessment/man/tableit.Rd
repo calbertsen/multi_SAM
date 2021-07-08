@@ -20,6 +20,7 @@ tableit(
   x = lapply(attr(fit, "m_data")$sam, function(x) x$years),
   trans = function(x) x,
   returnList = FALSE,
+  addTotal = FALSE,
   ...
 )
 }

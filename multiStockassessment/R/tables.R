@@ -18,7 +18,7 @@
 tableit <-function (fit, what,
                     x=lapply(attr(fit,"m_data")$sam,function(x)x$years),
                     trans=function(x)x,
-                    returnList=FALSE,
+                    returnList=FALSE,                    
                     ...){
     UseMethod("tableit")
 }
@@ -30,6 +30,7 @@ tableit.msam <- function (fit, what,
                          x=lapply(attr(fit,"m_data")$sam,function(x)x$years),
                          trans=function(x)x,
                          returnList=FALSE,
+                         addTotal = FALSE,
                          ...){
     d <- attr(fit,"m_data")
     if(is.list(x)){
@@ -39,7 +40,7 @@ tableit.msam <- function (fit, what,
         xstock <- replicate(length(fit),x,simplify=FALSE)
     }
     sdrep <- attr(fit,"m_sdrep")
-    idx <- grep(paste0("_",what,"$"),names(sdrep$value))
+    idx <- grep(paste0("SAM_[[:digit:]]+_",what,"$"),names(sdrep$value))
     y<-sdrep$value[idx]
     ci<-y+sdrep$sd[idx]%o%c(-2,2)
     stockIndx <- as.numeric(factor(sub(paste0("_",what),"",names(sdrep$value)[idx])))
@@ -58,6 +59,19 @@ tableit.msam <- function (fit, what,
         ret[[i]] <- m
     }
     names(ret) <- getStockNames(fit)
+
+    if(addTotal){
+        idx <- grep(paste0("total_",what,"$"),names(sdrep$value))
+        y<-sdrep$value[idx]
+        ci<-y+sdrep$sd[idx]%o%c(-2,2)
+        allyears <- sort(unique(c(syears,xstock[[i]])))
+        m <- matrix(NA,length(allyears),3)
+        m[sindx,] <- trans(unname(cbind(y,ci)))
+        rownames(m) <- allyears
+        colnames(m) <- c("Estimate","Low","High")
+        ret$Total <- m
+    }
+    
     if(returnList)
         return(ret)
     return(cbindYearTables(ret))
