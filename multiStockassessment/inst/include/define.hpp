@@ -81,5 +81,5 @@ struct shared_obs {
       for(int i = 0; i < covCombine.size(); ++i)
 	covCombine(i) = static_cast<CovCombineType>(covCombineTmp(i));
     }
-  };
+  };  
 };

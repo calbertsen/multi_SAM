@@ -57,17 +57,17 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 }
 
 template<class Type>
-matrix<Type> predObsPerStock(shared_obs<Type> obs,
-		       vector<dataSet<Type> > datA,
-		       vector<confSet> confA,
-		       vector<paraSet<Type> > parA,
-		       cmoe_matrix<Type> logF,
-		       cmoe_matrix<Type> logN,
+matrix<Type> predObsPerStock(shared_obs<Type>& obs,
+		       vector<dataSet<Type> >& datA,
+		       vector<confSet>& confA,
+		       vector<paraSet<Type> >& parA,
+		       cmoe_matrix<Type>& logF,
+		       cmoe_matrix<Type>& logN,
 		       // vector<Type> logSdObs,
 		       int minYearAll,
 		       int minAgeAll,
 		       objective_function<Type> *of){
-
+  
   matrix<Type> predPerStock(obs.aux.dim[0], datA.size());
   predPerStock.setConstant(R_NegInf);
 
@@ -197,18 +197,17 @@ matrix<Type> predObsPerStock(shared_obs<Type> obs,
 
 
 template<class Type>
-Type sharedObservation(shared_obs<Type> obs,
-		       vector<dataSet<Type> > datA,
-		       vector<confSet> confA,
-		       vector<paraSet<Type> > parA,
-		       cmoe_matrix<Type> logF,
-		       cmoe_matrix<Type> logN,
+Type sharedObservation(shared_obs<Type>& obs,
+		       vector<dataSet<Type> >& datA,
+		       vector<confSet>& confA,
+		       vector<paraSet<Type> >& parA,
+		       cmoe_matrix<Type>& logF,
+		       cmoe_matrix<Type>& logN,
 		       // vector<Type> logSdObs,
 		       int minYearAll,
 		       int minAgeAll,
-		       data_indicator<vector<Type>,Type> keep,
+		       data_indicator<vector<Type>,Type>& keep,
 		       objective_function<Type> *of){
-
   if(!obs.hasSharedObs){
     return Type(0.0);
   }

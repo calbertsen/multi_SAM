@@ -133,9 +133,7 @@ Type objective_function<Type>::operator() ()
       keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
     }
   }
-
-
-  
+ 
   
   PARAMETER_CMOE_VECTOR(logFpar);
   PARAMETER_CMOE_VECTOR(logQpow);
@@ -150,11 +148,30 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logScale);
   PARAMETER_CMOE_VECTOR(logitReleaseSurvival);
   PARAMETER_CMOE_VECTOR(logitRecapturePhi);
+
   PARAMETER_CMOE_VECTOR(sepFalpha);
   PARAMETER_CMOE_VECTOR(sepFlogitRho);
   PARAMETER_CMOE_VECTOR(sepFlogSd);
   PARAMETER_CMOE_VECTOR(predVarObs);
 
+  PARAMETER_CMOE_VECTOR(logPhiSW);
+  PARAMETER_CMOE_VECTOR(logSdProcLogSW);
+  PARAMETER_CMOE_VECTOR(meanLogSW);
+  PARAMETER_CMOE_VECTOR(logSdLogSW);
+  PARAMETER_CMOE_VECTOR(logPhiCW);
+  PARAMETER_CMOE_VECTOR(logSdProcLogCW);
+  PARAMETER_CMOE_VECTOR(meanLogCW);
+  PARAMETER_CMOE_VECTOR(logSdLogCW);
+  PARAMETER_CMOE_VECTOR(logPhiMO);
+  PARAMETER_CMOE_VECTOR(logSdProcLogitMO);
+  PARAMETER_CMOE_VECTOR(meanLogitMO);
+  PARAMETER_CMOE_VECTOR(logSdMO);
+  PARAMETER_CMOE_VECTOR(logPhiNM);
+  PARAMETER_CMOE_VECTOR(logSdProcLogNM);
+  PARAMETER_CMOE_VECTOR(meanLogNM);
+  PARAMETER_CMOE_VECTOR(logSdLogNM);
+  PARAMETER_CMOE_VECTOR(logXtraSd);
+  
   // Forecast FMSY
   PARAMETER_VECTOR(logFScaleMSY);
   PARAMETER_VECTOR(implicitFunctionDelta);
@@ -175,6 +192,13 @@ Type objective_function<Type>::operator() ()
 
   PARAMETER_CMOE_MATRIX(logF); 
   PARAMETER_CMOE_MATRIX(logN);
+
+  PARAMETER_CMOE_MATRIX(logSW);
+  PARAMETER_CMOE_MATRIX(logCW);  
+  PARAMETER_CMOE_MATRIX(logitMO);
+  PARAMETER_CMOE_MATRIX(logNM);    
+
+  
   PARAMETER_CMOE_VECTOR(missing);
   
   ////////////////////////////////////////
@@ -217,6 +241,24 @@ Type objective_function<Type>::operator() ()
     paraSets(s).sepFlogitRho = sepFlogitRho.col(s);
     paraSets(s).sepFlogSd = sepFlogSd.col(s);
     paraSets(s).predVarObs = predVarObs.col(s);
+    // Biopar    
+    paraSets(s).logPhiSW = logPhiSW.col(s);
+    paraSets(s).logSdProcLogSW = logSdProcLogSW.col(s);
+    paraSets(s).meanLogSW = meanLogSW.col(s);
+    paraSets(s).logSdLogSW = logSdLogSW.col(s);
+    paraSets(s).logPhiCW = logPhiCW.col(s);
+    paraSets(s).logSdProcLogCW = logSdProcLogCW.col(s);
+    paraSets(s).meanLogCW = meanLogCW.col(s);
+    paraSets(s).logSdLogCW = logSdLogCW.col(s);
+    paraSets(s).logPhiMO = logPhiMO.col(s);
+    paraSets(s).logSdProcLogitMO = logSdProcLogitMO.col(s);
+    paraSets(s).meanLogitMO = meanLogitMO.col(s);
+    paraSets(s).logSdMO = logSdMO.col(s);
+    paraSets(s).logPhiNM = logPhiNM.col(s);
+    paraSets(s).logSdProcLogNM = logSdProcLogNM.col(s);
+    paraSets(s).meanLogNM = meanLogNM.col(s);
+    paraSets(s).logSdLogNM = logSdLogNM.col(s);
+    paraSets(s).logXtraSd = logXtraSd.col(s);
     // Forecast FMSY
     paraSets(s).logFScaleMSY = logFScaleMSY(s);
     paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
@@ -245,6 +287,7 @@ Type objective_function<Type>::operator() ()
 
   PARAMETER_ARRAY(logGst);
   PARAMETER_MATRIX(logGtrip);
+
   
   // for(int s = 0; s < logF.cols(); ++s){  
   //   if(shared_logFscale.col(s).size() > 0){    
@@ -268,7 +311,7 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   /////////// Prepare forecast ///////////
   ////////////////////////////////////////
-  
+
   for(int s = 0; s < nStocks; ++s){
     // Calculate forecast
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -282,7 +325,7 @@ Type objective_function<Type>::operator() ()
 
 
   Type ans = 0.0; //negative log-likelihood
-  
+
   // patch missing 
   int idxmis = 0;
   for(int s = 0; s < nStocks; ++s)
@@ -430,11 +473,48 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
   // }
+
+
+  //////////////////////////////////
+  ////////// Bio PROCESS //////////
+  ////////////////////////////////
+
+   for(int s = 0; s < nStocks; ++s){
+     oftmp<Type> of(this->do_simulate);
+     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+     logNa = logN.col(s);
+     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+     logFa = logF.col(s);
+     array<Type> logSWa(logSW.col(s).rows(),logSW.col(s).cols());
+     logSWa = logSW.col(s);
+     array<Type> logCWa(logCW.col(s).rows(),logCW.col(s).cols());
+     logCWa = logCW.col(s);
+     array<Type> logitMOa(logitMO.col(s).rows(),logitMO.col(s).cols());
+     logitMOa = logitMO.col(s);
+     array<Type> logNMa(logNM.col(s).rows(),logNM.col(s).cols());
+     logNMa = logNM.col(s);
+
+     
+     data_indicator<vector<Type>,Type> keepTmp = keep(s);
+     dataSet<Type> ds = sam.dataSets(s);
+     confSet cs = sam.confSets(s);
+     paraSet<Type> ps = paraSets(s);
+
+     ans += nllSW(logSWa, ds, cs, ps, &of);
+     ans += nllCW(logCWa, ds, cs, ps, &of);
+     ans += nllMO(logitMOa, ds, cs, ps, &of);
+     ans += nllNM(logNMa, ds, cs, ps, &of);      
+
+     ofAll.addToReport(of.report,s);
+     moveADREPORT(&of,this,s);
+  }
+
+
   
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
-   
+
   // Initial parameter contribution
   for(int s = 0; s < nStocks; ++s){
     if(initLogN.col(s).size() == logN.col(s).rows()){ // Initial value per age
@@ -787,7 +867,7 @@ Type objective_function<Type>::operator() ()
 			   minAgeAll,
 			   keep(keep.size()-1),
 			   this);
-
+  
   ///////////////////////////////
   ////////// GENETICS //////////
   /////////////////////////////

@@ -139,17 +139,17 @@ struct genetic_parameters {
 
 
 template<class Type>
-Type nllGenetics(shared_obs<Type> obs,
-		 vector<dataSet<Type> > datA,
-		 vector<confSet> confA,
-		 vector<paraSet<Type> > parA,
-		 cmoe_matrix<Type> logF,
-		 cmoe_matrix<Type> logN,
-		 genetic_parameters<Type> genpar,
-		 genetic_data<Type> gendat,
+Type nllGenetics(shared_obs<Type>& obs,
+		 vector<dataSet<Type> >& datA,
+		 vector<confSet>& confA,
+		 vector<paraSet<Type> >& parA,
+		 cmoe_matrix<Type>& logF,
+		 cmoe_matrix<Type>& logN,
+		 genetic_parameters<Type>& genpar,
+		 genetic_data<Type>& gendat,
 		 //array<Type> alleleFreq, // (nAllele-1) x nLoci x nStockGenetic
-		 array<Type> logGst, // nSpace x nTime x nAges x (nStock-1) (??order)
-		 matrix<Type> logGtrip, // (nStock-1) x nTrips
+		 array<Type>& logGst, // nSpace x nTime x nAges x (nStock-1) (??order)
+		 matrix<Type>& logGtrip, // (nStock-1) x nTrips
 		 int maxAgeAll,
 		 int minAgeAll
 		 ){

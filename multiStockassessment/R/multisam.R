@@ -332,10 +332,10 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing", "shared_logFscale", "logGst", "logGtrip")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "shared_logFscale", "logGst", "logGtrip")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
-        prf <- NULL
+    prf <- NULL
     ## }else if(all(sapply(pars[prf], length) == 0)){
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
     ## }
