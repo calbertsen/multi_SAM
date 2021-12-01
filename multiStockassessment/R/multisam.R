@@ -31,7 +31,7 @@
 ##' 
 ##' @importFrom stats nlminb optimHess
 ##' @importFrom methods is
-##' @importFrom TMB MakeADFun sdreport
+##' @importFrom TMB MakeADFun sdreport runSymbolicAnalysis
 ##' @references
 ##' Albertsen, C. M., Nielsen, A. and Thygesen, U. H. (2018) Connecting single-stock assessment models through correlated survival. ICES Journal of Marine Science, 75(1), 235-244. doi: 10.1093/icesjms/fsx114
 ##' @export
@@ -39,7 +39,7 @@ multisam.fit <- function(x,
                          formula = ~-1,
                          corStructure = suggestCorStructure(x,nAgeClose = Inf,noCorInArea=FALSE),
                          usePartialCors=TRUE,
-                         newtonsteps=3,
+                         newtonsteps=0,
                          rm.unidentified=FALSE,
                          nlminb.control = list(trace=1, eval.max=20000, iter.max=20000),
                          lower=NULL,
@@ -48,29 +48,76 @@ multisam.fit <- function(x,
                          community_formula = ~-1,
                          community_type = 1,
                          shared_data = NULL,
-                         shared_conf = NULL,
+                         ## shared_conf = NULL,
                          shared_keys = character(0),
                          shared_selectivity = FALSE,
                          shared_stockrecruitment = FALSE,
                          shared_oneFScaleSd = FALSE,
                          shared_initN = FALSE,
+                         shared_fleetParameters = c(),
+                         shared_proportionalHazard = NULL,
+                         genetics_data = prepareGenetics(),
+                         genetics_dirichlet = FALSE,
+                         genetics_spatialAge = TRUE,
+                         genetics_independentStocks = TRUE,
                          initN = 0,
                          initF = FALSE,
+                         parlist = NULL,
+                         run = TRUE,
+                         symbolicAnalysis = FALSE,
                          ...){
+    mc <- match.call(expand.dots = TRUE)
     ## Check input
     requireNamespace("TMB")
     if(!methods::is(x,"samset"))
         stop("x must be a samset.")
 
-    if(is.null(shared_data))
+    if(is.null(shared_data)){
         shared_data <- list(hasSharedObs = 0L)
-    if(is.null(shared_conf))
-        shared_conf <- list()
-    
+    }else{
+        if(is.null(shared_data$covCombine)){
+            shared_data$covCombine <- rep(0, length.out = nrow(shared_data$keyFleetStock))
+        }else{
+            shared_data$covCombine <- rep(shared_data$covCombine, length.out = nrow(shared_data$keyFleetStock))
+        }
+    }
+    ## if(is.null(shared_conf))
+    ##     shared_conf <- list()
+
     ## Prepare data for TMB
     dat0 <- collect_data(x)
+    if(!is.list(shared_proportionalHazard)){
+            shared_proportionalHazard <- replicate(length(x), shared_proportionalHazard, simplify = FALSE)
+            shared_proportionalHazard[1] <- list(NULL)
+    }else{
+        if(length(shared_proportionalHazard) < length(x))
+            stop("When a list, the length of shared_proportionalHazard must match the length of x")
+    }
+    Xph <- lapply(shared_proportionalHazard, function(f){
+        if(is.null(f))
+            return(matrix(0,0,0))
+        maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years))))
+        minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years))))
+        maxAgeAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$maxAge))))
+        minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge))))
+        AYgrd <- expand.grid(Age = as.numeric(minAgeAll:maxAgeAll),
+                             Year = as.numeric(minYearAll:maxYearAll))
+        if(inherits(f,"formula")){
+            return(model.matrix(f, AYgrd))
+        }
+        if(is.matrix(f)){            
+            if(ncol(f) > 0 && nrow(AYgrd) == nrow(f))
+                return(f)
+            stop("shared_proportionalHazard matrix has incorrect dimensions")
+        }
+        warning("Unsupported shared_proportionalHazard")
+        return(matrix(0,0,0))
+    })
+    if(!(is.matrix(Xph[[1]]) && ncol(Xph[[1]]) == 0 && nrow(Xph[[1]]) == 0))
+        stop("First proportional hazard covariate matrix must be 0x0")
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
+                geneticsData = genetics_data,
                 usePartialCor = as.integer(usePartialCors),
                 maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years)))),
                 minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years)))),
@@ -80,19 +127,22 @@ multisam.fit <- function(x,
                 X = build_cov_design(formula, x),
                 XCon = build_cov_design(community_formula,  x, type = community_type),
                 ConConf = as.integer(community_type),
+                Xph = Xph,
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
                 doResiduals = as.integer(FALSE)
                 )
-
     ## Prepare parameters for TMB
     pars <- collect_pars(x)
     pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
     pars$betaCon <- numeric(ncol(dat$XCon))
 
-    pars$shared_logSdObs <- numeric(length(dat$sharedObs$fleetTypes))
+    ## pars$shared_logSdObs <- numeric(length(dat$sharedObs$fleetTypes))
     if(shared_selectivity){
+        if(!(length(unique(attr(pars$logF,"cdim"))) == 1 &&
+             length(unique(attr(pars$logF,"rdim"))) == 1))
+            stop("logF must have same dimension for all stocks when sharing selectivity")
         lfsDim <- local({xx <- attr(pars$logF,"cdim");  xx[1] <- 0; xx})
         ## newFdimR <- attr(pars$logF,"rdim")
         ## newFdimR[-1] <- 0
@@ -109,6 +159,7 @@ multisam.fit <- function(x,
     pars$shared_lfsSd <- numeric(ifelse(shared_selectivity,length(dat$sam)-1,0))
     ## pars$shared_lfsRho <- 2 + numeric(ifelse(shared_selectivity,length(dat$sam)-1,0))
     pars$shared_logitMissingVulnerability <- numeric(sum(is.na(dat$sharedObs$keyFleetStock)))
+    pars$shared_phbeta <- combineVectors(lapply(dat$Xph, function(x) numeric(ncol(x))))
     
     if(initN == 0){
         pars$initLogN <- combineVectors(lapply(attr(pars$logN,"rdim") * 0,numeric))
@@ -119,7 +170,55 @@ multisam.fit <- function(x,
     }
     ##pars$initLogN <- combineVectors(lapply(attr(pars$logN,"rdim") * ifelse(initN,1,0),numeric))
     pars$initLogF <- combineVectors(lapply(initFdim,numeric))
+
+    if(!is.null(parlist)){
+        ## Message about wrong names in parlist
+        for(nm in intersect(names(pars),names(parlist)))
+            if(length(parlist[[nm]]) == length(pars[[nm]])){
+                pars[[nm]][] <- parlist[[nm]][]
+            }else{
+                ## Warning/message, does not match
+            }
+    }
+
+    ## Genetics parameters
+    nStockM <- length(x)
+    na2 <- function(x,a) ifelse(is.na(x) | is.null(x), a, x)
+    nStockG <- na2(ncol(dat$geneticsData$stock2gen),0)
+    pars$gen_logKappaSpace <- 0
+    pars$gen_logKappaTime <- 0
+    n2cor <- function(n) numeric(n*(n-1)/2)
+    pars$gen_corparST <- n2cor(pmax(0,nStockG-1))
+    pars$gen_logSdST <- numeric(pmax(0,nStockG-1))
+    pars$gen_corparAge <- 0
+    pars$gen_corparTrip <- n2cor(pmax(0,nStockG-1))
+    pars$gen_logSdTrip <- numeric(pmax(0,nStockG-1))
+    ad <- attr(dat$geneticsData,"alleleDim")
+    pars$gen_alleleFreq <- array(0, dim = c(pmax(ad[1]-1,0),ad[2],nStockG))
+    if(length(dat$geneticsData) > 0){   # Get better starting values
+        gen_samples <- dat$geneticsData$samples
+        gStock <- sapply(gen_samples,function(x)x$keyStock)
+        isBaseline <- !is.na(gStock)
+        if(any(isBaseline)){
+            pars$gen_alleleFreq <- simplify2array(lapply(lapply(split(lapply(gen_samples[isBaseline],function(x)x$alleleCount),gStock[isBaseline]), Reduce, f="+"),function(x){
+                x <- x+1
+                logP <- log(x / colSums(x)[col(x)])
+                logP[-nrow(x),,drop=FALSE] - matrix(logP[nrow(x),],nrow(x)-1,ncol(x), byrow=TRUE)
+            }))
+        }
+    }
+    pars$gen_dmScale <- matrix(0, nrow = ad[2], ncol = nStockG)
+    pars$gen_muLogP <- matrix(0,dat$maxAgeAll-dat$minAgeAll+1,nStockG)
+
+    maxAge <- max(sapply(x, function(xx) xx$conf$maxAge))
+    minAge <- max(sapply(x, function(xx) xx$conf$minAge))
+    pars$logGst <- array(0, dim = c(nrow(dat$geneticsData$Qspace),
+                                    nrow(dat$geneticsData$Qtime),
+                                    ifelse(genetics_spatialAge,maxAge-minAge+1,1),
+                                    pmax(0,nStockG-1)))
     
+    pars$logGtrip <- matrix(0, pmax(0,nStockG-1), attr(dat$geneticsData,"nTrips"))
+                                 
     ## Prepare map for TMB
     map0 <- collect_maps(x)
 
@@ -132,12 +231,83 @@ multisam.fit <- function(x,
     }else if(initN == 2){
         ## map0$initLogN <- factor(c(1,NA,NA))#rep(NA,3))
     }
+
+    if(length(dat$geneticsData$samples) == 0){
+        map0$gen_logKappaSpace <- factor(NA * pars$gen_logKappaSpace)
+        map0$gen_logKappaTime <- factor(NA * pars$gen_logKappaTime)
+        map0$gen_corparST <- factor(NA * pars$gen_corparST)
+        map0$gen_logSdST <- factor(NA * pars$gen_logSdST)
+        map0$gen_corparAge <- factor(NA * pars$gen_corparAge)
+        map0$gen_corparTrip <- factor(NA * pars$gen_corparTrip)
+        map0$gen_logSdTrip <- factor(NA * pars$gen_logSdTrip)
+        map0$gen_alleleFreq <- factor(NA * pars$gen_alleleFreq)
+        map0$gen_dmScale <- factor(NA * pars$gen_dmScale)
+        map0$gen_muLogP <- factor(NA * pars$gen_muLogP)
+    }else{
+        gStock <- sapply(gen_samples,function(x)x$keyStock)
+        isBaseline <- !is.na(gStock)
+        if(all(isBaseline)){
+            map0$gen_logKappaSpace <- factor(NA * pars$gen_logKappaSpace)
+            map0$gen_logKappaTime <- factor(NA * pars$gen_logKappaTime)
+            map0$gen_corparST <- factor(NA * pars$gen_corparST)
+            map0$gen_logSdST <- factor(NA * pars$gen_logSdST)
+            map0$gen_corparAge <- factor(NA * pars$gen_corparAge)
+            map0$gen_corparTrip <- factor(NA * pars$gen_corparTrip)
+            map0$gen_logSdTrip <- factor(NA * pars$gen_logSdTrip)
+            map0$gen_muLogP <- factor(NA * pars$gen_muLogP)
+        }else{
+            gAge <- sapply(gen_samples[isBaseline],function(x)x$keyStock)
+            if(all(is.na(gAge)) || !genetics_spatialAge){
+                map0$gen_corparAge <- factor(NA * pars$gen_corparAge)                
+            }
+            ## Is this one parameter too much?
+            gmlpMap <- matrix(seq_along(pars$gen_muLogP), nrow(pars$gen_muLogP), ncol(pars$gen_muLogP))
+            gmlpMap[,colSums(dat$geneticsData$stock2gen) > 0] <- NA
+            map0$gen_muLogP <- factor(gmlpMap)
+        }
+        if(all(is.na(sapply(gen_samples[isBaseline],function(x)x$keyTrip)))){
+            map0$gen_corparTrip <- factor(NA * pars$gen_corparTrip)
+            map0$gen_logSdTrip <- factor(NA * pars$gen_logSdTrip)
+        }
+    }
+    if(genetics_dirichlet){
+        map0$gen_dmScale <- factor(col(pars$gen_dmScale))
+    }else{
+        map0$gen_dmScale <- factor(NA * pars$gen_dmScale)
+        pars$gen_dmScale[] <- Inf
+    }
+    if(genetics_independentStocks)
+        map0$gen_corparST <- factor(NA * pars$gen_corparST)            
     
-    
-    ## Share keys
+    ## Share parameters
     keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs")
     parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist")
-    for(nm in shared_keys)
+    sn <- getStockNames(x)
+    ## Share fleet parameters
+    ## if(length(shared_fleetParameters) > 0){
+    ##     for(f in shared_fleetParameters){
+    ##         ft <- unique(sapply(x, function(y) y$data$fleetType[f]))
+    ##         if(length(ft) > 1)
+    ##             stop("Fleet type must be the same for all stocks to share parameters")
+    ##     }
+    ##     ## keyLogFsta (F standard deviation; should not be shared)
+    ##     for(nm in c("keyLogFpar","keyQpow","keyVarObs","keyCorObs")){
+    ##         lapply(seq_along(dat$sam), function(ii){
+    ##             v <- dat$sam[[ii]][[nm]]
+    ##             v <- paste(sn[ii],v[-shared_fleetParameters,][],sep="_")
+                
+    ##         }
+    ##         map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
+    ##             xx <- sort(unique(as.numeric(x[[nm]])))
+    ##             xx[xx >= 0]
+    ##         })))
+    ##         }
+    ##     }
+    ## }    
+    ## Share keys
+    keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs")
+    parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist")  
+     for(nm in shared_keys)
         map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
             xx <- sort(unique(as.numeric(x[[nm]])))
             xx[xx >= 0]
@@ -148,19 +318,47 @@ multisam.fit <- function(x,
         if(sum(srvd) > 0)
             map0$rec_pars <- factor(unlist(lapply(seq_along(srvd), function(i){ if(srvd[i]==0) return(character(0)); paste0(sr[i],"_",seq_len(srvd[i]))})))
     }
+
+    ## Map F if using shared_selectivity or proportional hazard
+    ## if(any(sapply(dat$Xph,nrow) > 0) || shared_selectivity){
+    ##     hasPH <- sapply(dat$Xph,nrow) > 0
+    ##     hasSS <- sapply(seq_along(x), function(i) i > 1 && shared_selectivity)
+    ##     Fmap <- seq_along(pars$logF)
+    ##     attr(Fmap,"rdim") <- attr(pars$logF,"rdim")
+    ##     attr(Fmap,"cdim") <- attr(pars$logF,"cdim")
+    ##     FmapL <- splitParameter(Fmap)
+    ##     FmapL[hasPH | hasSS] <- lapply(FmapL[hasPH | hasSS], function(x) rep(NA,length(x)))
+    ##     map0$logF <- factor(unlist(FmapL))
+    ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing", "shared_logFscale")
-    obj <- TMB::MakeADFun(dat, pars, map0, random=ran, DLL="multiStockassessment", ...)
-
+    ran <- c("logN", "logF", "missing", "shared_logFscale", "logGst", "logGtrip")
+    ## prf <- c("gen_alleleFreq", "gen_muLogP")
+    ## if(all(sapply(pars[prf], length) == 0)){
+        prf <- NULL
+    ## }else if(all(sapply(pars[prf], length) == 0)){
+    ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
+    ## }
+    obj <- TMB::MakeADFun(dat, pars, map0,
+                          random=ran,
+                          profile = prf,
+                          regexp = FALSE,
+                          DLL="multiStockassessment", ...)
+    if(!run)
+        return(obj)
+ 
     ## Check for unused correlation parameters
-    indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
-    mvals <- seq_along(pars$RE)
-    mvals[indx] <- NA
-    map <- c(map0, list(RE = factor(mvals)))
-
+    if(any(names(obj$par) %in% "RE")){
+        indx <- which(obj$gr()[names(obj$par) %in% "RE"] == 0)
+        mvals <- seq_along(pars$RE)
+        mvals[indx] <- NA
+        map <- c(map0, list(RE = factor(mvals)))
+    }else{
+        map <- map0
+    }
     
     if(rm.unidentified){
+        obj$fn(obj$par + rnorm(length(obj$par),0,0.01))
         gr <- obj$gr()
         safemap <- obj$env$parList(gr)
         safemap <- safemap[!names(safemap)%in%ran]
@@ -169,8 +367,12 @@ multisam.fit <- function(x,
     }
     
     ## Create TMB Object
-    obj <- TMB::MakeADFun(dat, pars, map, random=ran, DLL="multiStockassessment", ...)
-
+    obj <- TMB::MakeADFun(dat, pars, map,
+                          random=ran,
+                          profile = prf,
+                          DLL="multiStockassessment", ...)
+    if(symbolicAnalysis)
+        TMB::runSymbolicAnalysis(obj)
     pars2 <- pars
     pars2$RE <- obj$par[names(obj$par)=="RE"]
     ## Fit object
@@ -181,11 +383,14 @@ multisam.fit <- function(x,
 
     lower2 <- rep(-Inf,length(obj$par))
     upper2 <- rep(Inf,length(obj$par))
-    for(nn in names(lower)) lower2[names(obj$par)==nn]=lower[[nn]]
-    for(nn in names(upper)) upper2[names(obj$par)==nn]=upper[[nn]]
+    for(nn in intersect(names(lower),unique(names(obj$par))))
+        lower2[names(obj$par)==nn]=lower[[nn]]
+    for(nn in intersect(names(upper),unique(names(obj$par))))
+        upper2[names(obj$par)==nn]=upper[[nn]]
 
     p0 <- obj$par
-    for(nn in names(starting)) p0[names(obj$par)==nn]=starting[[nn]]
+    for(nn in intersect(names(starting),unique(names(obj$par))))
+        p0[names(obj$par)==nn]=starting[[nn]]
     
     opt <- stats::nlminb(p0, obj$fn, obj$gr,
                          control=nlminb.control,
@@ -218,6 +423,12 @@ multisam.fit <- function(x,
     sdrep$estYm1 <- sdrep$value[idx]
     sdrep$covYm1 <- sdrep$cov[idx,idx]
 
+    ## covRecPars
+    idx <- grep("_rec_pars$",names(sdrep$value))
+    sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
+    colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+
+    ## parList    
     pl <- as.list(sdrep,"Est")
     plsd <- as.list(sdrep,"Std")
     
@@ -252,6 +463,7 @@ multisam.fit <- function(x,
     attr(res,"newtonsteps") <- newtonsteps
     attr(res,"nlminb.control") <- nlminb.control
     attr(res,"dotargs") <- list(...)
+    attr(res,"m_call") <- mc
     corpars <- ssdrep[rownames(ssdrep)=="RE",]
     if(!is.null(obj$env$map$RE)){
         corpars <- corpars[obj$env$map$RE,]

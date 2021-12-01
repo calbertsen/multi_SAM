@@ -43,6 +43,8 @@
   drop = 0,
   unnamed.basename = "current",
   xlim = NULL,
+  addTotal = FALSE,
+  onlyTotal = FALSE,
   ...
 )
 }

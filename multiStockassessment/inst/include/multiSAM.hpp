@@ -5,3 +5,4 @@
 #include "report_help.hpp"
 #include "sharedObs.hpp"
 #include "get_totals.hpp"
+#include "genetic.hpp"

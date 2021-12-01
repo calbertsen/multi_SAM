@@ -1,35 +1,71 @@
 
+##' @importFrom stockassessment runwithout reduce saveConf loadConf defpar sam.fit
+##' @method runwithout msam
+##' @export
+runwithout.msam <- function(fit, year = NULL, fleet = NULL, ...){
+    fake_runwithout_sam <- function (fit, year = NULL, fleet = NULL, map = fit$obj$env$map, 
+                                     ...) {
+        data <- stockassessment::reduce(fit$data, year = year, fleet = fleet, conf = fit$conf)
+        conf <- attr(data, "conf")
+        fakefile <- file()
+        sink(fakefile)
+        stockassessment::saveConf(conf, file = "")
+        sink()
+        conf <- stockassessment::loadConf(data, fakefile, patch = TRUE)
+        close(fakefile)
+        par <- stockassessment::defpar(data, conf)
+        par[!names(par) %in% c("logN", "logF")] <- fit$pl[!names(fit$pl) %in% 
+                                                          c("missing", "logN", "logF")]
+        ret <- stockassessment::sam.fit(data, conf, par, rm.unidentified = FALSE, map = map, 
+                       lower = fit$low, upper = fit$hig, run = FALSE, ...)
+        class(ret) <- "sam"
+        return(ret)
+    }
+    fitRed <- do.call("c",lapply(fit, fake_runwithout_sam, year = year, fleet = fleet, ...))
+    args <- as.list(attr(fit,"m_call"))[-1]
+    args$x <- fitRed
+    ## args <- list(x = fitRed,
+    ##              formula = formula(attr(attr(fit,"m_data")$X,"terms")),
+    ##              corStructure = attr(fit,"corStructure"),
+    ##              usePartialCors=attr(fit,"partialCors"),
+    ##              newtonsteps = 0,
+    ##              lower = list(RE = -10),
+    ##              upper = list(RE = 10))
+    ## ## Reduced shared observation
+    shObs <- attr(fit,"m_data")$sharedObs
+    if(shObs$hasSharedObs){
+        shRed <- stockassessment::reduce(shObs, year = year, fleet = fleet)
+        args$shared_data <- shRed[names(shObs)]
+    }        
+    ## ##
+    ## if(!is.null(attr(fit,"newtonsteps")))
+    ##     args$newtonsteps <- attr(fit,"newtonsteps")
+    ## if(!is.null(attr(fit,"lower")))
+    ##     args$lower <- attr(fit,"lower")
+    ## if(!is.null(attr(fit,"upper")))
+    ##     args$upper <- attr(fit,"upper")
+    ## if(!is.null(attr(fit,"dotargs")))
+    ##     args <- c(args, attr(fit,"dotargs"))
+    args$rm.unidentified <- TRUE
+    args$parlist <- attr(fit,"m_pl")
+    try({do.call(multisam.fit, args)})
+}
+
 
 ##' @method retro msam
 ##' @importFrom stockassessment runwithout reduce retro
+##' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ
 ##' @export
-retro.msam <- function(fit, year=NULL, ncores=detectCores()-1, ...){   
+retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, ...){   
     dd <- attr(fit,"m_data")
 
     if(length(year) != 1 || any(year > length(dd$minYearAll:dd$maxYearAll)))
         stop("year should be a single number giving the maximum number of years to exclude. Other options from stockassessment are not implemented")
  
     
-    yy <- lapply(tail(dd$minYearAll:dd$maxYearAll,year), function(y) seq(y, dd$maxYearAll, 1))
-
+    yy <- lapply(tail(dd$minYearAll:dd$maxYearAll,year), function(y) seq(y, dd$maxYearAll, 1)) 
     doRun <- function(years){
-        fitRed <- do.call("c",lapply(fit, runwithout, year = years))
-        args <- list(x = fitRed,
-                     formula = formula(attr(attr(fit,"m_data")$X,"terms")),
-                     corStructure = attr(fit,"corStructure"),
-                     usePartialCors=attr(fit,"partialCors"),
-                     newtonsteps = 0,
-                     lower = list(RE = -10),
-                     upper = list(RE = 10))
-        if(!is.null(attr(fit,"newtonsteps")))
-            args$newtonsteps <- attr(fit,"newtonsteps")
-        if(!is.null(attr(fit,"lower")))
-            args$lower <- attr(fit,"lower")
-        if(!is.null(attr(fit,"upper")))
-            args$upper <- attr(fit,"upper")
-        if(!is.null(attr(fit,"dotargs")))
-            args <- c(args, attr(fit,"dotargs"))
-        do.call(multisam.fit, args)
+        runwithout(fit, year = years)
     }
     if(ncores>1){
         if(!requireNamespace("parallel"))
@@ -45,8 +81,8 @@ retro.msam <- function(fit, year=NULL, ncores=detectCores()-1, ...){
   } else {
     runs <- lapply(yy, function(y)doRun(y))
   }
-  converg <- unlist(lapply(runs, function(x)x$opt$conv))
-  if(any(converg!=0)) warning(paste0("retro run(s) ", paste0(which(converg!=0),collapse=",")," did not converge."))
+  ## converg <- unlist(lapply(runs, function(x)x$opt$conv))
+  ## if(any(converg!=0)) warning(paste0("retro run(s) ", paste0(which(converg!=0),collapse=",")," did not converge."))
   attr(runs, "fit") <- fit
   class(runs)<-c("msam_retro","msamset")
   runs
@@ -61,7 +97,11 @@ retro.msam <- function(fit, year=NULL, ncores=detectCores()-1, ...){
 ##' @export
 mohn.msam_retro <- function(fits, what=NULL, lag=0, ...){
     if(is.null(what)){
-        what <- function(fit){
+        what <- function(fit,...){
+            ## if(class(fit)=="try-error"){
+            ##     r <- matrix(NA_real_, 4)
+            ##     colnames(r) <- c("R","SSB","Fbar","Catch")
+            ## }
             recList <- rectable(fit,..., returnList = TRUE)
             ssbList <- ssbtable(fit,..., returnList = TRUE)
             fbarList <- fbartable(fit,..., returnList = TRUE)
@@ -72,25 +112,41 @@ mohn.msam_retro <- function(fits, what=NULL, lag=0, ...){
                 if(dots$lagR == TRUE){
                     add <- 1
                 }
-            }          
+            }
+            sn <- getStockNames(fit)
+            if(length(recList) > length(sn))
+                sn <- c(sn,"Total")                 
             ret <- lapply(seq_along(recList), function(i){
-                r <- cbind(recList[[i]][,1], ssbList[[i]][,1], fbarList[[i]][,1], catchList[[i]][,1])
-                colnames(r) <- c(paste("R(age ", fit[[i]]$conf$minAge + add, ")", sep = ""), "SSB",
-                                 paste("Fbar(", fit[[i]]$conf$fbarRange[1], "-", fit[[i]]$conf$fbarRange[2], ")", sep = ""),
-                                 "Catch")
+                ##r <- cbind(recList[[i]][,1], ssbList[[i]][,1], fbarList[[i]][,1], catchList[[i]][,1])
+                r <- cbindYearTables(list(recList[[i]][,1, drop=FALSE],
+                                          ssbList[[i]][,1, drop=FALSE],
+                                          fbarList[[i]][,1, drop=FALSE],
+                                          catchList[[i]][,1, drop=FALSE]))
+                if(i <= length(fit)){
+                    colnames(r) <- c(paste("R(age ", fit[[i]]$conf$minAge + add, ")", sep = ""), "SSB",
+                                     paste("Fbar(", fit[[i]]$conf$fbarRange[1], "-", fit[[i]]$conf$fbarRange[2], ")", sep = ""),
+                                     "Catch")
+                }else{
+                    colnames(r) <- c("R","SSB","Fbar","Catch")
+                }
                 r
             })
-            names(ret) <- getStockNames(fit)
+            names(ret) <- sn
             ret
         }
     }
-    ref <- what(attr(fits,"fit"))
-    ret <- lapply(fits, what)
+    ref <- what(attr(fits,"fit"),...)
+    ret <- lapply(fits, what, ...)
     getBias <- function(i){ b <- lapply(ret, function(z){x <- z[[i]]; y<-rownames(x)[nrow(x)-lag]; (x[rownames(x)==y,]-ref[[i]][rownames(ref[[i]])==y,])/ref[[i]][rownames(ref[[i]])==y,]})
-        colMeans(do.call(rbind,b))
+        colMeans(do.call(rbind,b), na.rm=TRUE)
     }
     b <- do.call("cbind",lapply(seq_along(ref), getBias))
-    colnames(b) <- getStockNames(attr(fits,"fit"))
+    sn <- getStockNames(attr(fits,"fit"))
+    if(ncol(b) == length(sn)){
+        colnames(b) <- sn
+    }else{
+        colnames(b) <- c(sn,"Total")
+    }
     b    
 }
 

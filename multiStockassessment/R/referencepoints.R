@@ -282,6 +282,7 @@ referencepoints.msam <- function(fit,
                          "logScaleFxPercent")
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(61,63)){ # Hockey-sticks
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
@@ -291,12 +292,14 @@ referencepoints.msam <- function(fit,
                          "logScaleFmsyRange")
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(3,62)){ # constant mean, AR
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFxPercent",
                          "logScaleFmsyRange")
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(64)){ # Pow CMP
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFxPercent",
@@ -304,6 +307,7 @@ referencepoints.msam <- function(fit,
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(65)){ # Pow Non-CMP
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFxPercent",
@@ -311,6 +315,7 @@ referencepoints.msam <- function(fit,
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(68,69) && fit[[i]]$pl$rec_par[3] > 0){ ## depensatory recruitment; Fcrash does not work.
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFext",
@@ -319,6 +324,7 @@ referencepoints.msam <- function(fit,
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(90)){
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
@@ -328,6 +334,7 @@ referencepoints.msam <- function(fit,
                          )
         }else if(fit[[i]]$conf$stockRecruitmentModelCode %in% c(91,92)){
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          ##"logScaleFcrash",
@@ -337,6 +344,7 @@ referencepoints.msam <- function(fit,
                          )
         }else{
             rp[[i]] <- c("logScaleFmsy",
+                         "logScaleFmypyl",
                          "logScaleFmax",
                          "logScaleF01",
                          "logScaleFcrash",
@@ -356,6 +364,7 @@ referencepoints.msam <- function(fit,
 
     rpMap <- list()
     rpMap$logScaleFmsy <- rp2map(rp, "logScaleFmsy")
+    rpMap$logScaleFmypyl <- rp2map(rp, "logScaleFmypyl")
     rpMap$logScaleF01 <- rp2map(rp, "logScaleF01")
     rpMap$logScaleFmax <- rp2map(rp, "logScaleFmax")
     rpMap$logScaleFcrash <- rp2map(rp, "logScaleFcrash")
@@ -367,6 +376,7 @@ referencepoints.msam <- function(fit,
                   rpMap[which(names(rpMap) %in% unique(unlist(rp)))])
 
     args$parameters$logScaleFmsy[] <- -1
+    args$parameters$logScaleFmypyl[] <- -1
     args$parameters$logScaleF01[] <- -1
     args$parameters$logScaleFmax[] <- -1
     args$parameters$logScaleFcrash[] <- -1
@@ -397,7 +407,7 @@ referencepoints.msam <- function(fit,
     for(i in seq_along(stockNames)){
         logFbar <- unname(log(tail(fbartable(fit,returnList = TRUE)[[i]][,"Estimate"],1)))
         ## Fmax
-        if(which.max(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) == length(rep$logYPR[[i]][is.finite(rep$logYPR[[i]])]) && any(rp[[i]] %in% "logScaleFmax")){
+        if(which.max(rep$refpointseq_logYPR[[i]][is.finite(rep$refpointseq_logYPR[[i]])]) == length(rep$refpointseq_logYPR[[i]][is.finite(rep$refpointseq_logYPR[[i]])]) && any(rp[[i]] %in% "logScaleFmax")){
             warning(sprintf("%s does not appear to have a well-defined Fmax. Fmax will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmax")]
             args$map$logScaleFmax[i] <- NA
@@ -406,14 +416,14 @@ referencepoints.msam <- function(fit,
             rpMap$logScaleFmax <- factor(rpMap$logScaleFmax)
             tryAgain <- TRUE
         }else if(any(rp[[i]] %in% "logScaleFmax")){
-            indx <- which(is.finite(rep$logYPR[[i]]) & Fsequence[[i]] > 0)
-            ypr <- rep$logYPR[[i]][indx]
+            indx <- which(is.finite(rep$refpointseq_logYPR[[i]]) & Fsequence[[i]] > 0)
+            ypr <- rep$refpointseq_logYPR[[i]][indx]
             ff <- Fsequence[[i]][indx]
             pStart[[i]]$logScaleFmax <- log(ff[which.max(ypr)]) - logFbar
         }
 
         ## Fcrash
-        if(any(rp[[i]] %in% "logScaleFcrash") && min(rep$logSe[[i]][is.finite(rep$logSe[[i]])], na.rm = TRUE) > -4){
+        if(any(rp[[i]] %in% "logScaleFcrash") && min(rep$refpointseq_logSe[[i]][is.finite(rep$refpointseq_logSe[[i]])], na.rm = TRUE) > -4){
             warning(sprintf("%s does not appear to have a well-defined Fcrash. Fcrash will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFcrash")]
             args$map$logScaleFcrash[i] <- NA
@@ -424,7 +434,7 @@ referencepoints.msam <- function(fit,
         }
         
         ## Fmsy
-        if(any(rp[[i]] %in% "logScaleFmsy") && which.max(rep$logYe[[i]][is.finite(rep$logYe[[i]])]) == length(rep$logYe[is.finite(rep$logYe[[i]])])){
+        if(any(rp[[i]] %in% "logScaleFmsy") && which.max(rep$refpointseq_logYe[[i]][is.finite(rep$refpointseq_logYe[[i]])]) == length(rep$refpointseq_logYe[is.finite(rep$refpointseq_logYe[[i]])])){
             warning(sprintf("%s does not appear to have a well-defined Fmsy. Fmsy will not be estimated. Increase the upper bound of Fsequence to try again.",stockNames[i]))
             rp[[i]] <- rp[[i]][-which(rp[[i]] %in% "logScaleFmsy")]
             args$map$logScaleFmsy[i] <- NA
@@ -433,21 +443,21 @@ referencepoints.msam <- function(fit,
             rpMap$logScaleFmsy <- factor(rpMap$logScaleFmsy)
             tryAgain <- TRUE
         }else if(any(rp[[i]] %in% "logScaleFmsy")){
-            indx <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0)
-            ye <- rep$logYe[[i]][indx]
+            indx <- which(is.finite(rep$refpointseq_logYe[[i]]) & Fsequence[[i]] > 0)
+            ye <- rep$refpointseq_logYe[[i]][indx]
             ff <- Fsequence[[i]][indx]
             pStart[[i]]$logScaleFmsy <- log(ff[which.max(ye)]) - logFbar
             if(any(rp[[i]] %in% "logScaleFmsyRange")){
-                indx2 <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] < ff[which.max(ye)])
-                ye2 <- rep$logYe[[i]][indx2]
+                indx2 <- which(is.finite(rep$refpointseq_logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] < ff[which.max(ye)])
+                ye2 <- rep$refpointseq_logYe[[i]][indx2]
                 ff2 <- Fsequence[[i]][indx2]
                 fmsy <- ff[which.max(ye)]
                 FmsyRangeLower <- sapply(MSYfraction[[i]], function(x){
                     fL <- ff2[which.min((ye2 - x * max(ye))^2)]
                     -log(-(log(fL) - log(fmsy)))
                 })
-                indx3 <- which(is.finite(rep$logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] > ff[which.max(ye)])
-                ye3 <- rep$logYe[[i]][indx3]
+                indx3 <- which(is.finite(rep$refpointseq_logYe[[i]]) & Fsequence[[i]] > 0 & Fsequence[[i]] > ff[which.max(ye)])
+                ye3 <- rep$refpointseq_logYe[[i]][indx3]
                 ff3 <- Fsequence[[i]][indx3]
                 fmsy <- ff[which.max(ye)]
                 FmsyRangeUpper <- sapply(MSYfraction[[i]], function(x){
@@ -461,16 +471,16 @@ referencepoints.msam <- function(fit,
         
         ## F01
         if(any(rp[[i]] %in% "logScaleF01")){
-            indx <- which(is.finite(rep$logYPR[[i]]) & Fsequence[[i]] > 0)
-            ypr <- rep$logYPR[[i]][indx]
+            indx <- which(is.finite(rep$refpointseq_logYPR[[i]]) & Fsequence[[i]] > 0)
+            ypr <- rep$refpointseq_logYPR[[i]][indx]
             ff <- Fsequence[[i]][indx]
             pStart[[i]]$logScaleF01 <- log(ff[which.min((diff(ypr)/diff(ff) - 0.1 * diff(ypr)[1] / diff(ff)[1])^2)]) - logFbar
         }
         
         ## Fx%
         if(any(rp[[i]] %in% "logScaleFxPercent")){
-            indx <- which(is.finite(rep$logSPR[[i]]) & Fsequence[[i]] > 0)
-            spr <- rep$logSPR[[i]][indx]
+            indx <- which(is.finite(rep$refpointseq_logSPR[[i]]) & Fsequence[[i]] > 0)
+            spr <- rep$refpointseq_logSPR[[i]][indx]
             ff <- Fsequence[[i]][indx]
             pStart[[i]]$logScaleFxPercent <- sapply(SPRpercent[[i]],function(x){
                 log(ff[which.min((spr - x * spr[1])^2)]) - logFbar
@@ -573,7 +583,8 @@ referencepoints.msam <- function(fit,
                    "crash"="Crash",
                    "ext"="Ext",
                    "xPercent"="xP",
-                   "lim"="lim",
+                   "lim"="lim",                   
+                   "mypyl"="Max Yield per Year Lost",
                    x
                    )               
         })
@@ -593,13 +604,15 @@ referencepoints.msam <- function(fit,
         ## SPRtab["Ext",c("Low","High")] <- NA
         ## YPRtab["Ext",c("Low","High")] <- NA
 
-        YPRseq <- toCI(sprintf("SAM_%d_logYPR",i-1))
-        SPRseq <- toCI(sprintf("SAM_%d_logSPR",i-1))
-        Yieldseq <- toCI(sprintf("SAM_%d_logYe",i-1))
-        Bseq <- toCI(sprintf("SAM_%d_logSe",i-1))
-        Rseq <- toCI(sprintf("SAM_%d_logRe",i-1))
-
-        rownames(YPRseq) <- rownames(SPRseq) <- rownames(Yieldseq) <- rownames(Bseq) <- rownames(Rseq) <- argsIn$data$referencepoint$Fsequence
+        YPRseq <- toCI(sprintf("SAM_%d_refpointseq_logYPR",i-1))
+        SPRseq <- toCI(sprintf("SAM_%d_refpointseq_logSPR",i-1))
+        Yieldseq <- toCI(sprintf("SAM_%d_refpointseq_logYe",i-1))
+        Bseq <- toCI(sprintf("SAM_%d_refpointseq_logSe",i-1))
+        Rseq <- toCI(sprintf("SAM_%d_refpointseq_logRe",i-1))
+        LLseq <- toCI(sprintf("SAM_%d_refpointseq_logYearsLost",i-1))
+        LEseq <- toCI(sprintf("SAM_%d_refpointseq_logLifeExpectancy",i-1))
+  
+        rownames(YPRseq) <- rownames(SPRseq) <- rownames(Yieldseq) <- rownames(Bseq) <- rownames(Rseq) <- rownames(LLseq) <- rownames(LEseq)<- argsIn$data$referencepoint$Fsequence
 
         res <- list(tables = list(F = Ftab,
                                   Yield = Ytab,
@@ -613,7 +626,9 @@ referencepoints.msam <- function(fit,
                                   YieldPerRecruit = YPRseq,
                                   SpawnersPerRecruit = SPRseq,
                                   Biomass = Bseq,
-                                  Recruitment = Rseq),
+                                  Recruitment = Rseq,
+                                  YearsLost = LLseq,
+                                  LifeExpectancy = LEseq),
                     fbarlabel = substitute(bar(F)[X - Y], list(X = fit[[i]]$conf$fbarRange[1], Y = fit[[i]]$conf$fbarRange[2]))## ,
                     ## diagonalCorrection = tv
                     )
@@ -632,15 +647,3 @@ referencepoints.msam <- function(fit,
 
 
 
-##' @method addRecruitmentCurve msam
-##' @inheritParams stockassessment::addRecruitmentCurve
-##' @importFrom stockassessment addRecruitmentCurve
-##' @export
-addRecruitmentCurve.msam <- function(fit,
-                    CI = TRUE,
-                    col = rgb(0.6,0,0),
-                    cicol = rgb(0.6,0,0,0.3),
-                    plot = TRUE,
-                    ...){
-    
-}

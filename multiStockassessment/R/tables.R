@@ -66,7 +66,9 @@ tableit.msam <- function (fit, what,
         ci<-y+sdrep$sd[idx]%o%c(-2,2)
         allyears <- sort(unique(c(syears,xstock[[i]])))
         m <- matrix(NA,length(allyears),3)
-        m[sindx,] <- trans(unname(cbind(y,ci)))
+        ## Keep NA when all is NA from stocks
+        sindx <- !apply(do.call("cbind",lapply(ret,function(x) is.na(x[,1]))), 1, all)
+        m[sindx,] <- trans(unname(cbind(y,ci)))[sindx,]
         rownames(m) <- allyears
         colnames(m) <- c("Estimate","Low","High")
         ret$Total <- m
@@ -95,6 +97,24 @@ ssbtable.msam <- function(fit,...){
     ret <- tableit(fit,"logssb", trans=exp,...)
     return(ret)
 }
+
+##' Life expectancy Table
+##'
+##' Table of estimated life expectancy.
+##' 
+##' @title SSB Table
+##' @param fit msam object
+##' @param ... Other parameters 
+##' @return A matrix of estimates and confidence intervals
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment lifeexpectancytable
+##' @method lifeexpectancytable msam
+##' @export
+lifeexpectancytable.msam <- function(fit,...){
+    ret <- tableit(fit,"logLifeExpectancy", trans=exp,...)
+    return(ret)
+}
+
 
 ##' TSB Table
 ##'
@@ -228,7 +248,12 @@ ntable.msam <- function(fit, returnList = FALSE, ...){
 faytable.msam <- function(fit, returnList = FALSE, ...){
     d <- attr(fit,"m_data")$sam
     idx <- lapply(d,function(xx)xx$keyLogFsta[1,]+2)
-    Flist <- par2list(attr(fit,"m_pl")$logF)
+    sdr <- attr(fit,"m_sdrep")
+    lf0 <- attr(fit,"m_pl")$logF
+    lf1 <- sdr$value[grep("logFs",names(sdr$value))]
+    attr(lf1,"cdim") <- attr(lf0,"cdim")
+    attr(lf1,"rdim") <- attr(lf0,"rdim")
+    Flist <- splitParameter(lf1)
     ret <- sapply(1:length(Flist),function(i){
         r <- cbind(NA,exp(t(Flist[[i]])))[,idx[[i]]]
         r[,idx[[i]]==0] <- 0

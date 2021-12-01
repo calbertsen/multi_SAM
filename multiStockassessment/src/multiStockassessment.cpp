@@ -84,6 +84,7 @@ Type objective_function<Type>::operator() ()
 
   DATA_STRUCT(sam,sam_data);
   DATA_STRUCT(sharedObs,shared_obs);
+  DATA_STRUCT(geneticsData, genetic_data);
   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
@@ -99,6 +100,8 @@ Type objective_function<Type>::operator() ()
 
   DATA_INTEGER(ConConf);
 
+  DATA_STRUCT(Xph, listMatrixFromR);
+
   // Related to residuals
   DATA_VECTOR(fake_obs);
   DATA_IVECTOR(fake_stock);
@@ -106,18 +109,26 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR_INDICATOR(fake_keep, fake_obs);
   DATA_INTEGER(doResiduals);
 
-  // Create a keep indicator for each stock
-  vector<data_indicator<vector<Type>,Type> > keep(sam.dataSets.size());
+  // Create a keep indicator for each stock and for shared observations
+  vector<data_indicator<vector<Type>,Type> > keep(sam.dataSets.size() + (sharedObs.hasSharedObs>0));
   
-  for(int s = 0; s < sam.dataSets.size(); ++s){
+  for(int s = 0; s < sam.dataSets.size(); ++s){    
     data_indicator<vector<Type>,Type> keepTmp(sam.dataSets(s).logobs, true);
     keep(s) = keepTmp;
+  }
+  if(sharedObs.hasSharedObs){
+    data_indicator<vector<Type>,Type> keepTmp(sharedObs.logobs, true);
+    keep(keep.size()-1) = keepTmp;
   }
   
   if(doResiduals){
     for(int i = 0; i < fake_obs.size(); ++i){
       // Overwrite true observations with residual observations
-      sam.dataSets(fake_stock(i)).logobs(fake_indx(i)) = fake_obs(i);
+      if(fake_stock(i) == sam.dataSets.size()){ // Shared observation
+	sharedObs.logobs(fake_indx(i)) = fake_obs(i);
+      }else{
+	sam.dataSets(fake_stock(i)).logobs(fake_indx(i)) = fake_obs(i);
+      }
       // Overwrite keep value
       keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
     }
@@ -150,6 +161,7 @@ Type objective_function<Type>::operator() ()
 
   // YPR reference points
   PARAMETER_VECTOR(logScaleFmsy);
+  PARAMETER_VECTOR(logScaleFmypyl);
   PARAMETER_VECTOR(logScaleFmax);
   PARAMETER_VECTOR(logScaleF01);
   PARAMETER_VECTOR(logScaleFcrash);
@@ -157,6 +169,8 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logScaleFxPercent);
   PARAMETER_VECTOR(logScaleFlim);
   PARAMETER_CMOE_MATRIX(logScaleFmsyRange);
+
+  PARAMETER_VECTOR(splinePenalty);
 
 
   PARAMETER_CMOE_MATRIX(logF); 
@@ -169,12 +183,14 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(RE);
   PARAMETER_VECTOR(betaCon); // (nages*nAreas) x (nages*nAreas)
 
-  PARAMETER_VECTOR(shared_logSdObs);
+  // PARAMETER_VECTOR(shared_logSdObs);
   PARAMETER_CMOE_VECTOR(shared_logFscale);
   // PARAMETER_VECTOR(shared_lfsMean);
   PARAMETER_VECTOR(shared_lfsSd);
   // PARAMETER_VECTOR(shared_lfsRho);
   PARAMETER_VECTOR(shared_logitMissingVulnerability);
+
+  PARAMETER_CMOE_VECTOR(shared_phbeta);
 
   PARAMETER_CMOE_VECTOR(initLogN);
   PARAMETER_CMOE_VECTOR(initLogF);
@@ -215,6 +231,21 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logScaleFmsyRange = logScaleFmsyRange.col(s);
   }
 
+  genetic_parameters<Type> genParSet;
+  PARAMETER(gen_logKappaSpace); genParSet.logKappaSpace = gen_logKappaSpace;
+  PARAMETER(gen_logKappaTime); genParSet.logKappaTime = gen_logKappaTime;
+  PARAMETER_VECTOR(gen_corparST); genParSet.corparST = gen_corparST;
+  PARAMETER_VECTOR(gen_logSdST); genParSet.logSdST = gen_logSdST;
+  PARAMETER(gen_corparAge); genParSet.corparAge = gen_corparAge;
+  PARAMETER_VECTOR(gen_corparTrip); genParSet.corparTrip = gen_corparTrip;
+  PARAMETER_VECTOR(gen_logSdTrip); genParSet.logSdTrip = gen_logSdTrip;
+  PARAMETER_ARRAY(gen_alleleFreq); genParSet.alleleFreq = gen_alleleFreq;
+  PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
+ PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
+
+  PARAMETER_ARRAY(logGst);
+  PARAMETER_MATRIX(logGtrip);
+  
   // for(int s = 0; s < logF.cols(); ++s){  
   //   if(shared_logFscale.col(s).size() > 0){    
   //     matrix<Type> logF0 = logF.col(0);
@@ -229,6 +260,10 @@ Type objective_function<Type>::operator() ()
   //     logF.col(s) = logFs;
   //   }
   // }
+
+
+  // Spline penalty
+
   
   ////////////////////////////////////////
   /////////// Prepare forecast ///////////
@@ -274,10 +309,48 @@ Type objective_function<Type>::operator() ()
   } 
   
   ofall<Type> ofAll(nStocks);
+
+  /////////////////////////////////////
+  ////////// Spline Penalty //////////
+  ///////////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);
+    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
+    logNa = logN.col(s);
+    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
+    logFa = logF.col(s);
+    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    dataSet<Type> ds = sam.dataSets(s);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+    ans += nllSplinePenalty(ds, cs, ps, &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+  
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
 
+  vector<bool> hasPH(Xph.size());
+  hasPH.setConstant(false);
+  vector<matrix<Type> > phPred(Xph.size());
+  for(int s = 0; s < phPred.size(); ++s){
+    if(shared_phbeta.col(s).size() > 0){
+      vector<Type> v0 = Xph(s) * shared_phbeta.col(s);
+      if(v0.size() != (maxAgeAll - minAgeAll + 1)*(maxYearAll - minYearAll + 1))
+	Rf_error("Wrong size in proportional hazard");
+      phPred(s) = asMatrix(v0, maxAgeAll - minAgeAll + 1, maxYearAll - minYearAll + 1); // Age x stock
+      hasPH(s) = true;
+    }else{
+      matrix<Type> m0(0,0);
+      m0.setZero();
+      phPred(s) = m0;
+    }
+  }
+  REPORT(phPred);
+    
   // Initial parameter contribution
   for(int s = 0; s < nStocks; ++s){
     if(initLogF.col(s).size() > 0){
@@ -289,7 +362,8 @@ Type objective_function<Type>::operator() ()
       }
     }
   }
-  
+
+  bool overwriteF = false;
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
@@ -300,7 +374,7 @@ Type objective_function<Type>::operator() ()
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    if(shared_logFscale.col(s).size() == 0){ // Not using shared logF selectivity
+    if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
       ans += nllF(ds, cs, ps, logFa, keepTmp, &of);
       ofAll.addToReport(of.report,s);
       moveADREPORT(&of,this,s);
@@ -308,23 +382,55 @@ Type objective_function<Type>::operator() ()
       logF.col(s) = logFa.matrix();
     }else{			// Using shared logF selectivity
       matrix<Type> logF0 = logF.col(0);
-      matrix<Type> logFs = logF.col(s);
-      for(int i = 0; i < shared_logFscale.col(s).size(); ++i){
-	if(i > 0){
-	  //ans -= dnorm(shared_logFscale.col(s)(i) - shared_lfsMean(s-1), invlogit(shared_lfsRho(s-1)) * (shared_logFscale.col(s)(i-1) - shared_lfsMean(s-1)), exp(shared_lfsSd(s-1)), true);
-	  ans -= dnorm(shared_logFscale.col(s)(i), shared_logFscale.col(s)(i-1), exp(shared_lfsSd(s-1)), true);
-	}else if(initLogF.col(s).size() == 0){
-	  // Type logsd = shared_lfsSd(s-1) - 0.5 * logspace_add2(log(2.0)+shared_lfsRho(s-1),Type(0.0)) - logspace_add2(shared_lfsRho(s-1),Type(0.0));
-	  // ans -= dnorm(shared_logFscale.col(s)(0),shared_lfsMean(s-1),exp(logsd),true);
-	  ans -= dnorm(shared_logFscale.col(s)(0),Type(0.0),Type(2.0),true);
+      matrix<Type> logFs = logF.col(s);      
+      for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
+	Type slfs = 0.0;
+	if(shared_logFscale.col(s).size() > 0){
+	  if(i > 0){
+	    //ans -= dnorm(shared_logFscale.col(s)(i) - shared_lfsMean(s-1), invlogit(shared_lfsRho(s-1)) * (shared_logFscale.col(s)(i-1) - shared_lfsMean(s-1)), exp(shared_lfsSd(s-1)), true);
+	    ans -= dnorm(shared_logFscale.col(s)(i), shared_logFscale.col(s)(i-1), exp(shared_lfsSd(s-1)), true);
+	  }else if(initLogF.col(s).size() == 0){
+	    //Type logsd = shared_lfsSd(s-1) - 0.5 * logspace_add2(log(2.0)+shared_lfsRho(s-1),Type(0.0)) - logspace_add2(shared_lfsRho(s-1),Type(0.0));
+	    //ans -= dnorm(shared_logFscale.col(s)(0),shared_lfsMean(s-1),exp(logsd),true);
+	    ans -= dnorm(shared_logFscale.col(s)(0),Type(0.0),Type(2.0),true);
+	  }
+	  slfs = shared_logFscale.col(s)(i);
 	}
 	for(int j = 0; j < logF0.rows(); ++j){	  
-	  ans -= dnorm(logFs(j,i), logF0(j,i) + shared_logFscale.col(s)(i), Type(0.01), true);
+	  Type lfPred = logF0(j,i);
+	  if(hasPH(s)){
+	    Type phV = 0.0;
+	    Type phD = 0.0;
+	    for(int a = 0; a < phPred.rows(); ++a){
+	      if(cs.keyLogFsta(0,a) == j){
+		phV += phPred(s)(a,i);
+		phD += 1.0;
+	      }
+	    }
+	    if(phD > 0)
+	      lfPred += phV / phD;
+	  }
+	  //ans -= dnorm(logFs(j,i), lfPred + slfs, Type(0.01), true);
+	  ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0), true);
+	  logFs(j,i) = lfPred + slfs;
 	}
 	// Implement simulation of logF with shared selectivity!
       }
+      logF.col(s) = logFs;
+      overwriteF = true;
     }
   }
+
+  // if(overwriteF){
+  for(int s = 0; s < logF.cols(); ++s){
+    oftmp<Type> of(this->do_simulate);
+    matrix<Type> logFs = logF.col(s);
+    ADREPORT_F(logFs,(&of));
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+  // }
+  
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
@@ -344,15 +450,16 @@ Type objective_function<Type>::operator() ()
       array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
       logFa = logF.col(s);	 
 
-      Type logssb0 = ssbi(dat, conf, logNa, logFa, 0, true);
-      ans -= dnorm(logssb0, initLogN.col(s)(0), Type(0.01), true);
-      
-      // ans -= dnorm(logNa(0,0), initLogN.col(s)(0), Type(0.01), true);
+      // Type logssb0 = ssbi(dat, conf, logNa, logFa, 0, true);
+      // ans -= dnorm(logssb0, initLogN.col(s)(0), Type(1.0), true);
+      ans -= dnorm(logNa(0,0), initLogN.col(s)(0), Type(1.00), true);
+
       for(int a = 1; a < logNa.rows(); ++a){
       	Type m = logNa(a-1,0) - dat.natMor(0,a-1);
       	if(conf.keyLogFsta(0,a-1)>(-1))
       	  m -= exp(logFa(conf.keyLogFsta(0,a-1),0));	
-      	ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
+	// ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
+	ans -= dnorm((logNa(a,0)), (m), Type(0.01), true); //
       }
     }
   }      
@@ -670,15 +777,33 @@ Type objective_function<Type>::operator() ()
   }
 
   ans += sharedObservation(sharedObs,
-		    sam.dataSets,
-		    sam.confSets,
-		    paraSets,
-		    logF,
-		    logN,
-		    shared_logSdObs,
-		    minYearAll,
-		    minAgeAll,
-		    this);
+			   sam.dataSets,
+			   sam.confSets,
+			   paraSets,
+			   logF,
+			   logN,
+			   // shared_logSdObs,
+			   minYearAll,
+			   minAgeAll,
+			   keep(keep.size()-1),
+			   this);
+
+  ///////////////////////////////
+  ////////// GENETICS //////////
+  /////////////////////////////
+
+  ans += nllGenetics(sharedObs,
+		     sam.dataSets,
+		     sam.confSets,
+		     paraSets,
+		     logF,
+		     logN,
+		     genParSet,
+		     geneticsData,
+		     logGst,
+		     logGtrip,
+		     maxAgeAll,
+		     minAgeAll);
   
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
@@ -702,8 +827,10 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////////////////////
   ////// ADD REPORTED OBJECTS FROM stockassessment //////
   //////////////////////////////////////////////////////
+
   if(isDouble<Type>::value && this->current_parallel_region<0)
     moveREPORT(this->report,ofAll.report);
+
 
   getTotals(sam.dataSets,
 	    sam.confSets,
@@ -715,6 +842,6 @@ Type objective_function<Type>::operator() ()
 	    minAgeAll,
 	    maxAgeAll,
 	    this);
-  
+
   return ans;
 }

@@ -88,22 +88,17 @@ plotit.msam <- function(fit, what,
     high[xindx,] <- tab[,(0:(length(tabList)-1))*3 + 3,drop=FALSE]
     
     didx <- 1:(nrow(tab)-drop)
-
-    
-    
+       
     if(missing(xlim)){
         xr <- range(unlist(x))
     }else{
-      xr <- xlim
+        xr <- xlim
     }
     x<-x[didx]
     y<-y[didx,,drop=FALSE]
     low<-low[didx,,drop=FALSE]
     high<-high[didx,,drop=FALSE]
-    if(add){
-        for(i in 1:length(fit))
-            lines(xAll, (y[,i]), lwd=3, col=col[i],...)
-    }else{
+    if(!add){
         parg <- c(list(x = xAll, y = NA * xAll), dotargs)
         if(is.null(parg$xlab))
             parg$xlab = xlab
@@ -121,16 +116,23 @@ plotit.msam <- function(fit, what,
             parg$ylim = range(c((low),(high),0,ex),na.rm=TRUE)
         do.call("plot", parg)
         grid(col="black")
-        for(i in 1:length(fit))
-            lines(xAll, (y[,i]), lwd=3, col=col[i], ...)
     }
     if(ci){
         for(i in 1:length(fit)){
             xuse <- xAll%in%x[[i]]
             indx <- which(!is.na(low[,i]) & !is.na(high[,i]) & xuse)
             polygon(c(xAll[indx],rev(xAll[indx])), y = c((low[indx,i]),rev((high[indx,i]))), col = addTrans(col[i],ciAlpha), border=NA)
-            lines(xAll, (y[,i]), lwd=3, col=col[i])
+            ##lines(xAll, (y[,i]), lwd=3, col=col[i])
         }
+    }
+    for(i in 1:length(fit)){
+        larg <- c(list(x = xAll,
+                       y = y[,i]),
+                  dotargs)
+        larg$col <- col[i]
+        if(is.null(larg$lwd))
+            larg$lwd = 3
+        do.call("lines", larg)
     }
     stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))
     if(!onlyTotal)
@@ -155,6 +157,8 @@ plotit.msamforecast <- function(fit,
                                 drop=0,
                                 unnamed.basename="current",
                                 xlim=NULL,
+                                addTotal = FALSE,
+                                onlyTotal = FALSE,
                                 ...){
     xy <- unlist(lapply(fit, function(xx) unlist(lapply(xx,function(yy)yy$year))))
     thisfit <- attr(fit,"fit")
@@ -318,6 +322,36 @@ ssbplot.msamforecast <- function(fit, ...){
 ssbplot.msam_hcr <- function(fit, ...){
     ssbplot(fit$forecast, ...)
 }
+
+
+
+##' Life expectancy plot
+##'
+##' @param fit msam object
+##' @param ... extra arguments for plotting
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment lifeexpectancyplot
+##' @method lifeexpectancyplot msam
+##' @export
+lifeexpectancyplot.msam <- function(fit, ...){
+    plotit(fit, "logLifeExpectancy", ylab="Life expectancy (years)", trans = exp, ...)
+}
+
+##' @method lifeexpectancyplot msamforecast
+##' @export
+lifeexpectancyplot.msamforecast <- function(fit, ...){
+    plotit(fit, "logLifeExpectancy", ylab="Life expectancy (years)", trans = exp, ...)
+    addforecast(fit,"ssb")
+}
+
+##' @method lifeexpectancyplot msam_hcr
+##' @export
+lifeexpectancyplot.msam_hcr <- function(fit, ...){
+    lifeexpectancyplot(fit$forecast, ...)
+}
+
+
+
 
 ##' TSB plot
 ##'
@@ -531,4 +565,51 @@ fitplot.msam <- function(fit,
         myby <- cbind(a,f)
     }
     stockassessment::plotby(Year, o[[stock]], y.line=p[[stock]], by=myby, y.common=FALSE, ylab="", ...)
+}
+
+
+
+##' F selectivity plot
+##'
+##' @param fit msam object
+##' @param cexAge size of Age label
+##' @param type bar for separate bar plots, line for overlayed line plots
+##' @param col Line colors for line plot
+##' @param ... extra arguments for plotting
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment fselectivityplot
+##' @method fselectivityplot msam
+##' @export
+fselectivityplot.msam <- function(fit,
+                                  cexAge = 1,
+                                  type = c("bar","line"),
+                                  col = .plotcols.crp(length(fit)),...){
+    fmat <- faytable(fit, returnList = TRUE)
+    xx <- lapply(fmat, function(x) t(x / rowSums(x)))
+    type <- match.arg(type)
+    if(type == "bar"){
+        on.exit(par(mfrow = par("mfrow")))
+        par(mfrow = n2mfrow(length(xx)))
+        for(i in seq_along(xx)){
+            yy <- xx[[i]]
+            barplot(yy, border = NA, space = c(0), 
+                    xlab = "Year", main = sprintf("%s - Selectivity in F",names(xx)[i]), ...)
+            text(1, cumsum(yy[, 1]) - 0.5 * yy[, 
+                                               1], label = as.character(1:nrow(yy)), adj = c(0, 0.2), 
+                 cex = cexAge)
+        }
+    }else if(type == "line"){
+        yyL <- lapply(xx, function(x2) apply(x2,2,cumsum))
+        plot(yyL[[1]][1,], ylim = c(0,1), type = "n",ylab=NA,
+             xlab = "Year", main = "Selectivity in F")
+        for(i in seq_along(xx)){
+            apply(yyL[[i]],1,lines, col = col[i], lwd = 3)
+            text(0, yyL[[i]][,1], label = as.character(1:nrow(yyL[[1]])), pos = 2, 
+                 cex = cexAge, col = col[i])
+        }
+        stocknames <- as.expression(parse(text = gsub("[[:space:]]", 
+                                                      "~", multiStockassessment:::getStockNames(fit))))
+        legend("bottom", legend = stocknames, lwd = 3, col = col, 
+               ncol = min(length(fit), 5), bty = "n", merge = TRUE)
+    }
 }
