@@ -179,6 +179,7 @@ Type objective_function<Type>::operator() ()
   // YPR reference points
   PARAMETER_VECTOR(logScaleFmsy);
   PARAMETER_VECTOR(logScaleFmypyl);
+  PARAMETER_VECTOR(logScaleFmdy);
   PARAMETER_VECTOR(logScaleFmax);
   PARAMETER_VECTOR(logScaleF01);
   PARAMETER_VECTOR(logScaleFcrash);
