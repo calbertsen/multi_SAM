@@ -8,7 +8,7 @@
   fit,
   atRecruit = TRUE,
   col = .plotcols.crp(length(fit)),
-  ylimAdd = fit$conf$maxAge,
+  ylimAdd = max(sapply(fit, function(x) x$conf$maxAge)),
   ...
 )
 }

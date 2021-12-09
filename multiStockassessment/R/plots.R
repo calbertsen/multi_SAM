@@ -71,6 +71,7 @@ plotit.msam <- function(fit, what,
                         extraLabel=NULL,
                         addTotal = FALSE,
                         onlyTotal = FALSE,
+                        legend.pos = "bottom",
                         ...){
     col <- rep(col, length.out = length(fit))
     dotargs <- list(...)
@@ -136,8 +137,8 @@ plotit.msam <- function(fit, what,
         do.call("lines", larg)
     }
     stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))
-    if(!onlyTotal)
-        legend("bottom",legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
+    if(!onlyTotal && !is.na(legend.pos))
+        legend(legend.pos,legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
 }
 
 
@@ -334,7 +335,7 @@ ssbplot.msam_hcr <- function(fit, ...){
 ##' @importFrom stockassessment lifeexpectancyplot
 ##' @method lifeexpectancyplot msam
 ##' @export
-lifeexpectancyplot.msam <- function(fit, atRecruit=TRUE, col = .plotcols.crp(length(fit)), ylimAdd = fit$conf$maxAge, ...){
+lifeexpectancyplot.msam <- function(fit, atRecruit=TRUE, col = .plotcols.crp(length(fit)), ylimAdd = max(sapply(fit,function(x)x$conf$maxAge)), ...){
   if(atRecruit){
         plotit(fit, "logLifeExpectancyRec", ylab="Life expectancy at recruitment", xlab="Year", trans=exp, ylimAdd = ylimAdd, col=col, ...)
     }else{
@@ -342,7 +343,7 @@ lifeexpectancyplot.msam <- function(fit, atRecruit=TRUE, col = .plotcols.crp(len
     }
   col <- rep(col, length.out = length(fit))
   for(i in seq_along(fit))
-      abline(h = c(fit[[i]]$conf$maxAge, fit[[i]]$conf$minAge), col = "darkgrey",lwd=3, lty = 4,col=col[i])
+      abline(h = c(fit[[i]]$conf$maxAge, fit[[i]]$conf$minAge), lwd=3, lty = 4,col=col[i])
 }
 
 ## ##' @method lifeexpectancyplot msamforecast
@@ -371,13 +372,13 @@ yearslostplot.msam <- function(fit, cause=c("Fishing","Other","LifeExpectancy"),
     cv <- match.arg(cause)
     if(cv == "Fishing"){
         what <- "logYLTF"
-        lab <- sprintf("Life years lost to fishing between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        lab <- "Life years lost to fishing between the minimum and maximum modelled age"
     }else if(cv == "Other"){
         what <- "logYLTM"
-        lab <- sprintf("Life years lost to other causes between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        lab <- "Life years lost to other causes between the minimum and maximum modelled age"
     }else{
         what <- "logYNL"
-        lab <- sprintf("Temporary life expectancy between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        lab <- "Temporary life expectancy between the minimum and maximum modelled age"
     }
     plotit(fit, what, ylab=lab, xlab="Year", trans=exp,...)
 }
@@ -641,5 +642,86 @@ fselectivityplot.msam <- function(fit,
                                                       "~", multiStockassessment:::getStockNames(fit))))
         legend("bottom", legend = stocknames, lwd = 3, col = col, 
                ncol = min(length(fit), 5), bty = "n", merge = TRUE)
+    }
+}
+
+
+bgtext <- function(x, y, labels, ...,
+                   cex = 1, font = NULL,
+                   bg = "white", bgex = 1, border = NA){
+    w <- strwidth(labels, cex = cex, font = font)
+    h <- strheight(expression(F[msy]), cex = cex, font = font)
+    rect(x - 0.5 * bgex * w,
+         y - 0.5 * bgex * h,
+         x + 0.5 * bgex * w,
+         y + 0.5 * bgex * h,
+         col = bg, border = NA)
+    text(x,y,labels, cex=cex, font=font, ...)
+}
+
+
+#' @export
+dataperiodplot <- function(fit, fn,...){
+    UseMethod("dataperiodplot")
+}
+
+#' @export
+dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total", totalCol = "black", addFits = NULL, addCols = NA, ...){
+    dat <- attr(fit,"m_data")
+    shared <- dat$sharedObs$hasSharedObs
+    if(shared){
+        dd <- dat$sharedObs
+        fln <- attr(dd, "fleetNames")
+    }else if(length(dat$sam) == 1){
+        dd <- dat$sam[[1]]
+        fln <- attr(fit[[1]]$data, "fleetNames")
+    }else{
+        stop("Wrong fit type")
+    }
+    xx <- split(as.data.frame(dd$aux),dd$aux[,2])
+    minYearsFleet <- lapply(xx,function(x) min(x$year))
+    maxYearsFleet <- lapply(xx,function(x) max(x$year))
+    minAgeFleet <- lapply(xx,function(x) min(x$age))
+    maxAgeFleet <- lapply(xx,function(x) max(x$age))
+
+
+    if(is.null(fln)){
+        fleetNames <- paste0(c("Residual catch","Unknown","Survey","Biomass Survey","Unknown","Tags","Unknown","Unknown")[dd$fleetTypes+1], toFleetTypeNumber(dd$fleetTypes))
+    }else{
+        fleetNames <- fln
+    }
+    txt <- sprintf("%s (%d-%d)", fleetNames, unlist(minAgeFleet), unlist(maxAgeFleet))
+    indxKeep <- which(!duplicated(txt))[order(unlist(minYearsFleet))]
+
+    layout(do.call("rbind",as.list(c(rep(2,1),rep(1,6)))))
+    par(mar = c(4, 4.4, .1, .1))
+    if(shared){
+        if(showTotal){
+            targ <- c(list(fit = fit, onlyTotal = TRUE), list(...))
+            targ$col <- totalCol            
+            do.call(fn,targ)
+        }
+        fn(fit, add = showTotal, ...)
+        legend("top",legend=totalLegend, col=totalCol, lwd = 3, bty = "n")
+    }else{
+        fn(fit, ...)
+    }
+    if(length(addFits) > 0){
+        addCols <- rep(addCols,length.out = length(addFits))
+        if(all(is.na(addCols)))
+            warning("Use the addCols argument for addFits colors")
+        for(ii in seq_along(addFits)){
+            fn(addFits[[ii]], add = TRUE, col = addCols[ii], legend.pos = FALSE)
+        }
+    }
+    usr <- par("usr")
+    par(mar = c(0, 4.2, .1, .1))
+    plot.new()
+    par(usr = c(usr[1:2],-0.5,length(indxKeep)+0.5))
+    for(i in seq_along(indxKeep)){
+        ii <- indxKeep[i]
+        segments(minYearsFleet[[ii]],i,maxYearsFleet[[ii]],i, lwd = 6)
+        ## fType <- ifelse(ee0$preplist$data$dat[[which(names(maxYearsFleet) == stock)]]$fleetType[ii] == 0,"Catch","Survey")
+        bgtext(0.5 * (minYearsFleet[[ii]] + maxYearsFleet[[ii]]),i,txt[ii], cex = 1, bgex = 1.1)
     }
 }

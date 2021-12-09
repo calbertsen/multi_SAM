@@ -25,6 +25,7 @@
   extraLabel = NULL,
   addTotal = FALSE,
   onlyTotal = FALSE,
+  legend.pos = "bottom",
   ...
 )
 

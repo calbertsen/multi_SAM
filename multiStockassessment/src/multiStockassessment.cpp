@@ -533,14 +533,14 @@ Type objective_function<Type>::operator() ()
 
       // Type logssb0 = ssbi(dat, conf, logNa, logFa, 0, true);
       // ans -= dnorm(logssb0, initLogN.col(s)(0), Type(1.0), true);
-      ans -= dnorm(logNa(0,0), initLogN.col(s)(0), Type(1.00), true);
+      ans -= dnorm(logNa(0,0), initLogN.col(s)(0), Type(0.01), true);
 
       for(int a = 1; a < logNa.rows(); ++a){
       	Type m = logNa(a-1,0) - dat.natMor(0,a-1);
       	if(conf.keyLogFsta(0,a-1)>(-1))
       	  m -= exp(logFa(conf.keyLogFsta(0,a-1),0));	
-	// ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
-	ans -= dnorm((logNa(a,0)), (m), Type(0.01), true); //
+      	// ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
+      	ans -= dnorm((logNa(a,0)), (m), Type(0.01), true); //
       }
     }
   }      
