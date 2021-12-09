@@ -72,6 +72,7 @@ plotit.msam <- function(fit, what,
                         addTotal = FALSE,
                         onlyTotal = FALSE,
                         ...){
+    col <- rep(col, length.out = length(fit))
     dotargs <- list(...)
     tabList <- tableit(fit=fit,what=what,x=x,trans=trans, returnList = TRUE, addTotal = addTotal || onlyTotal)
     if(onlyTotal)
@@ -333,25 +334,55 @@ ssbplot.msam_hcr <- function(fit, ...){
 ##' @importFrom stockassessment lifeexpectancyplot
 ##' @method lifeexpectancyplot msam
 ##' @export
-lifeexpectancyplot.msam <- function(fit, ...){
-    plotit(fit, "logLifeExpectancy", ylab="Life expectancy (years)", trans = exp, ...)
+lifeexpectancyplot.msam <- function(fit, atRecruit=TRUE, col = .plotcols.crp(length(fit)), ylimAdd = fit$conf$maxAge, ...){
+  if(atRecruit){
+        plotit(fit, "logLifeExpectancyRec", ylab="Life expectancy at recruitment", xlab="Year", trans=exp, ylimAdd = ylimAdd, col=col, ...)
+    }else{
+        plotit(fit, "logLifeExpectancy", ylab="Life expectancy at birth", xlab="Year", trans=exp, ylimAdd = ylimAdd, col = col, ...)
+    }
+  col <- rep(col, length.out = length(fit))
+  for(i in seq_along(fit))
+      abline(h = c(fit[[i]]$conf$maxAge, fit[[i]]$conf$minAge), col = "darkgrey",lwd=3, lty = 4,col=col[i])
 }
 
-##' @method lifeexpectancyplot msamforecast
+## ##' @method lifeexpectancyplot msamforecast
+## ##' @export
+## lifeexpectancyplot.msamforecast <- function(fit, ...){
+##     plotit(fit, "logLifeExpectancy", ylab="Life expectancy (years)", trans = exp, ...)
+##     addforecast(fit,"ssb")
+## }
+
+## ##' @method lifeexpectancyplot msam_hcr
+## ##' @export
+## lifeexpectancyplot.msam_hcr <- function(fit, ...){
+##     lifeexpectancyplot(fit$forecast, ...)
+## }
+
+
+##' Life Years lost to fishing plot
+##'
+##' @param fit msam object
+##' @param ... extra arguments for plotting
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment yearslostplot
+##' @method yearslostplot msam
 ##' @export
-lifeexpectancyplot.msamforecast <- function(fit, ...){
-    plotit(fit, "logLifeExpectancy", ylab="Life expectancy (years)", trans = exp, ...)
-    addforecast(fit,"ssb")
+yearslostplot.msam <- function(fit, ...){
+    function(fit, cause=c("Fishing","Other","LifeExpectancy"), ...){
+        cv <- match.arg(cause)
+        if(cv == "Fishing"){
+            what <- "logYLTF"
+            lab <- sprintf("Life years lost to fishing between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        }else if(cv == "Other"){
+            what <- "logYLTM"
+            lab <- sprintf("Life years lost to other causes between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        }else{
+            what <- "logYNL"
+            lab <- sprintf("Temporary life expectancy between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+        }
+        plotit(fit, what, ylab=lab, xlab="Year", trans=exp,...)
+    }
 }
-
-##' @method lifeexpectancyplot msam_hcr
-##' @export
-lifeexpectancyplot.msam_hcr <- function(fit, ...){
-    lifeexpectancyplot(fit$forecast, ...)
-}
-
-
-
 
 ##' TSB plot
 ##'

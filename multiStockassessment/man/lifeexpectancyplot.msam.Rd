@@ -4,7 +4,13 @@
 \alias{lifeexpectancyplot.msam}
 \title{Life expectancy plot}
 \usage{
-\method{lifeexpectancyplot}{msam}(fit, ...)
+\method{lifeexpectancyplot}{msam}(
+  fit,
+  atRecruit = TRUE,
+  col = .plotcols.crp(length(fit)),
+  ylimAdd = fit$conf$maxAge,
+  ...
+)
 }
 \arguments{
 \item{fit}{msam object}

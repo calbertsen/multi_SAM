@@ -4,7 +4,7 @@
 \alias{lifeexpectancytable.msam}
 \title{SSB Table}
 \usage{
-\method{lifeexpectancytable}{msam}(fit, ...)
+\method{lifeexpectancytable}{msam}(fit, atRecruit = TRUE, ...)
 }
 \arguments{
 \item{fit}{msam object}

@@ -486,4 +486,23 @@ ypr.msam <- function(fit,
 }
 
 
+##' @importFrom stockassessment lifeexpectancytable
+##' @method lifeexpectancytable msam
+##' @export
+lifeexpectancytable.msam <- function(fit,atRecruit=TRUE, ...){
+    ret<-tableit(fit, ifelse(atRecruit,"logLifeExpectancyRec","logLifeExpectancy"), trans=exp,...)
+    return(ret)
+}
 
+##' @importFrom stockassessment yearslosttable
+##' @method yearslosttable msam
+##' @export
+yearslosttable.msam <- function(fit,cause = c("Fishing","Other","LifeExpectancy"), ...){
+      cv <- match.arg(cause)
+      what <- switch(cv,
+                     "Fishing"="logYLTF",
+                     "Other"="logYLTM",
+                     "logYNL")
+    ret<-tableit(fit, what=what, trans=exp,...)
+    return(ret)
+}
