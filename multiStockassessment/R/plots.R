@@ -367,22 +367,21 @@ lifeexpectancyplot.msam <- function(fit, atRecruit=TRUE, col = .plotcols.crp(len
 ##' @importFrom stockassessment yearslostplot
 ##' @method yearslostplot msam
 ##' @export
-yearslostplot.msam <- function(fit, ...){
-    function(fit, cause=c("Fishing","Other","LifeExpectancy"), ...){
-        cv <- match.arg(cause)
-        if(cv == "Fishing"){
-            what <- "logYLTF"
-            lab <- sprintf("Life years lost to fishing between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
-        }else if(cv == "Other"){
-            what <- "logYLTM"
-            lab <- sprintf("Life years lost to other causes between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
-        }else{
-            what <- "logYNL"
-            lab <- sprintf("Temporary life expectancy between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
-        }
-        plotit(fit, what, ylab=lab, xlab="Year", trans=exp,...)
+yearslostplot.msam <- function(fit, cause=c("Fishing","Other","LifeExpectancy"), ...){
+    cv <- match.arg(cause)
+    if(cv == "Fishing"){
+        what <- "logYLTF"
+        lab <- sprintf("Life years lost to fishing between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+    }else if(cv == "Other"){
+        what <- "logYLTM"
+        lab <- sprintf("Life years lost to other causes between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
+    }else{
+        what <- "logYNL"
+        lab <- sprintf("Temporary life expectancy between age %d and %d",fit$conf$minAge,fit$conf$maxAge)
     }
+    plotit(fit, what, ylab=lab, xlab="Year", trans=exp,...)
 }
+
 
 ##' TSB plot
 ##'

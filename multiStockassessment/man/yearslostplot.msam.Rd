@@ -4,7 +4,7 @@
 \alias{yearslostplot.msam}
 \title{Life Years lost to fishing plot}
 \usage{
-\method{yearslostplot}{msam}(fit, ...)
+\method{yearslostplot}{msam}(fit, cause = c("Fishing", "Other", "LifeExpectancy"), ...)
 }
 \arguments{
 \item{fit}{msam object}

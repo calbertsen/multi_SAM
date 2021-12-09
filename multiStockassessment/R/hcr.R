@@ -1,22 +1,22 @@
 
-##' @rdname hcr
-##' @export
-##' 
-hcr <- function(fit,
-                ...){
-    UseMethod("hcr")
-}
+## ##' @rdname hcr
+## ##' @export
+## ##' 
+## hcr <- function(fit,
+##                 ...){
+##     UseMethod("hcr")
+## }
 
-##' @rdname hcr
-##' @method hcr sam
-##' @importFrom stockassessment hcr
-##' @export
-hcr.sam <- function(fit,...){
-    stockassessment::hcr(fit, ...)
-}
+## ##' @rdname hcr
+## ##' @method hcr sam
+## ##' @importFrom stockassessment hcr
+## ##' @export
+## hcr.sam <- function(fit,...){
+##     stockassessment::hcr(fit, ...)
+## }
                 
 
-##' @rdname hcr
+##' @importFrom stockassessment hcr
 ##' @method hcr msam
 ##' @export
 hcr.msam <- function(fit,                     
