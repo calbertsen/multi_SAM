@@ -143,6 +143,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		 vector<dataSet<Type> >& datA,
 		 vector<confSet>& confA,
 		 vector<paraSet<Type> >& parA,
+		 vector<forecastSet<Type> >& forecastA,
 		 cmoe_matrix<Type>& logF,
 		 cmoe_matrix<Type>& logN,
 		 genetic_parameters<Type>& genpar,
@@ -158,10 +159,10 @@ Type nllGenetics(shared_obs<Type>& obs,
     return 0.0;
   int nStockManagement = gendat.stock2gen.rows();
   int nStockGenetic = gendat.stock2gen.cols();
-  int nre_Space = logGst.dim[0];
-  int nre_Time = logGst.dim[1];
+  // int nre_Space = logGst.dim[0];
+  // int nre_Time = logGst.dim[1];
   int nre_Age = logGst.dim[2];
-  int nre_Stock = logGst.dim[3];
+  // int nre_Stock = logGst.dim[3];
   Type nll = 0.0;
   // nll form space-time-stock random effects
   using namespace density;
@@ -216,6 +217,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 				     datA,
 				     confA,
 				     parA,
+				      forecastA,
 				     logF,
 				     logN,
 				     (vector<Type>)obs.keyFleetStock.row(gs.fleet-1));

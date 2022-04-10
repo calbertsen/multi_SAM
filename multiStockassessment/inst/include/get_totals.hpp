@@ -1,5 +1,59 @@
 
 template<class Type>
+struct TOTAL_Z_y {
+
+  // All should have the same length
+  vector<vector<Type> > F;
+  vector<vector<Type> > M;
+  vector<vector<Type> > N;
+
+  template<class T>
+  TOTAL_Z_y(const vector<vector<T> >& F_,
+	    const vector<vector<T> >& M_,
+	    const vector<vector<T> >& N_) :
+    F(F_), M(M_), N(N_) {}
+
+  Type operator()(const vector<Type> &x) {
+    // Length of x should be 2 * length of F     
+    int nage = x.size()/2;
+    int nstock = F.size();
+    Type nll = 0.0;
+    for(int a = 0; a < nage; ++a){
+      Type vN = 0.0;
+      Type vC = 0.0;
+      Type Nat = 0.0;
+      for(int s = 0; s < nstock; ++s){
+	Type Za = F(s)(a) + M(s)(a);
+	vN += exp(-Za) * N(s)(a);
+	vC += F(s)(a) / Za * (1.0 - exp(-Za)) * N(s)(a);
+	Nat += N(s)(a);
+      }
+      Type Fat = x(a);
+      Type Zat = x(a + nage);
+      Type tmp1 = vN - exp(-Zat) * Nat;
+      Type tmp2 = vC - Fat / Zat * (1.0 - exp(-Zat)) * Nat;       
+      nll += tmp1 * tmp1 + tmp2 * tmp2;
+    }
+    return nll;
+  }  
+};
+
+
+// template<class Type>
+// vector<Type> totalFbar(vector<confSet> confA,		       
+// 		       int minYearAll,
+// 		       int maxYearAll,
+// 		       int minAgeAll,
+// 		       int maxAgeAll,
+// 		       int i){
+//   // Calculate F-at-age (only ages in Fbar)
+
+//   // Calculate Fbar using first F range
+//   return ;
+// }
+
+
+template<class Type>
 void getTotals(vector<dataSet<Type> > datA,
 	       vector<confSet> confA,
 	       vector<paraSet<Type> > parA,
@@ -37,7 +91,13 @@ void getTotals(vector<dataSet<Type> > datA,
 
   vector<Type> total_nStocks(nYear);
   total_nStocks.setConstant(R_NegInf);
-  
+
+  // matrix<Type> totalNay(nAge,nYear);
+  // vector<matrix<Type> > totalMay(datA.size());
+  // vector<matrix<Type> > totalFay(datA.size());
+  // for(int s = 0; s < datA.size(); ++s){
+    
+  // }
     
   for(int s = 0; s < datA.size(); ++s){
     dataSet<Type> dat = datA(s);

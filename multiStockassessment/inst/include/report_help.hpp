@@ -3,7 +3,10 @@
 #include <sstream>
 
 void moveREPORT(SEXP to, SEXP from){
-  SEXP names = PROTECT(R_lsInternal(from, FALSE));
+   SEXP names = PROTECT(R_lsInternal(from, FALSE));
+    if(names == NILSXP){
+      return;
+    }
   for(int i = 0; i < Rf_length(names); ++i){
     SEXP name = PROTECT(STRING_ELT(names,i));
     // SEXP val = PROTECT(Rf_findVarInFrame(to, Rf_install(CHAR(name))));
@@ -14,16 +17,23 @@ void moveREPORT(SEXP to, SEXP from){
     //}
     UNPROTECT(2);
   }
-  UNPROTECT(1);
+   UNPROTECT(1);
   return;
 }
 
 template<class Type>
+std::vector<Type> segment(std::vector<Type>& x, int i, int n){
+  return std::vector<Type>(x.begin() + i, x.begin() + i + n);
+}
+			  
+
+template<class Type>
 void moveADREPORT(objective_function<Type>* from, objective_function<Type>* to,int stock){  
   int nStart = 0;
-  for(int i = 0; i < from->reportvector.names.size(); ++i){
-    vector<int> n = from->reportvector.namedim(i);
-    vector<Type> res = from->reportvector.result.segment(nStart,n.prod());
+  for(int i = 0; i < (int)from->reportvector.names.size(); ++i){
+    vector<int> n = from->reportvector.namedim[i];
+    std::vector<Type> rtmp = segment(from->reportvector.result,nStart,n.prod());
+    vector<Type> res(rtmp);
     nStart += n.prod();
     std::string nam("");
     if(stock >= 0){
@@ -33,7 +43,7 @@ void moveADREPORT(objective_function<Type>* from, objective_function<Type>* to,i
       nam.append(s.str());
       nam.append("_");
     }
-    nam.append(from->reportvector.names(i));
+    nam.append(from->reportvector.names[i]);
     to->reportvector.push(res,strdup(nam.data()));
   }
   return;
@@ -91,7 +101,9 @@ struct ofall :
   void addToReport(SEXP rep, int stock){
     if(!isDouble<Type>::value) return;
     SEXP names = PROTECT(R_lsInternal(rep, FALSE));
-    if(names == NILSXP) return;
+    if(names == NILSXP){
+      return;
+    }
     for(int i = 0; i < Rf_length(names); ++i){
       SEXP name = PROTECT(STRING_ELT(names,i));
       SEXP val = PROTECT(Rf_findVarInFrame(this->report, Rf_install(CHAR(name))));

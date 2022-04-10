@@ -339,10 +339,11 @@ multisam.fit <- function(x,
     ## }else if(all(sapply(pars[prf], length) == 0)){
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
     ## }
+    ##return(list(dat=dat,pars=pars,map=map0,random=ran))
     obj <- TMB::MakeADFun(dat, pars, map0,
                           random=ran,
-                          profile = prf,
-                          regexp = FALSE,
+                          ##profile = prf,
+                          ##regexp = FALSE,
                           DLL="multiStockassessment", ...)
     if(!run)
         return(obj)
@@ -369,7 +370,7 @@ multisam.fit <- function(x,
     ## Create TMB Object
     obj <- TMB::MakeADFun(dat, pars, map,
                           random=ran,
-                          profile = prf,
+                          ##profile = prf,
                           DLL="multiStockassessment", ...)
     if(symbolicAnalysis)
         TMB::runSymbolicAnalysis(obj)

@@ -3,7 +3,7 @@ collect_data <- function(x) {
         stop("x must be a samset.")
 
     dat <- lapply(x,function(y){
-        y$obj$env$data
+        y$obj$env$data        
     })
     if(!is.null(names(x))){
         names(dat) <- names(x)

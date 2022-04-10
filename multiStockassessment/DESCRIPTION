@@ -8,8 +8,8 @@ Authors@R: person(c("Christoffer","Moesgaard"), "Albertsen",
 Description: Fitting multiple SAM models.
 License: GPL-2
 Copyright: Technical University of Denmark
-Imports: TMB, stockassessment (>= 0.11.0), grDevices, graphics, methods, stats
-LinkingTo: TMB, RcppEigen, stockassessment (>= 0.11.0)
+Imports: TMB (>= 1.8.1), stockassessment (>= 0.12.0), grDevices, graphics, methods, stats
+LinkingTo: TMB (>= 1.8.1), RcppEigen, stockassessment (>= 0.12.0)
 Suggests: parallel
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE

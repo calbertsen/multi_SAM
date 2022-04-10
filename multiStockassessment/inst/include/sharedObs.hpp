@@ -8,6 +8,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 				vector<dataSet<Type> > datA,
 				vector<confSet> confA,
 				vector<paraSet<Type>> parA,
+				vector<forecastSet<Type>> forecastA,
 				cmoe_matrix<Type> logF,
 				cmoe_matrix<Type> logN,
 				vector<Type> keyFleetStock){
@@ -19,7 +20,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
     // Skip if age or year is not used for this stock
     int y = year -  CppAD::Integer(datA(s).years(0));
     int a = age - confA(s).minAge;
-    if(y < 0 || y >= datA(s).noYears + datA(s).forecast.nYears)
+    if(y < 0 || y >= datA(s).noYears + forecastA(s).nYears)
       continue;
     if(a < 0 || a > (confA(s).maxAge - confA(s).minAge))
       continue;
@@ -58,15 +59,16 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 
 template<class Type>
 matrix<Type> predObsPerStock(shared_obs<Type>& obs,
-		       vector<dataSet<Type> >& datA,
-		       vector<confSet>& confA,
-		       vector<paraSet<Type> >& parA,
-		       cmoe_matrix<Type>& logF,
-		       cmoe_matrix<Type>& logN,
-		       // vector<Type> logSdObs,
-		       int minYearAll,
-		       int minAgeAll,
-		       objective_function<Type> *of){
+			     vector<dataSet<Type> >& datA,
+			     vector<confSet>& confA,
+			     vector<paraSet<Type> >& parA,
+			     vector<forecastSet<Type> >& forecastA,
+			     cmoe_matrix<Type>& logF,
+			     cmoe_matrix<Type>& logN,
+			     // vector<Type> logSdObs,
+			     int minYearAll,
+			     int minAgeAll,
+			     objective_function<Type> *of){
   
   matrix<Type> predPerStock(obs.aux.dim[0], datA.size());
   predPerStock.setConstant(R_NegInf);
@@ -93,6 +95,7 @@ matrix<Type> predObsPerStock(shared_obs<Type>& obs,
 					       datA,
 					       confA,
 					       parA,
+					       forecastA,
 					       logF,
 					       logN,
 					       (vector<Type>)obs.keyFleetStock.row(obs.aux(i,1)-1));
@@ -201,6 +204,7 @@ Type sharedObservation(shared_obs<Type>& obs,
 		       vector<dataSet<Type> >& datA,
 		       vector<confSet>& confA,
 		       vector<paraSet<Type> >& parA,
+		       vector<forecastSet<Type> >& forecastA,
 		       cmoe_matrix<Type>& logF,
 		       cmoe_matrix<Type>& logN,
 		       // vector<Type> logSdObs,
@@ -211,7 +215,7 @@ Type sharedObservation(shared_obs<Type>& obs,
   if(!obs.hasSharedObs){
     return Type(0.0);
   }
-  matrix<Type> predPerStock = predObsPerStock(obs, datA, confA, parA, logF, logN, minYearAll, minAgeAll, of);
+  matrix<Type> predPerStock = predObsPerStock(obs, datA, confA, parA, forecastA, logF, logN, minYearAll, minAgeAll, of);
   vector<vector< MVMIX_t<Type> > > nllVecPerStock(datA.size());
   for(int s = 0; s < nllVecPerStock.size(); ++s)
     nllVecPerStock(s) = getnllVec(datA(s), confA(s), parA(s), of);
