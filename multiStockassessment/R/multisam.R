@@ -265,7 +265,7 @@ multisam.fit <- function(x,
             gmlpMap[,colSums(dat$geneticsData$stock2gen) > 0] <- NA
             map0$gen_muLogP <- factor(gmlpMap)
         }
-        if(all(is.na(sapply(gen_samples[isBaseline],function(x)x$keyTrip)))){
+        if(all(is.na(sapply(gen_samples,function(x)x$keyTrip)))){
             map0$gen_corparTrip <- factor(NA * pars$gen_corparTrip)
             map0$gen_logSdTrip <- factor(NA * pars$gen_logSdTrip)
         }
