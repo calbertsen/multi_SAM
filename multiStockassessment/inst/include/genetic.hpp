@@ -172,12 +172,13 @@ Type nllGenetics(shared_obs<Type>& obs,
   Eigen::SparseMatrix<Type> Qtime = gendat.Qtime;
   for(int i = 0; i < Qtime.rows(); ++i)
     Qtime.coeffRef(i,i) += exp(genpar.logKappaTime);
-  
-  nll += SEPARABLE(SEPARABLE(SEPARABLE(
-				       VECSCALE(UNSTRUCTURED_CORR(genpar.corparST),exp(genpar.logSdST)), // Stock
-				       AR1(invlogit(genpar.corparAge))), // Age
-			     GMRF(Qtime, gendat.QorderTime)), // Time
-		   GMRF(Qspace, gendat.QorderSpace))(logGst); // Space
+
+  if(Qtime.cols() > 0 && Qspace.cols() > 0)
+    nll += SEPARABLE(SEPARABLE(SEPARABLE(
+					 VECSCALE(UNSTRUCTURED_CORR(genpar.corparST),exp(genpar.logSdST)), // Stock
+					 AR1(invlogit(genpar.corparAge))), // Age
+			       GMRF(Qtime, gendat.QorderTime)), // Time
+		     GMRF(Qspace, gendat.QorderSpace))(logGst); // Space
   // nll for trip random effects
   VECSCALE_t<UNSTRUCTURED_CORR_t<Type> > nllTrip = VECSCALE(UNSTRUCTURED_CORR(genpar.corparTrip),exp(genpar.logSdTrip));
   for(int i = 0; i < logGtrip.cols(); ++i)
@@ -228,9 +229,11 @@ Type nllGenetics(shared_obs<Type>& obs,
 	  Type PCcorrected = PCtmpG(s) + genpar.muLogP(aa - minAgeAll,s);
 	  if(s < nStockGenetic-1){
 	    if(nre_Age == maxAgeAll - minAgeAll + 1){
-	      PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, aa - minAgeAll, s);
+	      if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt)
+		PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, aa - minAgeAll, s);
 	    }else{
-	      PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, 0, s);
+	      if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt)
+		PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, 0, s);
 	    }
 	    if(gs.keyTrip != R_NaInt){
 	      PCcorrected += logGtrip(s, gs.keyTrip);
