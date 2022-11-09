@@ -29,10 +29,9 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //  --------------------------------------------------------------------------
 
-#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
-#include <TMB.hpp>
-#include <SAM.hpp>
-#include "../inst/include/multiSAM.hpp"
+#include "SAM.h"
+#include "MSAM.h"
+//"../inst/include/multiSAM.hpp"
 
 template<class Type>
 vector<Type> toLogProportion(vector<Type> x){
@@ -74,14 +73,14 @@ extern "C" {
 
 
 
-
-
 template<class Type>
 Type objective_function<Type>::operator() ()
 {
   DATA_STRUCT(sam,sam_data);
   DATA_STRUCT(sharedObs,shared_obs);
   DATA_STRUCT(geneticsData, genetic_data);
+
+  DATA_INTEGER(reportingLevel);
   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
@@ -131,20 +130,23 @@ Type objective_function<Type>::operator() ()
     }
   }
 
-  
   PARAMETER_CMOE_VECTOR(logFpar);
   PARAMETER_CMOE_VECTOR(logQpow);
   PARAMETER_CMOE_VECTOR(logSdLogFsta);
   PARAMETER_CMOE_VECTOR(logSdLogN);
+  PARAMETER_CMOE_VECTOR(logSdLogP);
   PARAMETER_CMOE_VECTOR(logSdLogObs);
   PARAMETER_CMOE_VECTOR(logSdLogTotalObs);
   PARAMETER_CMOE_VECTOR(transfIRARdist);
   PARAMETER_CMOE_VECTOR(sigmaObsParUS);
   PARAMETER_CMOE_VECTOR(rec_pars);
   PARAMETER_CMOE_VECTOR(itrans_rho);
+  PARAMETER_CMOE_VECTOR(rhop);
+  
   PARAMETER_CMOE_VECTOR(logScale);
   PARAMETER_CMOE_VECTOR(logitReleaseSurvival);
   PARAMETER_CMOE_VECTOR(logitRecapturePhi);
+  PARAMETER_CMOE_VECTOR(logAlphaSCB);
 
   PARAMETER_CMOE_VECTOR(sepFalpha);
   PARAMETER_CMOE_VECTOR(sepFlogitRho);
@@ -155,7 +157,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logSdProcLogSW);
   PARAMETER_CMOE_VECTOR(meanLogSW);
   PARAMETER_CMOE_VECTOR(logSdLogSW);
-  PARAMETER_CMOE_VECTOR(logPhiCW);
+  PARAMETER_CMOE_MATRIX(logPhiCW);
   PARAMETER_CMOE_VECTOR(logSdProcLogCW);
   PARAMETER_CMOE_VECTOR(meanLogCW);
   PARAMETER_CMOE_VECTOR(logSdLogCW);
@@ -168,6 +170,8 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(meanLogNM);
   PARAMETER_CMOE_VECTOR(logSdLogNM);
   PARAMETER_CMOE_VECTOR(logXtraSd);
+  PARAMETER_CMOE_VECTOR(initF);
+  PARAMETER_CMOE_VECTOR(initN);
 
   // Forecast FMSY
   PARAMETER_VECTOR(logFScaleMSY);
@@ -192,10 +196,12 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_MATRIX(logN);
 
   PARAMETER_CMOE_MATRIX(logSW);
-  PARAMETER_CMOE_MATRIX(logCW);  
+  PARAMETER_CMOE_3DARRAY(logCW);  
   PARAMETER_CMOE_MATRIX(logitMO);
-  PARAMETER_CMOE_MATRIX(logNM);    
+  PARAMETER_CMOE_MATRIX(logNM);
 
+  PARAMETER_CMOE_MATRIX(logP);
+ 
   
   PARAMETER_CMOE_VECTOR(missing);
   
@@ -218,27 +224,36 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(initLogF);
 
   int nStocks = logF.cols();
- 
+
   vector<paraSet<Type> > paraSets(nStocks);
 
+  
   for(int s = 0; s < nStocks; ++s){
-    paraSets(s).logFpar = logFpar.col(s);  
+    paraSets(s).logFpar = logFpar.col(s);
     paraSets(s).logQpow = logQpow.col(s);  
     paraSets(s).logSdLogFsta = logSdLogFsta.col(s);
     paraSets(s).logSdLogN = logSdLogN.col(s);
+    paraSets(s).logSdLogP = logSdLogP.col(s);
     paraSets(s).logSdLogObs = logSdLogObs.col(s);
     paraSets(s).logSdLogTotalObs = logSdLogTotalObs.col(s);
     paraSets(s).transfIRARdist = transfIRARdist.col(s);
     paraSets(s).sigmaObsParUS = sigmaObsParUS.col(s);
-    paraSets(s).rec_pars = rec_pars.col(s);
-    paraSets(s).itrans_rho = itrans_rho.col(s);  
+    paraSets(s).rec_pars = rec_pars.col(s);    
+    paraSets(s).itrans_rho = itrans_rho.col(s);
+    paraSets(s).rhop = rhop.col(s);
+    
     paraSets(s).logScale = logScale.col(s);
     paraSets(s).logitReleaseSurvival = logitReleaseSurvival.col(s);
     paraSets(s).logitRecapturePhi = logitRecapturePhi.col(s);
+    paraSets(s).logAlphaSCB = logAlphaSCB.col(s);
+    
     paraSets(s).sepFalpha = sepFalpha.col(s);
     paraSets(s).sepFlogitRho = sepFlogitRho.col(s);
     paraSets(s).sepFlogSd = sepFlogSd.col(s);
     paraSets(s).predVarObs = predVarObs.col(s);
+    // Forecast FMSY
+    paraSets(s).logFScaleMSY = logFScaleMSY(s);
+    paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
     // Biopar    
     paraSets(s).logPhiSW = logPhiSW.col(s);
     paraSets(s).logSdProcLogSW = logSdProcLogSW.col(s);
@@ -257,9 +272,10 @@ Type objective_function<Type>::operator() ()
     paraSets(s).meanLogNM = meanLogNM.col(s);
     paraSets(s).logSdLogNM = logSdLogNM.col(s);
     paraSets(s).logXtraSd = logXtraSd.col(s);
-    // Forecast FMSY
-    paraSets(s).logFScaleMSY = logFScaleMSY(s);
-    paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
+    paraSets(s).initF = initF.col(s);
+    paraSets(s).initN = initN.col(s);
+    if(splinePenalty.size() > 0)
+      paraSets(s).splinePenalty = splinePenalty(s);
     // YPR reference points
     // paraSets(s).logScaleFmsy = logScaleFmsy(s);
     // paraSets(s).logScaleFmax = logScaleFmax(s);
@@ -270,7 +286,6 @@ Type objective_function<Type>::operator() ()
     // paraSets(s).logScaleFlim = logScaleFlim(s);
     // paraSets(s).logScaleFmsyRange = logScaleFmsyRange.col(s);
   }
-
   genetic_parameters<Type> genParSet;
   PARAMETER(gen_logKappaSpace); genParSet.logKappaSpace = gen_logKappaSpace;
   PARAMETER(gen_logKappaTime); genParSet.logKappaTime = gen_logKappaTime;
@@ -305,34 +320,14 @@ Type objective_function<Type>::operator() ()
 
   // Spline penalty
 
-  ////////////////////////////////////
-  /////////// Recruitment ///////////
-  //////////////////////////////////
-  vector<Recruitment<Type> > recruits(nStocks);
-  for(int s = 0; s < nStocks; ++s){
-    recruits(s) = makeRecruitmentFunction(sam.confSets(s), paraSets(s));
-  }
-  
-
-  ////////////////////////////////////////
-  /////////// Prepare forecast ///////////
-  ////////////////////////////////////////
-
-  for(int s = 0; s < nStocks; ++s){
-    // Calculate forecast
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
-    // Resize arrays
-    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s));
-    sam.forecastSets(s).calculateForecast(logFa,logNa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s));
-  }
-
 
   Type ans = 0.0; //negative log-likelihood
 
-  // patch missing 
+  ////////////////////////////////////
+  /////////// Missing Obs ///////////
+  //////////////////////////////////
+
+ // patch missing 
   int idxmis = 0;
   for(int s = 0; s < nStocks; ++s)
     for(int i = 0; i < sam.dataSets(s).nobs; ++i){
@@ -356,7 +351,29 @@ Type objective_function<Type>::operator() ()
     for (int i = 0; i < missing.size(); i++)
       ans -= dnorm(missing(i), Type(0.0), huge, true);
   } 
+
+
   
+  ////////////////////////////////////
+  /////////// Recruitment ///////////
+  //////////////////////////////////
+  vector<Recruitment<Type> > recruits(nStocks);
+  for(int s = 0; s < nStocks; ++s){
+    recruits(s) = makeRecruitmentFunction(sam.confSets(s), paraSets(s));
+  }
+
+  ////////////////////////////////////////
+  /////////// Prepare forecast //////////
+  //////////////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    // Calculate forecast
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    // Resize arrays
+    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s));
+  }
+     
   ofall<Type> ofAll(nStocks);
 
   /////////////////////////////////////
@@ -365,11 +382,9 @@ Type objective_function<Type>::operator() ()
 
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
-    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    // array<Type> logNa = getArray(logN, s);
+    // array<Type> logFa = getArray(logF, s);
+    // data_indicator<vector<Type>,Type> keepTmp = keep(s);
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
@@ -378,9 +393,56 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
 
+  //////////////////////////////////
+  ////////// Bio PROCESS //////////
   ////////////////////////////////
-  ////////// F PROCESS //////////
-  //////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    array<Type> logSWa = getArray(logSW, s);
+    array<Type> logCWa = getArray(logCW, s);
+    array<Type> logitMOa = getArray(logitMO, s);
+    array<Type> logNMa = getArray(logNM, s);
+   
+    // data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    dataSet<Type> ds = sam.dataSets(s);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+
+    ans += nllSW(logSWa, ds, cs, ps, &of);
+    ans += nllCW(logCWa, ds, cs, ps, &of);
+    ans += nllMO(logitMOa, ds, cs, ps, &of);
+    ans += nllNM(logNMa, ds, cs, ps, &of);      
+
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+
+  
+
+  //////////////////////////////////
+  /////////// Components //////////
+  ////////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    array<Type> logPa = getArray(logP, s);
+    // Resize arrays
+    dataSet<Type> ds = sam.dataSets(s);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    ans += nllP(cs, ps, logPa, keepTmp, &of);
+  }
+     
+  
+  /////////////////////////////////////////
+  ////////// F PRE-CALCULATIONS //////////
+  ///////////////////////////////////////
 
   vector<bool> hasPH(Xph.size());
   hasPH.setConstant(false);
@@ -415,20 +477,19 @@ Type objective_function<Type>::operator() ()
   // bool overwriteF = false;
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
     if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
-      ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
-      ofAll.addToReport(of.report,s);
-      moveADREPORT(&of,this,s);
-      // If simulate -> move grab new logF values and move them to the right place!         
-      logF.col(s) = logFa.matrix();
+      // SAVE FOR LATER
+      // ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
+      // ofAll.addToReport(of.report,s);
+      // moveADREPORT(&of,this,s);
+      // // If simulate -> move grab new logF values and move them to the right place!         
+      // logF.col(s) = logFa.matrix();
     }else{			// Using shared logF selectivity
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);      
@@ -481,39 +542,49 @@ Type objective_function<Type>::operator() ()
   // }
 
 
-  //////////////////////////////////
-  ////////// Bio PROCESS //////////
+ 
+  ////////////////////////////////////////
+  /////////// Mortality /////////////////
+  //////////////////////////////////////
+  vector<MortalitySet<Type> > mortalities(nStocks);
+  for(int s = 0; s < nStocks; ++s){
+    array<Type> logFa = getArray(logF, s);
+    mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa);
+  }
+
+  ////////////////////////////////////////
+  /////////// Calculate forecast ////////
+  //////////////////////////////////////
+
+  for(int s = 0; s < nStocks; ++s){
+    // Calculate forecast
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    // Resize arrays
+    sam.forecastSets(s).calculateForecast(logFa,logNa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+  }
+
   ////////////////////////////////
+  ////////// F PROCESS //////////
+  //////////////////////////////
+
 
    for(int s = 0; s < nStocks; ++s){
-     oftmp<Type> of(this->do_simulate);
-     array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-     logNa = logN.col(s);
-     array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-     logFa = logF.col(s);
-     array<Type> logSWa(logSW.col(s).rows(),logSW.col(s).cols());
-     logSWa = logSW.col(s);
-     array<Type> logCWa(logCW.col(s).rows(),logCW.col(s).cols());
-     logCWa = logCW.col(s);
-     array<Type> logitMOa(logitMO.col(s).rows(),logitMO.col(s).cols());
-     logitMOa = logitMO.col(s);
-     array<Type> logNMa(logNM.col(s).rows(),logNM.col(s).cols());
-     logNMa = logNM.col(s);
-
-     
-     data_indicator<vector<Type>,Type> keepTmp = keep(s);
-     dataSet<Type> ds = sam.dataSets(s);
-     confSet cs = sam.confSets(s);
-     paraSet<Type> ps = paraSets(s);
-
-     ans += nllSW(logSWa, ds, cs, ps, &of);
-     ans += nllCW(logCWa, ds, cs, ps, &of);
-     ans += nllMO(logitMOa, ds, cs, ps, &of);
-     ans += nllNM(logNMa, ds, cs, ps, &of);      
-
-     ofAll.addToReport(of.report,s);
-     moveADREPORT(&of,this,s);
-  }
+    oftmp<Type> of(this->do_simulate);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    data_indicator<vector<Type>,Type> keepTmp = keep(s);
+    dataSet<Type> ds = sam.dataSets(s);
+    confSet cs = sam.confSets(s);
+    paraSet<Type> ps = paraSets(s);
+    if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
+      ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
+      ofAll.addToReport(of.report,s);
+      moveADREPORT(&of,this,s);
+      // If simulate -> move grab new logF values and move them to the right place!         
+      logF.col(s) = logFa.matrix();
+    }
+   }
 
   
   ////////////////////////////////
@@ -530,10 +601,8 @@ Type objective_function<Type>::operator() ()
       confSet conf = sam.confSets(s);
       dataSet<Type> dat = sam.dataSets(s);
       paraSet<Type> par = paraSets(s);
-      array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-      logNa = logN.col(s);
-      array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-      logFa = logF.col(s);	 
+      array<Type> logNa = getArray(logN, s);
+      array<Type> logFa = getArray(logF, s);
 
       // Type logssb0 = ssbi(dat, conf, logNa, logFa, 0, true);
       // ans -= dnorm(logssb0, initLogN.col(s)(0), Type(1.0), true);
@@ -549,7 +618,7 @@ Type objective_function<Type>::operator() ()
     }
   }      
   //////////////////////////////////////////
-  
+
   int nAreas = sam.dataSets.size();
 
   int nages = (maxAgeAll - minAgeAll + 1);
@@ -632,24 +701,22 @@ Type objective_function<Type>::operator() ()
     SIMULATE{
       // Simulate new F for forecast and HCR
      for(int s = 0; s < nAreas; ++s){
-      forecastSet<Type> fc = sam.forecastSets(s);
+       array<Type> logNa = getArray(logN, s);
+       array<Type> logFa = getArray(logF, s);
+       forecastSet<Type> fc = sam.forecastSets(s);
        if(fc.nYears > 0){
 	 dataSet<Type> ds = sam.dataSets(s);
 	 confSet cs = sam.confSets(s);
 	 paraSet<Type> ps = paraSets(s);
 	 int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
 	 if(y > 0 && y < ds.noYears + fc.nYears){
-	   array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-	   logNa = logN.col(s);
-	   array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-	   logFa = logF.col(s);	 
 	   matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
 	   MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
 	   int nYears = fc.nYears;
 	   int fi = y - fc.forecastYear.size() + nYears;
 	   // Update forecast
 	   if(fi > 0){
-	     fc.updateForecast(fi, logFa, logNa, ds, cs, ps, recruits(s));
+	     fc.updateForecast(fi, logFa, logNa, ds, cs, ps, recruits(s), mortalities(s));
 	     // Simulate F
 	     // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
 	     if(fc.simFlag(0) == 0){
@@ -680,12 +747,10 @@ Type objective_function<Type>::operator() ()
       int ageOffset = sam.confSets(s).minAge - minAgeAll;
       int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
       
-      array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-      logNa = logN.col(s);
-      array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-      logFa = logF.col(s);
+      array<Type> logNa = getArray(logN, s);
+      array<Type> logFa = getArray(logF, s);
       if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears){
-	vector<Type> predNnz = predNFun(ds, cs, ps, logNa, logFa, recruits(s), (int)y);
+	vector<Type> predNnz = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y);
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
 	newN.segment(s * nages + ageOffset,predNnz.size()) = logNa.col(y);
@@ -849,49 +914,52 @@ Type objective_function<Type>::operator() ()
 
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    array<Type> logPa = getArray(logP, s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    ans += nllObs(ds, cs, ps, sam.forecastSets(s), logNa, logFa, recruits(s), keepTmp,  &of);
+    ans += nllObs(ds, cs, ps, sam.forecastSets(s), logNa, logFa, logPa, recruits(s), mortalities(s), keepTmp, reportingLevel,  &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
 
-  ans += sharedObservation(sharedObs,
-			   sam.dataSets,
-			   sam.confSets,
-			   paraSets,
-			   sam.forecastSets,
-			   logF,
-			   logN,
-			   // shared_logSdObs,
-			   minYearAll,
-			   minAgeAll,
-			   keep(keep.size()-1),
-			   this);
+  // ans += sharedObservation(sharedObs,
+  // 			   sam.dataSets,
+  // 			   sam.confSets,
+  // 			   paraSets,
+  // 			   sam.forecastSets,
+  // 			   logF,
+  // 			   logN,
+  // 			   logP,
+  // 			   mortalities,
+  // 			   // shared_logSdObs,
+  // 			   minYearAll,
+  // 			   minAgeAll,
+  // 			   keep(keep.size()-1),
+  // 			   this);
 
   ///////////////////////////////
   ////////// GENETICS //////////
   /////////////////////////////
 
-  ans += nllGenetics(sharedObs,
-		     sam.dataSets,
-		     sam.confSets,
-		     paraSets,
-		     sam.forecastSets,
-		     logF,
-		     logN,
-		     genParSet,
-		     geneticsData,
-		     logGst,
-		     logGtrip,
-		     maxAgeAll,
-		     minAgeAll);
+  // ans += nllGenetics(sharedObs,
+  // 		     sam.dataSets,
+  // 		     sam.confSets,
+  // 		     paraSets,
+  // 		     sam.forecastSets,
+  // 		     logF,
+  // 		     logN,
+  // 		     logP,
+  // 		     mortalities,
+  // 		     genParSet,
+  // 		     geneticsData,
+  // 		     logGst,
+  // 		     logGtrip,
+  // 		     maxAgeAll,
+  // 		     minAgeAll);
 
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
@@ -920,11 +988,13 @@ Type objective_function<Type>::operator() ()
     moveREPORT(this->report,ofAll.report);
 
 
+
   getTotals(sam.dataSets,
 	    sam.confSets,
 	    paraSets,
 	    logF,
 	    logN,
+	    mortalities,
 	    minYearAll,
 	    maxYearAll,
 	    minAgeAll,

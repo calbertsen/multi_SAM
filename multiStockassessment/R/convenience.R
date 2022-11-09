@@ -25,16 +25,16 @@ is.msamset <- function(x){
     return(inherits(x,"msamset"))
 }
 
-getLowerBounds <- function(parameters){
+getLowerBounds <- function(parameters, conf){
     f <- get("getLowerBounds", envir = asNamespace("stockassessment"), inherits = FALSE)
-    r <- f(parameters)
+    r <- f(parameters, conf)
     #r$RE <- rep(-10,length(parameters$RE))
     return(r)
 }
 
-getUpperBounds <- function(parameters){
+getUpperBounds <- function(parameters, conf){
     f <- get("getUpperBounds", envir = asNamespace("stockassessment"), inherits = FALSE)
-    r <- f(parameters)
+    r <- f(parameters, conf)
     #r$RE <- rep(10,length(parameters$RE))
     return(r)
 }

@@ -65,6 +65,7 @@ multisam.fit <- function(x,
                          parlist = NULL,
                          run = TRUE,
                          symbolicAnalysis = FALSE,
+                         fullDerived = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     ## Check input
@@ -115,9 +116,19 @@ multisam.fit <- function(x,
     })
     if(!(is.matrix(Xph[[1]]) && ncol(Xph[[1]]) == 0 && nrow(Xph[[1]]) == 0))
         stop("First proportional hazard covariate matrix must be 0x0")
+
+    if(any(!corStructure)){
+        tms <- terms(formula)
+        if(length(attr(tms,"variables")) + attr(tms,"intercept")){
+            warning("corStructure used with a formula without parameters. Using ~factor(Index) instead.")
+            formula <- ~factor(Index)
+        }
+    }
+    
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
                 geneticsData = genetics_data,
+                reportingLevel = as.integer(fullDerived),
                 usePartialCor = as.integer(usePartialCors),
                 maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years)))),
                 minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years)))),
@@ -332,14 +343,14 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "shared_logFscale", "logGst", "logGtrip")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP", "shared_logFscale", "logGst", "logGtrip")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
     prf <- NULL
     ## }else if(all(sapply(pars[prf], length) == 0)){
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
-    ## }
-    ##return(list(dat=dat,pars=pars,map=map0,random=ran))
+    ## }    
+    ## return(list(dat=dat,pars=pars,map=map0,random=ran))
     obj <- TMB::MakeADFun(dat, pars, map0,
                           random=ran,
                           ##profile = prf,

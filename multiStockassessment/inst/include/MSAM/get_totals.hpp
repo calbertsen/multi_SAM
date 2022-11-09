@@ -1,3 +1,7 @@
+SAM_DEPENDS(define)
+SAM_DEPENDS(incidence)
+SAM_DEPENDS(derived)
+MSAM_DEPENDS(param_types)
 
 // template<class Type>
 // struct TOTAL_Z_y {
@@ -110,16 +114,17 @@
 
 
 template<class Type>
-void getTotals(vector<dataSet<Type> > datA,
-	       vector<confSet> confA,
-	       vector<paraSet<Type> > parA,
-	       cmoe_matrix<Type> logF,
-	       cmoe_matrix<Type> logN,
+void getTotals(vector<dataSet<Type> >& datA,
+	       vector<confSet>& confA,
+	       vector<paraSet<Type> >& parA,
+	       cmoe_matrix<Type>& logF,
+	       cmoe_matrix<Type>& logN,
+	       vector<MortalitySet<Type> >& mortalities,
 	       int minYearAll,
 	       int maxYearAll,
 	       int minAgeAll,
 	       int maxAgeAll,
-	       objective_function<Type> *of){
+	       objective_function<Type> *of)SOURCE({
 
 
   // Calculate values to report
@@ -168,16 +173,16 @@ void getTotals(vector<dataSet<Type> > datA,
     
     // Calculate values to report
     
-    vector<Type> S_logssb = ssbFun(dat, conf, logNa, logFa, true);
-    vector<Type> S_logfsb = log(fsbFun(dat, conf, logNa, logFa));
-    vector<Type> S_logCatch = catchFun(dat, conf, logNa, logFa, true);
-    matrix<Type> S_logCatAge = catchFunAge(dat, conf, logNa, logFa, true);
-    vector<Type> S_logLand = log(landFun(dat, conf, logNa, logFa));
+    vector<Type> S_logssb = ssbFun(dat, conf, logNa, logFa, mortalities(s), true);
+    vector<Type> S_logfsb = log(fsbFun(dat, conf, logNa, logFa, mortalities(s)));
+    vector<Type> S_logCatch = catchFun(dat, conf, logNa, logFa, mortalities(s), true);
+    matrix<Type> S_logCatAge = catchFunAge(dat, conf, logNa, logFa, mortalities(s), true);
+    vector<Type> S_logLand = log(landFun(dat, conf, logNa, logFa, mortalities(s)));
     // vector<Type> varLogCatch = varLogCatchFun(dat, conf, logN, logF, par);
     // vector<Type> varLogLand = varLogLandFun(dat, conf, logN, logF, par);
     vector<Type> S_logtsb = log(tsbFun(dat, conf, logNa));
     vector<Type> S_logR = log(rFun(logNa));
-    vector<Type> S_logfbar = fbarFun(conf, logFa, true);
+    vector<Type> S_logfbar = fbarFun(dat,conf, logFa, true);
     vector<Type> S_logfbarL = log(landFbarFun(dat, conf, logFa));
     
     for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){    
@@ -227,4 +232,9 @@ void getTotals(vector<dataSet<Type> > datA,
   ADREPORT_F(total_logCatAge,of);
 
   return;
-}
+		 })
+
+
+
+MSAM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, objective_function<double>*));
+MSAM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int, objective_function<TMBad::ad_aug>*));

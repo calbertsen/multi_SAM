@@ -1,7 +1,12 @@
+.forecastDefault <- getFromNamespace(".forecastDefault","stockassessment")
+.parseRel <- getFromNamespace(".parseRel","stockassessment")
+.parseForecast <- getFromNamespace(".parseForecast","stockassessment")
+
+
 ## Change targets to lists if specified
-targetToList <- function(x, nStocks){
+targetToList <- function(x, nStocks, constructor = numeric){
     if(is.null(x))
-        return(replicate(nStocks,numeric(0),FALSE))
+        return(replicate(nStocks,constructor(0),FALSE))
     if(is.list(x))
         return(x)
     if(is.vector(x)) ## Same target for all stocks
@@ -40,6 +45,7 @@ targetToList <- function(x, nStocks){
 ##' @method modelforecast msam
 ##' @export
 modelforecast.msam <- function(fit,
+                               constraints = NULL,
                           fscale = NULL,
                           catchval = NULL,
                           fval = NULL,
@@ -47,9 +53,9 @@ modelforecast.msam <- function(fit,
                           landval = NULL,
                           findMSY = NULL,
                           hcr = NULL,
-                          nosim = NULL,
+                          nosim = 0,
                           year.base = sapply(fit,function(x)max(x$data$years)),
-                          ave.years = lapply(fit,function(x)max(x$data$years)+(-4:0)),
+                          ave.years = lapply(fit,function(x)numeric(0)),
                           rec.years = lapply(fit,function(x)numeric(0)),
                           label = NULL,
                           overwriteSelYears = NULL,
@@ -66,6 +72,11 @@ modelforecast.msam <- function(fit,
                           nCatchAverageYears = rep(1,length(fit)),
                           returnObj = FALSE,
                           hcrConf = lapply(fit, function(x)numeric(0)),
+                          hcrCurrentSSB = 0,
+                          progress = TRUE,
+                          estimate = median,
+                          silent = TRUE,
+                          newton_config = NULL,
                           ...){
     
     ## Handle year.base < max(fit$data$years)
@@ -79,10 +90,16 @@ modelforecast.msam <- function(fit,
     if(deterministicF && length(fscale) > 0 && any(!is.na(fscale)) && is.null(customSel))
         warning("Forecasted F values may depend on the last estimated F vector and can therefore have uncertainty. Provide a custom selectivity to circumvent this.")
 
+    if(!is.null(nosim) && nosim > 0){ 
+        estimateLabel <- deparse1(substitute(estimate))
+    }else{
+        estimateLabel <- "mostLikelyTrajectory"
+    }
     
     
     nStocks <- length(fit)
-    
+
+    constraints <- targetToList(constraints, nStocks, character)
     fscale <- targetToList(fscale, nStocks)
     catchval <- targetToList(catchval, nStocks)
     fval <- targetToList(fval, nStocks)
@@ -93,7 +110,8 @@ modelforecast.msam <- function(fit,
         
     
     ## Get number of forecast years
-    lengthVec <- cbind(sapply(fscale,length),
+    lengthVec <- cbind(sapply(constraints, length),
+                       sapply(fscale,length),
                        sapply(catchval,length),
                        sapply(fval, length),
                        sapply(nextssb, length),
@@ -108,44 +126,64 @@ modelforecast.msam <- function(fit,
 
     ## Convert input to an F model code and a target value
     for(i in 1:nStocks){
+        if(length(constraints[[i]]) == 0)
+            constraints <- rep(NA_character_, nYears[i])
+        
         if(length(fscale[[i]]) == 0)
             fscale[[i]] <- rep(NA_real_, nYears[i])
+        if(any(!is.na(constraints[[i]]) & !is.na(fscale[[i]])))
+            warning("fscale specified for years with other constraints. Using previously defined constraints.")
+        constraints[[i]][is.na(constraints[[i]]) & !is.na(fscale[[i]])] <- sprintf("F=%f*",fscale[[i]][is.na(constraints[[i]]) & !is.na(fscale[[i]])])
+        
         if(length(catchval[[i]]) == 0)
             catchval[[i]] <- rep(NA_real_, nYears[i])
+        if(any(!is.na(constraints[[i]]) & !is.na(catchval[[i]])))
+        warning("catchval specified for years with other constraints. Using previously defined constraints.")
+        constraints[[i]][is.na(constraints[[i]]) & !is.na(catchval[[i]])] <- sprintf("C=%f",catchval[[i]][is.na(constraints[[i]]) & !is.na(catchval[[i]])])
+        
         if(length(fval[[i]]) == 0)
             fval[[i]] <- rep(NA_real_, nYears[i])
+        if(any(!is.na(constraints[[i]]) & !is.na(fval[[i]])))
+        warning("fval specified for years with other constraints. Using previously defined constraints.")
+        constraints[[i]][is.na(constraints[[i]]) & !is.na(fval[[i]])] <- sprintf("F=%f",fval[[i]][is.na(constraints[[i]]) & !is.na(fval[[i]])])
+        
         if(length(nextssb[[i]]) == 0)
             nextssb[[i]] <- rep(NA_real_, nYears[i])
+        if(any(!is.na(constraints[[i]]) & !is.na(nextssb[[i]])))
+        warning("nextssb specified for years with other constraints. Using previously defined constraints.")
+        constraints[[i]][is.na(constraints[[i]]) & !is.na(nextssb[[i]])] <- sprintf("SSB=%f",nextssb[[i]][is.na(constraints[[i]]) & !is.na(nextssb[[i]])])
+        
         if(length(landval[[i]]) == 0)
             landval[[i]] <- rep(NA_real_, nYears[i])
+         if(any(!is.na(constraints[[i]]) & !is.na(landval[[i]])))
+        warning("landval specified for years with other constraints. Using previously defined constraints.")
+        constraints[[i]][is.na(constraints[[i]]) & !is.na(landval[[i]])] <- sprintf("L=%f",landval[[i]][is.na(constraints[[i]]) & !is.na(landval[[i]])])
+        
         if(length(findMSY[[i]]) == 0)
             findMSY[[i]] <- rep(NA_real_, nYears[i])
+        if(any(!is.na(constraints[[i]]) & !is.na(findMSY[[i]])))
+        warning("findMSY specified for years with other constraints. findMSY will overwrite other values.")
         if(length(hcr[[i]]) == 0)
             hcr[[i]] <- rep(NA_real_, nYears[i])
+         if(any(!is.na(constraints[[i]]) & !is.na(hcr[[i]])))
+        warning("hcr specified for years with other constraints. hcr will overwrite other values.")
+    
     }
 
     
-    tabList <- lapply(as.list(1:nStocks),
-                      function(i)rbind(fscale[[i]],fval[[i]],catchval[[i]],nextssb[[i]],landval[[i]],findMSY[[i]], hcr[[i]]))
-    FModel <- lapply(tabList, function(tab)
-        apply(tab,2, function(x){
-            y <- which(!is.na(x))
-            switch(as.character(length(y)),
-                   "0"=0,
-                   "1"=y,
-                   stop("At most one target can be specified per year."))
-        })
-        )
-    target <- lapply(tabList, function(tab)
-        apply(tab,2, function(x){
-            y <- which(!is.na(x))
-            switch(as.character(length(y)),
-                   "0"=NA_real_,
-                   "1"=x[y],
-                   stop("At most one target can be specified per year."))
-        })
-        )
+    FModel <- lapply(seq_len(nStocks), function(s){
+        v <- rep(0,nYears[s])
+        v[!is.na(constraints[[s]])] <- 1
+        v[!is.na(findMSY[[s]])] <- 3
+        v[!is.na(hcr[[s]])] <- 4
+        v
+    })
 
+    cstr <- lapply(seq_len(nStocks), function(s){
+        v <- replicate(nYears, .forecastDefault(), simplify = FALSE)
+        v[!is.na(constraints[[s]])] <- .parseForecast(constraints[[s]][!is.na(constraints[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge))
+        })
+    
     ## Use custom selectivity?
     if(is.null(customSel)){
         customSel <- replicate(nStocks,numeric(0),FALSE)
@@ -197,6 +235,9 @@ modelforecast.msam <- function(fit,
 
     
     ## Convert average years to indices
+    useModelBio <- sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
+    ave.yearsIn <- ave.years
+    ave.years[useModelBio] <- lapply(fit[useModelBio],function(x) max(x$data$years)+(-4:0))
     ave.years <- lapply(as.list(1:nStocks),function(i)match(ave.years[[i]], fit[[i]]$data$years) - 1)
     if(any(is.na(ave.years)))
         stop("ave.years has years without data.")
@@ -214,7 +255,34 @@ modelforecast.msam <- function(fit,
     pl$logN <- combineMatrices(lapply(as.list(1:length(logNTmp)),
                                        function(i)cbind(logNTmp[[i]],
                                                         matrix(logNTmp[[i]][,ncol(logNTmp[[i]])],nrow(logNTmp[[i]]),nYears[i]))))
+    if(any(useModelBio)){
+        splitArray <- function(a){
+            nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
+            lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
+        }
+        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x)],nYears,ncol(x)))
+        makeBio <- function(x, isArray = FALSE){
+            if(isArray){
+                biox <- split3DArrays(x)
+            }else{                
+                biox <- splitMatrices(x)
+            }
+            nr <- sapply(biox,nrow)
+            fn <- extendBio
+            if(isArray)
+                fn <- function(y) simplify2array(lapply(splitArray(y), extendBio))
+            biox[nr > 0 & useModelBio] <- lapply(biox[nr > 0 & useModelBio], fn)
+            if(isArray)
+                return(combine3DArrays(biox))
+            return(combineMatrices(biox))
+        }
+        pl$logitMO <- makeBio(pl$logitMO)
+        pl$logNM <- makeBio(pl$logNM)
+        pl$logSW <- makeBio(pl$logSW)
+        pl$logCW <- makeBio(pl$logCW, TRUE)
+    }
 
+    
     args$parameters <- pl
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
 
@@ -224,15 +292,17 @@ modelforecast.msam <- function(fit,
                                             aveYears = as.numeric(ave.years[[i]]),
                                             forecastYear = as.numeric(c(rep(0,fit[[i]]$data$noYears),seq(1,nYears[i],length=nYears[i]))),
                                             FModel = as.numeric(FModel[[i]]),
-                                            target = as.numeric(target[[i]]),
+                                            ##target = as.numeric(target[[i]]),
+                                            constraints = cstr[[i]],
+                                            cfg = newton_config,
                                             selectivity = as.numeric(customSel[[i]]),
                                             recModel = as.numeric(recList[[i]]$recModel),
                                             logRecruitmentMedian = as.numeric(recList[[i]]$logRecruitmentMedian),
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
                                             simFlag = c(0,0),
-                                            uniroot = as.numeric(useUniroot),
-                                            hcrConf = hcrConf[[i]])
+                                            hcrConf = hcrConf[[i]],
+                                            hcrCurrentSSB = hcrCurrentSSB)
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
     withFMSY <- which(sapply(findMSY,function(x)any(!is.na(x))))    

@@ -1,22 +1,33 @@
+MSAM_DEPENDS(convenience)
+
 /* Structure to define covariance constraints */
+HEADER(
 template<class Type>
 struct cov_constraints {
   vector<vector<Type> > a;
-  cov_constraints(SEXP x){ // Constructor
-    a = vector<vector<Type> >(Rf_length(x));
-    for(int i = 0; i < a.size(); ++i){
-      vector<Type> tmp = asVector<Type>(VECTOR_ELT(x,i));
-      //a(i) = vector<Type>(tmp.size());
-      a(i) = tmp;
-    }
-  }
+  cov_constraints(SEXP x);
 };
+       )
 
-/* Structure to define covariance design matrices */
+SOURCE(
+       template<class Type>
+       cov_constraints<Type>::cov_constraints(SEXP x){ // Constructor
+	 a = vector<vector<Type> >(Rf_length(x));
+	 for(int i = 0; i < a.size(); ++i){
+	   vector<Type> tmp = asVector<Type>(VECTOR_ELT(x,i));
+	   //a(i) = vector<Type>(tmp.size());
+	   a(i) = tmp;
+	 }
+       }
+       );
+       /* Structure to define covariance design matrices */
+
+MSAM_SPECIALIZATION(struct cov_constraints<double>);
+MSAM_SPECIALIZATION(struct cov_constraints<TMBad::ad_aug>);
 
 
 template<class Type>
-matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, matrix<Type> X, cov_constraints<Type> cons){
+matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, matrix<Type> X, cov_constraints<Type> cons)SOURCE({
 
     int nAge = nages * nAreas;
     matrix<Type> llt(nAge,nAge);
@@ -56,4 +67,7 @@ matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, matrix<Type> X, 
     }
 
     return L;
-}
+  })
+
+MSAM_SPECIALIZATION(matrix<double> constructL(int, int, vector<double>, matrix<double>, cov_constraints<double>));
+MSAM_SPECIALIZATION(matrix<TMBad::ad_aug> constructL(int, int, vector<TMBad::ad_aug>, matrix<TMBad::ad_aug>, cov_constraints<TMBad::ad_aug>));

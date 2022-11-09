@@ -10,8 +10,10 @@ collect_pars <- function(x) {
             newparam[[i]] <- combineVectors(lapply(x,function(yy) yy$pl[[i]]))
         }else if(is.matrix(x[[1]]$pl[[i]])){
             newparam[[i]] <- combineMatrices(lapply(x,function(yy) yy$pl[[i]]))
+        }else if(is.array(x[[1]]$pl[[i]]) && length(dim(x[[1]]$pl[[i]]))==3){
+            newparam[[i]] <- combine3DArrays(lapply(x,function(yy) yy$pl[[i]]))
         }else{
-            stop("Type not implemented")
+            stop("Parameter type not implemented")
         }
     }
     names(newparam) <- names(x[[1]]$pl)
