@@ -37,7 +37,7 @@
 ##' @export
 multisam.fit <- function(x,
                          formula = ~-1,
-                         corStructure = suggestCorStructure(x,nAgeClose = Inf,noCorInArea=FALSE),
+                         corStructure = suggestCorStructure(x,nAgeClose = 0),
                          usePartialCors=TRUE,
                          newtonsteps=0,
                          rm.unidentified=FALSE,

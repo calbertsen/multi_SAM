@@ -926,40 +926,40 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
 
-  // ans += sharedObservation(sharedObs,
-  // 			   sam.dataSets,
-  // 			   sam.confSets,
-  // 			   paraSets,
-  // 			   sam.forecastSets,
-  // 			   logF,
-  // 			   logN,
-  // 			   logP,
-  // 			   mortalities,
-  // 			   // shared_logSdObs,
-  // 			   minYearAll,
-  // 			   minAgeAll,
-  // 			   keep(keep.size()-1),
-  // 			   this);
+  ans += sharedObservation(sharedObs,
+  			   sam.dataSets,
+  			   sam.confSets,
+  			   paraSets,
+  			   sam.forecastSets,
+  			   logF,
+  			   logN,
+  			   logP,
+  			   mortalities,
+  			   // shared_logSdObs,
+  			   minYearAll,
+  			   minAgeAll,
+  			   keep(keep.size()-1),
+  			   this);
 
   ///////////////////////////////
   ////////// GENETICS //////////
   /////////////////////////////
 
-  // ans += nllGenetics(sharedObs,
-  // 		     sam.dataSets,
-  // 		     sam.confSets,
-  // 		     paraSets,
-  // 		     sam.forecastSets,
-  // 		     logF,
-  // 		     logN,
-  // 		     logP,
-  // 		     mortalities,
-  // 		     genParSet,
-  // 		     geneticsData,
-  // 		     logGst,
-  // 		     logGtrip,
-  // 		     maxAgeAll,
-  // 		     minAgeAll);
+  ans += nllGenetics(sharedObs,
+  		     sam.dataSets,
+  		     sam.confSets,
+  		     paraSets,
+  		     sam.forecastSets,
+  		     logF,
+  		     logN,
+  		     logP,
+  		     mortalities,
+  		     genParSet,
+  		     geneticsData,
+  		     logGst,
+  		     logGtrip,
+  		     maxAgeAll,
+  		     minAgeAll);
 
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
