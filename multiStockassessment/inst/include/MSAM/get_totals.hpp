@@ -2,6 +2,7 @@ SAM_DEPENDS(define)
 SAM_DEPENDS(incidence)
 SAM_DEPENDS(derived)
 MSAM_DEPENDS(param_types)
+MSAM_DEPENDS(convenience)
 
 // template<class Type>
 // struct TOTAL_Z_y {
@@ -124,6 +125,7 @@ void getTotals(vector<dataSet<Type> >& datA,
 	       int maxYearAll,
 	       int minAgeAll,
 	       int maxAgeAll,
+	       bool mohn,
 	       objective_function<Type> *of)SOURCE({
 
 
@@ -166,10 +168,8 @@ void getTotals(vector<dataSet<Type> >& datA,
     confSet conf = confA(s);
     paraSet<Type> par = parA(s);
 
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
     
     // Calculate values to report
     
@@ -231,10 +231,46 @@ void getTotals(vector<dataSet<Type> >& datA,
   ADREPORT_F(total_logfbarL,of);
   ADREPORT_F(total_logCatAge,of);
 
+
+  if(mohn){
+    // When used for mohn's rho, 
+    Type n = datA.size();
+    Type mohnRho_ssb = 0.0;
+    Type mohnRho_fbar = 0.0;
+    Type mohnRho_rec = 0.0;
+    array<Type> logNa0 = getArray(logN, 0);
+    array<Type> logFa0 = getArray(logF, 0);
+    int T = datA(0).years.size()-1;
+    for(int i = 1; i < n; ++i){
+      array<Type> logNaR = getArray(logN, i);
+      array<Type> logFaR = getArray(logF, i);
+      // SSB
+      Type v = ssbi(datA(0),confA(0),logNa0,logFa0,mortalities(0),T-i, false);
+      Type vR =ssbi(datA(i),confA(i),logNaR,logFaR,mortalities(i),T-i, false);
+      mohnRho_ssb += (vR-v)/v;
+      // Fbar
+      v = fbari(datA(0),confA(0),logFa0,T-i, false);
+      vR =fbari(datA(i),confA(i),logFaR,T-i, false);
+      mohnRho_fbar += (vR-v)/v;
+      // Rec
+      v = exp(logNa0(0,T-i));
+      vR =exp(logNaR(0,T-i));
+      mohnRho_rec += (vR-v)/v;
+
+    }
+    mohnRho_ssb /= Type(n-1);
+    mohnRho_fbar /= Type(n-1);
+    mohnRho_rec /= Type(n-1);
+    ADREPORT_F(mohnRho_ssb, of);
+    ADREPORT_F(mohnRho_fbar, of);
+    ADREPORT_F(mohnRho_rec, of);
+  }
+  
+
   return;
 		 })
 
 
 
-MSAM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, objective_function<double>*));
-MSAM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int, objective_function<TMBad::ad_aug>*));
+		 MSAM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, bool,objective_function<double>*));
+		 MSAM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int,bool, objective_function<TMBad::ad_aug>*));

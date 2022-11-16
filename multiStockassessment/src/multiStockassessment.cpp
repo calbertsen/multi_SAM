@@ -81,6 +81,7 @@ Type objective_function<Type>::operator() ()
   DATA_STRUCT(geneticsData, genetic_data);
 
   DATA_INTEGER(reportingLevel);
+  DATA_INTEGER(mohn);
   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
@@ -999,6 +1000,7 @@ Type objective_function<Type>::operator() ()
 	    maxYearAll,
 	    minAgeAll,
 	    maxAgeAll,
+	    mohn,
 	    this);
 
   return ans;

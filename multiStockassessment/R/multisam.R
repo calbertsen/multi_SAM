@@ -66,6 +66,7 @@ multisam.fit <- function(x,
                          run = TRUE,
                          symbolicAnalysis = FALSE,
                          fullDerived = FALSE,
+                         mohn = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     ## Check input
@@ -129,6 +130,7 @@ multisam.fit <- function(x,
                 sharedObs = shared_data,
                 geneticsData = genetics_data,
                 reportingLevel = as.integer(fullDerived),
+                mohn = as.integer(mohn),
                 usePartialCor = as.integer(usePartialCors),
                 maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years)))),
                 minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years)))),
