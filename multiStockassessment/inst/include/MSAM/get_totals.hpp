@@ -238,6 +238,9 @@ void getTotals(vector<dataSet<Type> >& datA,
     Type mohnRho_ssb = 0.0;
     Type mohnRho_fbar = 0.0;
     Type mohnRho_rec = 0.0;
+    Type mohnRhoMod_ssb = 0.0;
+    Type mohnRhoMod_fbar = 0.0;
+    Type mohnRhoMod_rec = 0.0;
     array<Type> logNa0 = getArray(logN, 0);
     array<Type> logFa0 = getArray(logF, 0);
     int T = datA(0).years.size()-1;
@@ -256,14 +259,33 @@ void getTotals(vector<dataSet<Type> >& datA,
       v = exp(logNa0(0,T-i));
       vR =exp(logNaR(0,T-i));
       mohnRho_rec += (vR-v)/v;
+      // Modified
+      // SSB
+      Type v = ssbi(datA(0),confA(0),logNa0,logFa0,mortalities(0),T-i, true);
+      Type vR =ssbi(datA(i),confA(i),logNaR,logFaR,mortalities(i),T-i, true);
+      mohnRhoMod_ssb += (vR-v);
+      // Fbar
+      v = fbari(datA(0),confA(0),logFa0,T-i, true);
+      vR =fbari(datA(i),confA(i),logFaR,T-i, true);
+      mohnRhoMod_fbar += (vR-v)/v;
+      // Rec
+      v = (logNa0(0,T-i));
+      vR =(logNaR(0,T-i));
+      mohnRhoMod_rec += (vR-v)/v;
 
     }
     mohnRho_ssb /= Type(n-1);
     mohnRho_fbar /= Type(n-1);
     mohnRho_rec /= Type(n-1);
+    mohnRhoMod_ssb /= Type(n-1);
+    mohnRhoMod_fbar /= Type(n-1);
+    mohnRhoMod_rec /= Type(n-1);
     ADREPORT_F(mohnRho_ssb, of);
     ADREPORT_F(mohnRho_fbar, of);
     ADREPORT_F(mohnRho_rec, of);
+    ADREPORT_F(mohnRhoMod_ssb, of);
+    ADREPORT_F(mohnRhoMod_fbar, of);
+    ADREPORT_F(mohnRhoMod_rec, of);
   }
   
 
