@@ -261,8 +261,8 @@ void getTotals(vector<dataSet<Type> >& datA,
       mohnRho_rec += (vR-v)/v;
       // Modified
       // SSB
-      Type v = ssbi(datA(0),confA(0),logNa0,logFa0,mortalities(0),T-i, true);
-      Type vR =ssbi(datA(i),confA(i),logNaR,logFaR,mortalities(i),T-i, true);
+      v = ssbi(datA(0),confA(0),logNa0,logFa0,mortalities(0),T-i, true);
+      vR =ssbi(datA(i),confA(i),logNaR,logFaR,mortalities(i),T-i, true);
       mohnRhoMod_ssb += (vR-v);
       // Fbar
       v = fbari(datA(0),confA(0),logFa0,T-i, true);
