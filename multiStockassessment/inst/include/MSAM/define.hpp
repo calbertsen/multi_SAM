@@ -36,8 +36,8 @@ SOURCE(
        };
        )
 
-MSAM_SPECIALIZATION(struct sam_data<double>);
-MSAM_SPECIALIZATION(struct sam_data<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct sam_data<double>);
+MSM_SPECIALIZATION(struct sam_data<TMBad::ad_aug>);
 
 
 HEADER(
@@ -54,6 +54,7 @@ struct shared_obs {
   vector<int> fleetTypes;
   vector<int> maxAgePlusGroup;
   array<int> aux;
+  array<Type> auxData;
   vector<Type> logobs;
   matrix<Type> keyFleetStock;
   int noYears;
@@ -75,6 +76,7 @@ SOURCE(
        fleetTypes(),
        maxAgePlusGroup(),
        aux(),
+       auxData(),
        logobs(),
        keyFleetStock(),
        noYears(0),
@@ -91,21 +93,22 @@ SOURCE(
        shared_obs<Type>::shared_obs(SEXP x) {
 	 using tmbutils::asArray;
 	 if(Rf_isNull(getListElement(x,"hasSharedObs")) ||
-	    (int)*REAL(getListElement(x,"hasSharedObs")) == 0){
+	    (int)*REAL(getListElement(x,"hasSharedObs",&Rf_isNumeric)) == 0){
 	   hasSharedObs = 0;
 	 }else{
-	   hasSharedObs = (int)*REAL(getListElement(x,"hasSharedObs"));
-	   fleetTypes = asVector<int>(getListElement(x,"fleetTypes"));
-	   maxAgePlusGroup = asVector<int>(getListElement(x,"maxAgePlusGroup"));
-	   aux = asArray<int>(getListElement(x,"aux"));   
-	   logobs = asVector<Type>(getListElement(x,"logobs"));
-	   keyFleetStock = asMatrix<Type>(getListElement(x,"keyFleetStock"));   
-	   noYears = (int)*REAL(getListElement(x,"noYears"));
-	   noFleets = (int)*REAL(getListElement(x,"noFleets"));
-	   idx1 = asArray<int>(getListElement(x,"idx1"));
-	   idx2 = asArray<int>(getListElement(x,"idx2"));
-	   idxCor = asArray<int>(getListElement(x,"idxCor"));
-	   vector<int> covCombineTmp = asVector<int>(getListElement(x,"covCombine"));
+	   hasSharedObs = (int)*REAL(getListElement(x,"hasSharedObs",&Rf_isNumeric));
+	   fleetTypes = asVector<int>(getListElement(x,"fleetTypes",&Rf_isNumeric));
+	   maxAgePlusGroup = asVector<int>(getListElement(x,"maxAgePlusGroup",&Rf_isNumeric));
+	   aux = asArray<int>(getListElement(x,"aux",&Rf_isArray));
+	   auxData = asArray<Type>(getListElement(x,"auxData",&Rf_isArray));   
+	   logobs = asVector<Type>(getListElement(x,"logobs",&Rf_isNumeric));
+	   keyFleetStock = asMatrix<Type>(getListElement(x,"keyFleetStock",&Rf_isMatrix));   
+	   noYears = (int)*REAL(getListElement(x,"noYears",&isNumericScalar));
+	   noFleets = (int)*REAL(getListElement(x,"noFleets",&isNumericScalar));
+	   idx1 = asArray<int>(getListElement(x,"idx1",&Rf_isArray));
+	   idx2 = asArray<int>(getListElement(x,"idx2",&Rf_isArray));
+	   idxCor = asArray<int>(getListElement(x,"idxCor", &Rf_isArray));
+	   vector<int> covCombineTmp = asVector<int>(getListElement(x,"covCombine", &Rf_isNumeric));
 	   covCombine = vector<CovCombineType>(covCombineTmp.size());
 	   for(int i = 0; i < covCombine.size(); ++i)
 	     covCombine(i) = static_cast<CovCombineType>(covCombineTmp(i));
@@ -114,5 +117,5 @@ SOURCE(
        )
 
 
-MSAM_SPECIALIZATION(struct shared_obs<double>);
-MSAM_SPECIALIZATION(struct shared_obs<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct shared_obs<double>);
+MSM_SPECIALIZATION(struct shared_obs<TMBad::ad_aug>);

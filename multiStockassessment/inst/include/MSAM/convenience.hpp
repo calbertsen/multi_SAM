@@ -1,4 +1,4 @@
-MSAM_DEPENDS(param_types)
+MSM_DEPENDS(param_types)
 
 template<class Type>
 matrix<Type> cov2cor(matrix<Type> x)SOURCE({
@@ -11,8 +11,8 @@ matrix<Type> cov2cor(matrix<Type> x)SOURCE({
   return r;
   });
 
-MSAM_SPECIALIZATION(matrix<double> cov2cor(matrix<double>));
-MSAM_SPECIALIZATION(matrix<TMBad::ad_aug> cov2cor(matrix<TMBad::ad_aug>));
+MSM_SPECIALIZATION(matrix<double> cov2cor(matrix<double>));
+MSM_SPECIALIZATION(matrix<TMBad::ad_aug> cov2cor(matrix<TMBad::ad_aug>));
 
 
 
@@ -25,8 +25,8 @@ Type norm(vector<Type> x)SOURCE({
   return sqrt(res);
   });
 
-MSAM_SPECIALIZATION(double norm(vector<double>));
-MSAM_SPECIALIZATION(TMBad::ad_aug norm(vector<TMBad::ad_aug>));
+MSM_SPECIALIZATION(double norm(vector<double>));
+MSM_SPECIALIZATION(TMBad::ad_aug norm(vector<TMBad::ad_aug>));
 
 
 /* Inner product of two vectors */
@@ -38,8 +38,8 @@ Type vprod(vector<Type> x,vector<Type> y)SOURCE({
   return res;
   });
 
-MSAM_SPECIALIZATION(double vprod(vector<double>, vector<double>));
-MSAM_SPECIALIZATION(TMBad::ad_aug vprod(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>));
+MSM_SPECIALIZATION(double vprod(vector<double>, vector<double>));
+MSM_SPECIALIZATION(TMBad::ad_aug vprod(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>));
 
 
 
@@ -50,8 +50,8 @@ array<Type> getArray(cmoe_matrix<Type> x, int s)SOURCE({
   return Xa;
   })
 
-MSAM_SPECIALIZATION(array<double> getArray(cmoe_matrix<double>, int));
-MSAM_SPECIALIZATION(array<TMBad::ad_aug> getArray(cmoe_matrix<TMBad::ad_aug>, int));
+MSM_SPECIALIZATION(array<double> getArray(cmoe_matrix<double>, int));
+MSM_SPECIALIZATION(array<TMBad::ad_aug> getArray(cmoe_matrix<TMBad::ad_aug>, int));
 
 template<class Type>
 array<Type> getArray(cmoe_3darray<Type> x, int s)SOURCE({
@@ -62,5 +62,5 @@ array<Type> getArray(cmoe_3darray<Type> x, int s)SOURCE({
   return x.col(s);
   })
 
-MSAM_SPECIALIZATION(array<double> getArray(cmoe_3darray<double>, int));
-MSAM_SPECIALIZATION(array<TMBad::ad_aug> getArray(cmoe_3darray<TMBad::ad_aug>, int));
+MSM_SPECIALIZATION(array<double> getArray(cmoe_3darray<double>, int));
+MSM_SPECIALIZATION(array<TMBad::ad_aug> getArray(cmoe_3darray<TMBad::ad_aug>, int));

@@ -1,8 +1,8 @@
 SAM_DEPENDS(define)
 SAM_DEPENDS(incidence)
 SAM_DEPENDS(derived)
-MSAM_DEPENDS(param_types)
-MSAM_DEPENDS(convenience)
+MSM_DEPENDS(param_types)
+MSM_DEPENDS(convenience)
 
 // template<class Type>
 // struct TOTAL_Z_y {
@@ -154,7 +154,7 @@ void getTotals(vector<dataSet<Type> >& datA,
   total_logfbarL.setConstant(R_NegInf);
 
   vector<Type> total_nStocks(nYear);
-  total_nStocks.setConstant(R_NegInf);
+  total_nStocks.setConstant(0);
 
   // matrix<Type> totalNay(nAge,nYear);
   // vector<matrix<Type> > totalMay(datA.size());
@@ -162,6 +162,18 @@ void getTotals(vector<dataSet<Type> >& datA,
   // for(int s = 0; s < datA.size(); ++s){
     
   // }
+
+  matrix<Type> tmp_v(nAge,nYear);
+  tmp_v.setZero();
+  matrix<Type> tmp_u(nAge,nYear);
+  tmp_u.setZero();
+  matrix<Type> tmp_N(nAge,nYear);
+  tmp_N.setZero();
+  vector<Type> total_logfbar_Effective(nYear);
+  total_logfbar_Effective.setConstant(R_NegInf);
+  vector<Type> total_logmbar_Effective(nYear);
+  total_logmbar_Effective.setConstant(R_NegInf);
+
     
   for(int s = 0; s < datA.size(); ++s){
     dataSet<Type> dat = datA(s);
@@ -189,37 +201,60 @@ void getTotals(vector<dataSet<Type> >& datA,
       int y = yall - CppAD::Integer(dat.years(0) - minYearAll);
       if(y >= 0 && y < dat.noYears){	
 	if(y < S_logssb.size())
-	  total_logssb(yall) = logspace_add2(total_logssb(yall),S_logssb(y));
+	  total_logssb(yall) = logspace_add_SAM(total_logssb(yall),S_logssb(y));
 	if(y < S_logfsb.size())
-	  total_logfsb(yall) = logspace_add2(total_logfsb(yall),S_logfsb(y));
+	  total_logfsb(yall) = logspace_add_SAM(total_logfsb(yall),S_logfsb(y));
 	if(y < S_logCatch.size())
-	  total_logCatch(yall) = logspace_add2(total_logCatch(yall),S_logCatch(y));
+	  total_logCatch(yall) = logspace_add_SAM(total_logCatch(yall),S_logCatch(y));
 	if(y < S_logLand.size())
-	  total_logLand(yall) = logspace_add2(total_logLand(yall),S_logLand(y));
+	  total_logLand(yall) = logspace_add_SAM(total_logLand(yall),S_logLand(y));
 	if(y < S_logtsb.size())
-	  total_logtsb(yall) = logspace_add2(total_logtsb(yall),S_logtsb(y));
+	  total_logtsb(yall) = logspace_add_SAM(total_logtsb(yall),S_logtsb(y));
 	if(y < S_logR.size())
-	  total_logR(yall) = logspace_add2(total_logR(yall),S_logR(y));
+	  total_logR(yall) = logspace_add_SAM(total_logR(yall),S_logR(y));
 	if(y < S_logfbar.size()){
-	  total_nStocks(yall) = logspace_add2(total_nStocks(yall), Type(0.0));
-	  total_logfbar(yall) = logspace_add2(total_logfbar(yall),S_logfbar(y));
+	  total_nStocks(yall) += 1.0; // logspace_add_SAM(total_nStocks(yall), Type(0.0));
+	  total_logfbar(yall) = logspace_add_SAM(total_logfbar(yall),S_logfbar(y));
 	}
 	if(y < S_logfbarL.size()){
 	  // total_nStocks(yall) = logspace_add2(total_nStocks(yall), Type(0.0));
-	  total_logfbarL(yall) = logspace_add2(total_logfbarL(yall),S_logfbarL(y));
+	  total_logfbarL(yall) = logspace_add_SAM(total_logfbarL(yall),S_logfbarL(y));
 	}
 	for(int aall = 0; aall < maxAgeAll - minAgeAll + 1; ++aall){
 	  int a = aall - (conf.minAge - minAgeAll);
 	  if(a >= 0 && a < conf.maxAge - conf.minAge + 1 && y < S_logCatAge.cols()) 
-	    total_logCatAge(aall,yall) = logspace_add2(total_logCatAge(aall,yall),S_logCatAge(a,y));
+	    total_logCatAge(aall,yall) = logspace_add_SAM(total_logCatAge(aall,yall),S_logCatAge(a,y));
 	}
+	for(int aall = 0; aall < maxAgeAll - minAgeAll + 1; ++aall){
+	  int a = aall - (conf.minAge - minAgeAll);
+	  if(a >= 0 && a < conf.maxAge - conf.minAge + 1){ 
+	    tmp_v(aall,yall) += exp(-mortalities(s).cumulativeHazard(a,y)) * exp(logNa(a,y));
+	    tmp_u(aall,yall) += mortalities(s).FullYear_cumulativeIncidence_Fishing(a,y) * exp(logNa(a,y));
+	    tmp_N(aall,yall) += exp(logNa(a,y));
+	  }
+	}	
       }
     }  
   }
 
+  for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
+    Type Fbar = 0.0;
+    Type Mbar = 0.0;
+    for(int aall = confA(0).fbarRange(0) - minAgeAll; aall <= confA(0).fbarRange(1) - minAgeAll; ++aall){
+      Type v = tmp_v(aall,yall) / tmp_N(aall,yall);
+      Type u = tmp_u(aall,yall) / tmp_N(aall,yall);
+      //Type logf = log(-log(v)) + log(u) - log(1.0 - v);
+      //total_logfbar(yall) = logspace_add(total_logfbar(yall),logf);
+      Fbar += -log(v) * u / (1.0 - v);
+      Mbar += -log(v) * (1.0 - u - v) / (1.0 - v);
+    }
+    total_logfbar_Effective(yall) = log(Fbar / Type(confA(0).fbarRange(1)-confA(0).fbarRange(0)+1.0));
+    total_logmbar_Effective(yall) = log(Mbar / Type(confA(0).fbarRange(1)-confA(0).fbarRange(0)+1.0));
+  }
+
   // fbar to averages
-  total_logfbar -= total_nStocks;
-  total_logfbarL -= total_nStocks;
+  total_logfbar -= log(total_nStocks);
+  total_logfbarL -= log(total_nStocks);
   
   ADREPORT_F(total_logssb,of);
   ADREPORT_F(total_logfsb,of);
@@ -227,6 +262,8 @@ void getTotals(vector<dataSet<Type> >& datA,
   ADREPORT_F(total_logLand,of);
   ADREPORT_F(total_logtsb,of);
   ADREPORT_F(total_logR,of);
+  ADREPORT_F(total_logfbar_Effective,of);
+  ADREPORT_F(total_logmbar_Effective,of);
   ADREPORT_F(total_logfbar,of);
   ADREPORT_F(total_logfbarL,of);
   ADREPORT_F(total_logCatAge,of);
@@ -294,5 +331,5 @@ void getTotals(vector<dataSet<Type> >& datA,
 
 
 
-		 MSAM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, bool,objective_function<double>*));
-		 MSAM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int,bool, objective_function<TMBad::ad_aug>*));
+		 MSM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, bool,objective_function<double>*));
+		 MSM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int,bool, objective_function<TMBad::ad_aug>*));

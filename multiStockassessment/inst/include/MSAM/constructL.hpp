@@ -1,4 +1,4 @@
-MSAM_DEPENDS(convenience)
+MSM_DEPENDS(convenience)
 
 /* Structure to define covariance constraints */
 HEADER(
@@ -22,8 +22,8 @@ SOURCE(
        );
        /* Structure to define covariance design matrices */
 
-MSAM_SPECIALIZATION(struct cov_constraints<double>);
-MSAM_SPECIALIZATION(struct cov_constraints<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct cov_constraints<double>);
+MSM_SPECIALIZATION(struct cov_constraints<TMBad::ad_aug>);
 
 
 template<class Type>
@@ -69,5 +69,5 @@ matrix<Type> constructL(int nages, int nAreas, vector<Type> RE, matrix<Type> X, 
     return L;
   })
 
-MSAM_SPECIALIZATION(matrix<double> constructL(int, int, vector<double>, matrix<double>, cov_constraints<double>));
-MSAM_SPECIALIZATION(matrix<TMBad::ad_aug> constructL(int, int, vector<TMBad::ad_aug>, matrix<TMBad::ad_aug>, cov_constraints<TMBad::ad_aug>));
+MSM_SPECIALIZATION(matrix<double> constructL(int, int, vector<double>, matrix<double>, cov_constraints<double>));
+MSM_SPECIALIZATION(matrix<TMBad::ad_aug> constructL(int, int, vector<TMBad::ad_aug>, matrix<TMBad::ad_aug>, cov_constraints<TMBad::ad_aug>));

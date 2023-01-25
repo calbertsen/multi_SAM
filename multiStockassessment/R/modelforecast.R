@@ -77,6 +77,7 @@ modelforecast.msam <- function(fit,
                           estimate = median,
                           silent = TRUE,
                           newton_config = NULL,
+                          useNonLinearityCorrection = FALSE,
                           ...){
     
     ## Handle year.base < max(fit$data$years)
@@ -127,7 +128,7 @@ modelforecast.msam <- function(fit,
     ## Convert input to an F model code and a target value
     for(i in 1:nStocks){
         if(length(constraints[[i]]) == 0)
-            constraints <- rep(NA_character_, nYears[i])
+            constraints[[i]] <- rep(NA_character_, nYears[i])
         
         if(length(fscale[[i]]) == 0)
             fscale[[i]] <- rep(NA_real_, nYears[i])
@@ -180,8 +181,8 @@ modelforecast.msam <- function(fit,
     })
 
     cstr <- lapply(seq_len(nStocks), function(s){
-        v <- replicate(nYears, .forecastDefault(), simplify = FALSE)
-        v[!is.na(constraints[[s]])] <- .parseForecast(constraints[[s]][!is.na(constraints[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge))
+        v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
+        v[!is.na(constraints[[s]])] <- .parseForecast(constraints[[s]][!is.na(constraints[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
         })
     
     ## Use custom selectivity?

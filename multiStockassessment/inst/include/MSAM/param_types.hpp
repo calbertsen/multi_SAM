@@ -193,16 +193,16 @@ SOURCE(
   
 
 
-MSAM_SPECIALIZATION(struct cmoe_vector<double>);
-MSAM_SPECIALIZATION(struct cmoe_vector<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct cmoe_vector<double>);
+MSM_SPECIALIZATION(struct cmoe_vector<TMBad::ad_aug>);
 
 template<class Type>
 cmoe_vector<Type> asCmoeVector(SEXP x)SOURCE({
     return cmoe_vector<Type>(x);
   });
 
-MSAM_SPECIALIZATION(cmoe_vector<double> asCmoeVector(SEXP));
-MSAM_SPECIALIZATION(cmoe_vector<TMBad::ad_aug> asCmoeVector(SEXP));
+MSM_SPECIALIZATION(cmoe_vector<double> asCmoeVector(SEXP));
+MSM_SPECIALIZATION(cmoe_vector<TMBad::ad_aug> asCmoeVector(SEXP));
 
 
 template<class Type>
@@ -210,8 +210,8 @@ SEXP asSEXP(const cmoe_vector<Type>& x)SOURCE({
     return asSEXP(x.dat);
   });
 
-MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_vector<double>&));
-MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_vector<TMBad::ad_aug>&));
+MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_vector<double>&));
+MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_vector<TMBad::ad_aug>&));
 
 
 HEADER(
@@ -437,8 +437,8 @@ SOURCE(
        );
 
 
-MSAM_SPECIALIZATION(struct cmoe_matrix<double>);
-MSAM_SPECIALIZATION(struct cmoe_matrix<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct cmoe_matrix<double>);
+MSM_SPECIALIZATION(struct cmoe_matrix<TMBad::ad_aug>);
 
 
 
@@ -447,8 +447,8 @@ cmoe_matrix<Type> asCmoeMatrix(SEXP x)SOURCE({
     return cmoe_matrix<Type>(x);
   });
 
-MSAM_SPECIALIZATION(cmoe_matrix<double> asCmoeMatrix(SEXP));
-MSAM_SPECIALIZATION(cmoe_matrix<TMBad::ad_aug> asCmoeMatrix(SEXP));
+MSM_SPECIALIZATION(cmoe_matrix<double> asCmoeMatrix(SEXP));
+MSM_SPECIALIZATION(cmoe_matrix<TMBad::ad_aug> asCmoeMatrix(SEXP));
 
 
 template<class Type>
@@ -457,8 +457,8 @@ SEXP asSEXP(const cmoe_matrix<Type>& x)SOURCE({
   });
 
 
-MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_matrix<double>&));
-MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_matrix<TMBad::ad_aug>&));
+MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_matrix<double>&));
+MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_matrix<TMBad::ad_aug>&));
 
 
 // 3D Array
@@ -686,8 +686,8 @@ SOURCE(
 
 
 
-MSAM_SPECIALIZATION(struct cmoe_3darray<double>);
-MSAM_SPECIALIZATION(struct cmoe_3darray<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct cmoe_3darray<double>);
+MSM_SPECIALIZATION(struct cmoe_3darray<TMBad::ad_aug>);
 
 
 template<class Type>
@@ -696,8 +696,8 @@ cmoe_3darray<Type> asCmoe3darray(SEXP x)SOURCE({
   })
 
 
-MSAM_SPECIALIZATION(cmoe_3darray<double> asCmoe3darray(SEXP));
-MSAM_SPECIALIZATION(cmoe_3darray<TMBad::ad_aug> asCmoe3darray(SEXP));
+MSM_SPECIALIZATION(cmoe_3darray<double> asCmoe3darray(SEXP));
+MSM_SPECIALIZATION(cmoe_3darray<TMBad::ad_aug> asCmoe3darray(SEXP));
 
 
 // SEXP asSEXP(const cmoe_3darray<double>& x)SOURCE({
@@ -709,8 +709,8 @@ MSAM_SPECIALIZATION(cmoe_3darray<TMBad::ad_aug> asCmoe3darray(SEXP));
 //   })
 
 
-// MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_3darray<double>&));
-// MSAM_SPECIALIZATION(SEXP asSEXP(const cmoe_3darray<TMBad::ad_aug>&));
+// MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_3darray<double>&));
+// MSM_SPECIALIZATION(SEXP asSEXP(const cmoe_3darray<TMBad::ad_aug>&));
 
 
 
@@ -734,5 +734,5 @@ vector<vector<Type> > exp(cmoe_vector<Type> x)SOURCE({
   })
 
 
-MSAM_SPECIALIZATION(vector<vector<double> > exp(const cmoe_vector<double>));
-MSAM_SPECIALIZATION(vector<vector<TMBad::ad_aug> > exp(const cmoe_vector<TMBad::ad_aug>));
+MSM_SPECIALIZATION(vector<vector<double> > exp(const cmoe_vector<double>));
+MSM_SPECIALIZATION(vector<vector<TMBad::ad_aug> > exp(const cmoe_vector<TMBad::ad_aug>));

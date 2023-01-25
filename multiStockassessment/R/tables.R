@@ -61,6 +61,8 @@ tableit.msam <- function (fit, what,
     names(ret) <- getStockNames(fit)
 
     if(addTotal){
+        if(what == "logfbar_Effective" && !any(grepl(paste0("total_",what,"$"),names(sdrep$value))))
+            what <- "logfbar"
         idx <- grep(paste0("total_",what,"$"),names(sdrep$value))
         y<-sdrep$value[idx]
         ci<-y+sdrep$sd[idx]%o%c(-2,2)
@@ -186,20 +188,22 @@ rectable.msam <- function(fit,...){
 ##' @export
 catchtable.msam <- function(fit, obs.show = FALSE,returnList = FALSE, ...){
     CW <- lapply(attr(fit,"m_data")$sam,function(x)x$catchMeanWeight)
-    xx <- lapply(CW,function(x) as.integer(rownames(x)))
+    xx <- lapply(CW,function(x) as.integer(rownames(x[,,1])))
     ret <- tableit(fit, x=xx, "logCatch", trans=exp, returnList = TRUE, ...)
     if(obs.show){
-        aux <- lapply(attr(fit,"m_data")$sam,function(x)x$aux)
-        logobs <- lapply(attr(fit,"m_data")$sam,function(x)x$logobs)
-        .goget <- Vectorize(function(y,a,s){
-            ret <- exp(logobs[[s]][aux[[s]][,"fleet"]==1 & aux[[s]][,"year"]==y & aux[[s]][,"age"]==a])
-            ifelse(length(ret)==0,0,ret)
-        })
-        sop <- sapply(1:length(fit),
-                      function(i)rowSums(outer(rownames(CW[[i]]), colnames(CW[[i]]), .goget,s=i)*CW[[i]], na.rm=TRUE),
-                      simplify=FALSE)
+        ## aux <- lapply(attr(fit,"m_data")$sam,function(x)x$aux)
+        ## logobs <- lapply(attr(fit,"m_data")$sam,function(x)x$logobs)
+        ## .goget <- Vectorize(function(y,a,s){
+        ##     ret <- exp(logobs[[s]][aux[[s]][,"fleet"]==1 & aux[[s]][,"year"]==y & aux[[s]][,"age"]==a])
+        ##     ifelse(length(ret)==0,0,ret)
+        ## })
+        ## sop <- sapply(1:length(fit),
+        ##               function(i)rowSums(outer(rownames(CW[[i]]), colnames(CW[[i]]), .goget,s=i)*CW[[i]], na.rm=TRUE),
+        ##               simplify=FALSE)
+        sopStock <- lapply(fit, function(ff)catchtable(ff,obs.show=TRUE)[,"sop.catch"])
+        ## Add shared catches!
         for(i in 1:length(ret))
-            ret[[i]] <- cbind(ret[[i]],"sop.catch"=sop[[i]])
+            ret[[i]] <- cbind(ret[[i]],"sop.catch"=sopStock[[i]])
     }
     if(returnList)
         return(ret)

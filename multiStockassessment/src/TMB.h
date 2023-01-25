@@ -28,6 +28,22 @@
 /* #define IF_TMB_PRECOMPILE(...) */
 /* #endif */
 
+#ifndef TMB_PRECOMPILE
+#ifdef TMB_ALREADY_PRECOMPILED
+#undef WITH_LIBTMB
+#undef TMB_PRECOMPILE
+#undef CSKIP
+#undef IF_TMB_PRECOMPILE
+#undef TMB_EXTERN
+// Redefine
+#define WITH_LIBTMB
+#undef  TMB_PRECOMPILE
+#define CSKIP(...) ;
+#define IF_TMB_PRECOMPILE(...)
+#define TMB_EXTERN extern
+#endif
+#endif
+
 #include <TMB.hpp>
 
 
@@ -59,11 +75,13 @@ using density::GMRF_t;
 using density::SCALE_t;
 using density::UNSTRUCTURED_CORR_t;
 
+#ifndef TMB_ALREADY_PRECOMPILED
 TMB_SPEC(class density::MVNORM_t<double >);
 TMB_SPEC(class density::MVNORM_t<TMBad::ad_aug >);
 
 TMB_SPEC(class density::GMRF_t<double >);
 TMB_SPEC(class density::GMRF_t<TMBad::ad_aug >);
+#endif
 
 TMB_SPEC(class density::SCALE_t<GMRF_t<double > >);
 TMB_SPEC(class density::SCALE_t<GMRF_t<TMBad::ad_aug > >);
@@ -91,6 +109,10 @@ TMB_SPEC(struct data_indicator<vector<TMBad::ad_aug>,TMBad::ad_aug>);
 TMB_SPEC(double dnorm(double,double,double,int));
 TMB_SPEC(TMBad::ad_aug dnorm(TMBad::ad_aug,TMBad::ad_aug,TMBad::ad_aug,int));
 
+#ifdef TMB_ALREADY_PRECOMPILED
+Rostream<true> Rcout;
+Rostream<true> Rcerr;
+#endif
 
 
 #endif

@@ -50,12 +50,14 @@ multisam.fit <- function(x,
                          shared_data = NULL,
                          ## shared_conf = NULL,
                          shared_keys = character(0),
-                         shared_selectivity = FALSE,
+                         shared_selectivity = 0,
+                         shared_seasonality = 0,
                          shared_stockrecruitment = FALSE,
-                         shared_oneFScaleSd = FALSE,
+                         shared_oneFScalePars = FALSE,
                          shared_initN = FALSE,
                          shared_fleetParameters = c(),
                          shared_proportionalHazard = NULL,
+                         shared_phmap = NULL,
                          genetics_data = prepareGenetics(),
                          genetics_dirichlet = FALSE,
                          genetics_spatialAge = TRUE,
@@ -96,7 +98,7 @@ multisam.fit <- function(x,
             stop("When a list, the length of shared_proportionalHazard must match the length of x")
     }
     Xph <- lapply(shared_proportionalHazard, function(f){
-        if(is.null(f))
+        if(is.null(f) || !(shared_selectivity %in% c(3,4)))
             return(matrix(0,0,0))
         maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years))))
         minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years))))
@@ -141,37 +143,59 @@ multisam.fit <- function(x,
                 XCon = build_cov_design(community_formula,  x, type = community_type),
                 ConConf = as.integer(community_type),
                 Xph = Xph,
+                shared_F_type = as.integer(shared_selectivity),
+                shared_Fseason_type = as.integer(shared_seasonality),
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
                 doResiduals = as.integer(FALSE)
                 )
+    ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
+    if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
+        ## First column of indx is fleet index, second is stock index
+        indx <- which(shared_data$fleetTypes[row(shared_data$keyFleetStock)] == 0 && shared_data$keyFleetStock ==0, arr.ind=TRUE)
+        iL <- lapply(split(indx[,1], indx[,2]), unique)
+        for(ii in seq_along(iL)){
+            dat$sam$keyLogFsta[iL[[ii]],] <- -1
+        }
+    }
     ## Prepare parameters for TMB
     pars <- collect_pars(x)
     pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
     pars$betaCon <- numeric(ncol(dat$XCon))
 
     ## pars$shared_logSdObs <- numeric(length(dat$sharedObs$fleetTypes))
-    if(shared_selectivity){
+    
+    if(shared_selectivity > 0){
         if(!(length(unique(attr(pars$logF,"cdim"))) == 1 &&
              length(unique(attr(pars$logF,"rdim"))) == 1))
             stop("logF must have same dimension for all stocks when sharing selectivity")
-        lfsDim <- local({xx <- attr(pars$logF,"cdim");  xx[1] <- 0; xx})
-        ## newFdimR <- attr(pars$logF,"rdim")
-        ## newFdimR[-1] <- 0
-        ## newFdimC <- attr(pars$logF,"cdim")
-        ## newFdimC[-1] <- 0
-        ## pars$logF <- combineParameter(lapply(seq_along(newFdimR), function(i) matrix(0, newFdimR[i], newFdimC[i])))
-        initFdim <- local({xx <- attr(pars$logF,"rdim") * (initF>0);  xx[-1] <- 1 * (initF>0); xx})
+        if(shared_selectivity == 1){    #Scale by vector AR1
+            lfsRDim <- attr(pars$logF,"rdim") 
+            lfsCDim <- attr(pars$logF,"cdim")
+            lfsCDim[1] <- 0
+           initFdim <- attr(pars$logF,"rdim") * 0
+        }else if(shared_selectivity == 3){                     #Scale by pure parametric
+            lfsRDim <- attr(pars$logF,"cdim") * 0
+            lfsCDim <- attr(pars$logF,"cdim") * 0
+            initFdim <- attr(pars$logF,"rdim") * 0
+        }else{                          #Scale by scalar RW (+ parametric)
+            lfsRDim <- attr(pars$logF,"rdim") * 0 + 1
+            lfsCDim <- attr(pars$logF,"cdim")            
+            lfsCDim[1] <- 0
+            initFdim <- local({xx <- attr(pars$logF,"rdim") * (initF>0);  xx[-1] <- 1 * (initF>0); xx})
+        }
     }else{
-        lfsDim <- attr(pars$logF,"cdim") * 0
+        lfsRDim <- lfsCDim <- attr(pars$logF,"cdim") * 0
         initFdim <- attr(pars$logF,"rdim") * 0
     }
-    pars$shared_logFscale <- combineVectors(lapply(lfsDim,numeric))
-    ## pars$shared_lfsMean <- numeric(ifelse(shared_selectivity,length(dat$sam)-1,0))
-    pars$shared_lfsSd <- numeric(ifelse(shared_selectivity,length(dat$sam)-1,0))
-    ## pars$shared_lfsRho <- 2 + numeric(ifelse(shared_selectivity,length(dat$sam)-1,0))
+    pars$shared_logFscale <- combineMatrices(lapply(seq_along(lfsRDim),function(i) matrix(0,lfsRDim[i],lfsCDim[i])))
+    pars$shared_lfsMean <- matrix(0, nrow = lfsRDim,
+                                  ncol = length(dat$sam)-1)
+    pars$shared_lfsSd <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))
+    pars$shared_lfsRho <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))    
     pars$shared_logitMissingVulnerability <- numeric(sum(is.na(dat$sharedObs$keyFleetStock)))
+    pars$shared_missingObs <- numeric(sum(is.na(dat$sharedObs$logobs)))
     pars$shared_phbeta <- combineVectors(lapply(dat$Xph, function(x) numeric(ncol(x))))
     
     if(initN == 0){
@@ -235,9 +259,9 @@ multisam.fit <- function(x,
     ## Prepare map for TMB
     map0 <- collect_maps(x)
 
-    if(shared_oneFScaleSd){
+    if(shared_oneFScalePars){
         map0$shared_lfsSd <- factor(rep(1,length(pars$shared_lfsSd)))
-        ## map0$shared_lfsRho <- factor(rep(1,length(pars$shared_lfsRho)))
+        map0$shared_lfsRho <- factor(rep(1,length(pars$shared_lfsRho)))
     }
     if(shared_initN && initN == 2){
         map0$initLogN <- factor(rep(1,length(pars$initLogN)))
@@ -291,10 +315,22 @@ multisam.fit <- function(x,
     }
     if(genetics_independentStocks)
         map0$gen_corparST <- factor(NA * pars$gen_corparST)            
+
+    if(!is.null(shared_phmap)){
+        map0$shared_phbeta <- shared_phmap
+    }else if(shared_selectivity == 4){        #Both parametric scaling and AR1 level
+        ## Need to fix one parameter from parametric scaling since the level/intercept is modelled elsewhere
+        vdphb <- attr(pars$shared_phbeta,"vdim")
+        mtmp <- split(seq_along(pars$shared_phbeta), factor(rep(seq_along(vdphb), times = vdphb),seq_along(vdphb)))
+        mtmp[vdphb > 0] <- lapply(mtmp[vdphb > 0], function(xx){ xx[1] <- NA; xx})            
+        map0$shared_phbeta <- factor(multiStockassessment:::combineVectors(mtmp))
+    }else if(!(shared_selectivity %in% c(3,4))){
+        map0$shared_phbeta <- factor(NA * pars$shared_phbeta)
+    }
     
     ## Share parameters
-    keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs")
-    parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist")
+    ## keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs")
+    ## parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist")
     sn <- getStockNames(x)
     ## Share fleet parameters
     ## if(length(shared_fleetParameters) > 0){
@@ -318,13 +354,37 @@ multisam.fit <- function(x,
     ##     }
     ## }    
     ## Share keys
-    keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs")
-    parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist")  
-     for(nm in shared_keys)
-        map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
-            xx <- sort(unique(as.numeric(x[[nm]])))
-            xx[xx >= 0]
-        })))
+    keyName <- c("keyLogFpar","keyQpow","keyVarF","keyVarLogN","keyVarObs","keyCorObs",
+                 "keyStockWeightMean","keyStockWeightObsVar","phiSW","procSdSW",
+                 "keyCatchWeightMean","keyCatchWeightObsVar","phiCW","procSdCW",
+                 "keyMatureMean","sdMO","phiMO","procSdMO",
+                 "keyMortalityMean","keyMortalityObsVar","phiNM","procSdNM",
+                 "keyLogFmu","keyLogFrho","seasonMu","seasonRho","seasonSd",
+                 "rec_transphi")
+    parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist",
+                 "meanLogSW","logSdLogSW","logPhiSW","logSdProcLogSW",
+                 "meanLogCW","logSdLogCW","logPhiCW","logSdProcLogCW",
+                 "meanLogitMO","logSdMO","logPhiMO","logSdProcLogitMO",
+                 "meanLogNM","logSdLogNM","logPhiNM","logSdProcLogNM",
+                 "muF","trans_rho_F","seasonMu","seasonLogitRho","seasonLogSd",
+                 "rec_transphi")
+    if(any(!(shared_keys %in% keyName)))
+        stop(sprintf("shared keys not valid: %s",paste(shared_keys[!(shared_keys %in% keyName)],collapse=", ")))
+    for(nm in shared_keys)
+        if(!is.na(match(nm,names(dat$sam[[1]])))){
+            map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
+                xx <- sort(unique(as.numeric(x[[nm]])))
+                xx[xx >= 0]
+            })))
+        }else{            
+            pnm <- parName[match(nm,keyName)]
+            mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
+            if(parName[match(nm,keyName)] %in% names(map0)){
+                mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
+            }
+            map0[[parName[match(nm,keyName)]]] <- mTmp
+            
+        }
     if(shared_stockrecruitment){
         sr <- sapply(dat$sam,function(x)x$stockRecruitmentModelCode)
         srvd <- attr(pars$rec_pars,"vdim")
@@ -345,7 +405,7 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP", "shared_logFscale", "logGst", "logGtrip")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
     prf <- NULL
@@ -353,6 +413,7 @@ multisam.fit <- function(x,
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
     ## }    
     ## return(list(dat=dat,pars=pars,map=map0,random=ran))
+
     obj <- TMB::MakeADFun(dat, pars, map0,
                           random=ran,
                           ##profile = prf,
@@ -374,12 +435,20 @@ multisam.fit <- function(x,
     if(rm.unidentified){
         obj$fn(obj$par + rnorm(length(obj$par),0,0.01))
         gr <- obj$gr()
-        safemap <- obj$env$parList(gr)
+        plForMap <- obj$env$parList(gr)
+        safemap <- plForMap
         safemap <- safemap[!names(safemap)%in%ran]
-        safemap <- lapply(safemap, function(x)factor(ifelse(abs(x)>1.0e-15,1:length(x),NA)))
-        map <- c(map,safemap)        
+        safemap <- lapply(names(safemap), function(nm){
+            x <- safemap[[nm]]            
+            vv <- 1:length(x)
+            if(nm %in% names(map))
+                vv <- map[[nm]]            
+            factor(ifelse(abs(x)>1.0e-15,vv,NA))
+        })
+        names(safemap) <- names(plForMap)[!names(plForMap)%in%ran]
+        map <- safemap #c(map[setdiff(names(map),names(safemap))],safemap)        
     }
-    
+   
     ## Create TMB Object
     obj <- TMB::MakeADFun(dat, pars, map,
                           random=ran,
@@ -422,6 +491,7 @@ multisam.fit <- function(x,
         opt$objective <- obj$fn(opt$par)
     }
     opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
+    ##opt$he <- numDeriv::hessian(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
     sdrep <- TMB::sdreport(obj,opt$par, opt$he)

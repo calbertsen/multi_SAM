@@ -4,8 +4,8 @@ prepareGenetics <- function(baselineFile,
 
     if(missing(baselineFile) && missing(sampleFile)){
         r <- list(samples = list(),
-                  Qspace = as(matrix(0,0,0),"dgTMatrix"),
-                  Qtime = as(matrix(0,0,0),"dgTMatrix"),
+                  Qspace = as(matrix(0,0,0),"TsparseMatrix"),
+                  Qtime = as(matrix(0,0,0),"TsparseMatrix"),
                   QorderTime = 1L,
                   QorderSpace = 1L,
                   stock2gen = matrix(0,0,0))

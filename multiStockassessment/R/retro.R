@@ -95,17 +95,17 @@ retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, ...){
 ##' @method mohn msam_retro
 ##' @importFrom stockassessment mohn
 ##' @export
-mohn.msam_retro <- function(fits, what=NULL, lag=0, ...){
+mohn.msam_retro <- function(fits, what=NULL, lag=0, addTotal = FALSE,...){
     if(is.null(what)){
         what <- function(fit,...){
             ## if(class(fit)=="try-error"){
             ##     r <- matrix(NA_real_, 4)
             ##     colnames(r) <- c("R","SSB","Fbar","Catch")
             ## }
-            recList <- rectable(fit,..., returnList = TRUE)
-            ssbList <- ssbtable(fit,..., returnList = TRUE)
-            fbarList <- fbartable(fit,..., returnList = TRUE)
-            catchList <- catchtable(fit,..., returnList = TRUE)
+            recList <- rectable(fit,..., returnList = TRUE, addTotal = addTotal)
+            ssbList <- ssbtable(fit,..., returnList = TRUE, addTotal = addTotal)
+            fbarList <- fbartable(fit,..., returnList = TRUE, addTotal = addTotal)
+            catchList <- catchtable(fit,..., returnList = TRUE, addTotal = addTotal)
             add <- 0
             dots <- list(...)
             if(!is.null(dots$lagR)){

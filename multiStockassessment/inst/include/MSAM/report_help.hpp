@@ -27,8 +27,8 @@ std::vector<Type> segment(std::vector<Type>& x, int i, int n)SOURCE({
   return std::vector<Type>(x.begin() + i, x.begin() + i + n);
   })
 
-  MSAM_SPECIALIZATION(std::vector<double> segment(std::vector<double>&, int, int));
-MSAM_SPECIALIZATION(std::vector<TMBad::ad_aug> segment(std::vector<TMBad::ad_aug>&, int, int));
+  MSM_SPECIALIZATION(std::vector<double> segment(std::vector<double>&, int, int));
+MSM_SPECIALIZATION(std::vector<TMBad::ad_aug> segment(std::vector<TMBad::ad_aug>&, int, int));
 			  
 
 template<class Type>
@@ -53,8 +53,8 @@ void moveADREPORT(objective_function<Type>* from, objective_function<Type>* to,i
   return;
   })
 
-MSAM_SPECIALIZATION(void moveADREPORT(objective_function<double>* from, objective_function<double>* to,int stock));
-MSAM_SPECIALIZATION(void moveADREPORT(objective_function<TMBad::ad_aug>* from, objective_function<TMBad::ad_aug>* to,int stock));
+MSM_SPECIALIZATION(void moveADREPORT(objective_function<double>* from, objective_function<double>* to,int stock));
+MSM_SPECIALIZATION(void moveADREPORT(objective_function<TMBad::ad_aug>* from, objective_function<TMBad::ad_aug>* to,int stock));
 
 HEADER(
 template<class Type>
@@ -104,8 +104,8 @@ SOURCE(
        });
 
 
-MSAM_SPECIALIZATION(struct oftmp<double>);
-MSAM_SPECIALIZATION(struct oftmp<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct oftmp<double>);
+MSM_SPECIALIZATION(struct oftmp<TMBad::ad_aug>);
 
 
 HEADER(
@@ -177,5 +177,5 @@ SOURCE(
        }
        );
 
-MSAM_SPECIALIZATION(struct ofall<double>);
-MSAM_SPECIALIZATION(struct ofall<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct ofall<double>);
+MSM_SPECIALIZATION(struct ofall<TMBad::ad_aug>);

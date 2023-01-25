@@ -1,6 +1,6 @@
-MSAM_DEPENDS(define)
-MSAM_DEPENDS(param_types)
-MSAM_DEPENDS(sharedObs)
+MSM_DEPENDS(define)
+MSM_DEPENDS(param_types)
+MSM_DEPENDS(sharedObs)
 
 template<class Type>
 vector<Type> toLogProportionG(vector<Type> x)SOURCE({
@@ -16,8 +16,8 @@ vector<Type> toLogProportionG(vector<Type> x)SOURCE({
   })
 
 
-MSAM_SPECIALIZATION(vector<double> toLogProportionG(vector<double>));
-MSAM_SPECIALIZATION(vector<TMBad::ad_aug> toLogProportionG(vector<TMBad::ad_aug>));
+MSM_SPECIALIZATION(vector<double> toLogProportionG(vector<double>));
+MSM_SPECIALIZATION(vector<TMBad::ad_aug> toLogProportionG(vector<TMBad::ad_aug>));
 
 template<class Type>
 Type dmultinom2(vector<Type> x, vector<Type> logp, int give_log DEFARG(=0))SOURCE({
@@ -32,8 +32,8 @@ Type dmultinom2(vector<Type> x, vector<Type> logp, int give_log DEFARG(=0))SOURC
   if(give_log)return logres; else return exp(logres);
     })
 
-  MSAM_SPECIALIZATION(double dmultinom2(vector<double>, vector<double>, int));
-MSAM_SPECIALIZATION(TMBad::ad_aug dmultinom2(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>, int));
+  MSM_SPECIALIZATION(double dmultinom2(vector<double>, vector<double>, int));
+MSM_SPECIALIZATION(TMBad::ad_aug dmultinom2(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>, int));
 
 template<class Type>
   Type ddirichletmultinom(vector<Type> x, vector<Type> logp, Type logAlphaScale, int give_log DEFARG(=0))SOURCE({
@@ -51,8 +51,8 @@ template<class Type>
   if(give_log)return logres; else return exp(logres);
       })
 
-MSAM_SPECIALIZATION(double ddirichletmultinom(vector<double>, vector<double>, double, int));
-MSAM_SPECIALIZATION(TMBad::ad_aug ddirichletmultinom(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>, TMBad::ad_aug, int));
+MSM_SPECIALIZATION(double ddirichletmultinom(vector<double>, vector<double>, double, int));
+MSM_SPECIALIZATION(TMBad::ad_aug ddirichletmultinom(vector<TMBad::ad_aug>, vector<TMBad::ad_aug>, TMBad::ad_aug, int));
 
 
 // x:  #Allele x # Loci matrix of observations
@@ -76,8 +76,8 @@ Type dAlleleCount(matrix<Type> x, matrix<Type> mu, vector<Type> scale, int give_
   if(give_log)return r; else return exp(r);
       })
 
-MSAM_SPECIALIZATION(double dAlleleCount(matrix<double>, matrix<double>, vector<double>, int));
-MSAM_SPECIALIZATION(TMBad::ad_aug dAlleleCount(matrix<TMBad::ad_aug>, matrix<TMBad::ad_aug>, vector<TMBad::ad_aug>, int));
+MSM_SPECIALIZATION(double dAlleleCount(matrix<double>, matrix<double>, vector<double>, int));
+MSM_SPECIALIZATION(TMBad::ad_aug dAlleleCount(matrix<TMBad::ad_aug>, matrix<TMBad::ad_aug>, vector<TMBad::ad_aug>, int));
 
 
     HEADER(
@@ -119,8 +119,8 @@ genetic_sample<Type>::genetic_sample(SEXP x){
   }
 	   )
 
-    MSAM_SPECIALIZATION(struct genetic_sample<double>);
-MSAM_SPECIALIZATION(struct genetic_sample<TMBad::ad_aug>);
+    MSM_SPECIALIZATION(struct genetic_sample<double>);
+MSM_SPECIALIZATION(struct genetic_sample<TMBad::ad_aug>);
 
 
     
@@ -164,8 +164,8 @@ SOURCE(
        }
        )
 
-    MSAM_SPECIALIZATION(struct genetic_data<double>);
-MSAM_SPECIALIZATION(struct genetic_data<TMBad::ad_aug>);
+    MSM_SPECIALIZATION(struct genetic_data<double>);
+MSM_SPECIALIZATION(struct genetic_data<TMBad::ad_aug>);
 
 
 
@@ -185,8 +185,8 @@ HEADER(
        };
        )
 
-MSAM_SPECIALIZATION(struct genetic_parameters<double>);
-MSAM_SPECIALIZATION(struct genetic_parameters<TMBad::ad_aug>);
+MSM_SPECIALIZATION(struct genetic_parameters<double>);
+MSM_SPECIALIZATION(struct genetic_parameters<TMBad::ad_aug>);
 
 
 template<class Type>
@@ -198,6 +198,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		 cmoe_matrix<Type>& logF,
 		 cmoe_matrix<Type>& logN,
 		 cmoe_matrix<Type>& logP,
+		 cmoe_3darray<Type>& logitFseason,
 		 vector<MortalitySet<Type> >& mortalities,
 		 genetic_parameters<Type>& genpar,
 		 genetic_data<Type>& gendat,
@@ -268,6 +269,10 @@ Type nllGenetics(shared_obs<Type>& obs,
 			   a2 = gs.age;
 			 }
 
+			 vector<Type> auxData(obs.auxData.cols());
+			 for(int q = 0; q < auxData.size(); ++q)
+			   auxData(q) = obs.auxData(i,q);
+
 			 for(int aa = a1; aa <= a2; ++aa){
 			   vector<Type> PCtmpM(nStockManagement); // Should be nModelledStocks (not nGeneticStocks)
 			   PCtmpM.setZero();
@@ -288,8 +293,10 @@ Type nllGenetics(shared_obs<Type>& obs,
 							 logF,
 							 logN,
 							 comps,
+							 logitFseason,
 							 weekContrib,
 							 mortalities,
+							 auxData,
 							 (vector<Type>)obs.keyFleetStock.row(gs.fleet-1));
 			   }
 			   // Map modelled stocks to genetic stocks
@@ -341,6 +348,6 @@ Type nllGenetics(shared_obs<Type>& obs,
 		   )
 
 
-MSAM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, int, int));
-MSAM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, int, int));
+MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, int, int));
+MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, int, int));
 

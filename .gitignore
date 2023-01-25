@@ -6,3 +6,7 @@
 /**/.Rhistory
 *.tar.gz
 /**/#*
+multiStockassessment/src/A_*
+multiStockassessment/src/M_*
+multiStockassessment/src/MSAM.h
+multiStockassessment/src/SAM.h

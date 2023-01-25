@@ -1,4 +1,4 @@
-PKG_CPPFLAGS = -DTMBAD_FRAMEWORK -DTMB_EIGEN_DISABLE_WARNINGS 
+PKG_CPPFLAGS = -DTMBAD_FRAMEWORK -DTMB_EIGEN_DISABLE_WARNINGS @PRECOMPILE@
 
 SAM_PATH = $(shell $(R_HOME)/bin$(R_ARCH_BIN)/Rscript -e 'cat(system.file(file.path("include","SAM"),package="stockassessment"))')
 

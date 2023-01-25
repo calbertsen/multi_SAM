@@ -235,6 +235,7 @@ addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)
 ##' @method fbarplot msam
 ##' @export
 fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
+                          effectiveF = TRUE,
                           add=FALSE,
                           ex=numeric(0),
                           ...){
@@ -242,31 +243,42 @@ fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
     d <- attr(fit,"m_data")$sam
     fbarRange <- lapply(d,function(x){
         r <- x$fbarRange
-        attr(r,"label") <- substitute(bar(F)[X-Y],list(X=r[1],Y=r[2]))
+        if(effectiveF){
+            attr(r,"label") <- substitute(Effective~bar(F)[X-Y],list(X=r[1],Y=r[2]))
+        }else{
+            attr(r,"label") <- substitute(bar(F)[X-Y],list(X=r[1],Y=r[2]))
+        }
         attr(r,"page") <- r[1]:r[2]
         r
     })
-    flist<-faytable(fit,returnList = TRUE)
-    if(is.null(page)){
-        page<-lapply(fbarRange,function(x)attr(x,"page"))
-    }
-    fmatsInPage <- sapply(1:length(fit),function(i)flist[[i]][,d[[i]]$minAge:d[[i]]$maxAge %in% page[[i]],drop=FALSE],simplify = FALSE)
-    exx <- if(partial){unlist(fmatsInPage)}else{numeric(0)}
-    fit2 <- fit
+     fit2 <- fit
     names(fit2) <- paste0(gsub("[[:space:]]","~",getStockNames(fit)),":~",
-                                      unlist(lapply(fbarRange,function(x)attr(x,"label"))))
+                          unlist(lapply(fbarRange,function(x)attr(x,"label"))))
     if(plot){
-        plotit(fit2, "logfbar", ylab=expression(bar(F)), trans=exp, ex=c(ex,exx), drop=drop, add=add, ...)
-        if(partial){
-            if(is.null(args$col)){
-                col <- .plotcols.crp(length(fit))
-            }else{
-                col <- args$col
+        if(effectiveF){
+            exx <- numeric(0)
+            fmatsInPage <- NA
+            plotit(fit2, "logfbar_Effective", ylab=expression(bar(F)), trans=exp, ex=c(ex,exx), drop=drop, add=add, ...)
+        }else{
+            flist<-faytable(fit,returnList = TRUE)
+            if(is.null(page)){
+                page<-lapply(fbarRange,function(x)attr(x,"page"))
             }
-            for(i in 1:length(fit)){
-                idxx <- 1:(length(d[[i]]$years)-drop)
-                matplot(d[[i]]$years[idxx],
-                        fmatsInPage[[i]][idxx,], add=TRUE, type="b", col=col[i], pch=as.character(page[[i]]))
+            fmatsInPage <- sapply(1:length(fit),function(i)flist[[i]][,d[[i]]$minAge:d[[i]]$maxAge %in% page[[i]],drop=FALSE],simplify = FALSE)
+            exx <- if(partial){unlist(fmatsInPage)}else{numeric(0)}
+
+            plotit(fit2, "logfbar", ylab=expression(bar(F)), trans=exp, ex=c(ex,exx), drop=drop, add=add, ...)
+            if(partial){
+                if(is.null(args$col)){
+                    col <- .plotcols.crp(length(fit))
+                }else{
+                    col <- args$col
+                }
+                for(i in 1:length(fit)){
+                    idxx <- 1:(length(d[[i]]$years)-drop)
+                    matplot(d[[i]]$years[idxx],
+                            fmatsInPage[[i]][idxx,], add=TRUE, type="b", col=col[i], pch=as.character(page[[i]]))
+                }
             }
         }
     }
@@ -464,7 +476,7 @@ recplot.msam_hcr <- function(fit, ...){
 ##' @export
 catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
     args <- list(...)
-    ctab <- catchtable(fit, returnList = TRUE,obs.show=TRUE)
+    ctab <- catchtable(fit, returnList = TRUE,obs.show=obs.show)
     plotit(fit, "logCatch", ylab="Catch", trans=exp, drop=drop,...)
     if(obs.show){
         if(is.null(args$col)){
@@ -475,9 +487,11 @@ catchplot.msam <- function(fit, obs.show=TRUE, drop=0, ...){
         for(i in 1:length(fit))
             points(as.numeric(rownames(ctab[[i]])),ctab[[i]][,4],
                    pch=4, lwd=2, cex=1.2, col=col[i])
+    ##CW <- lapply(attr(fit,"m_data")$sam,function(x)x$catchMeanWeight)
+        obs <- list(x=as.numeric(rownames(ctab[[i]])),y=ctab[[i]][,"sop.catch"], na.rm=TRUE)
+    }else{
+        obs <- list(x=NA,y=NA)
     }
-    CW <- lapply(attr(fit,"m_data")$sam,function(x)x$catchMeanWeight)
-    obs <- list(x=as.numeric(rownames(ctab[[i]])),y=ctab[[i]][,"sop.catch"], na.rm=TRUE)
     invisible(list(drop=drop,obs=obs))
 }
 
@@ -666,7 +680,7 @@ dataperiodplot <- function(fit, fn,...){
 }
 
 #' @export
-dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total", totalCol = "black", addFits = NULL, addCols = NA, ...){
+dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total", totalCol = "black", addFits = NULL, addCols = NA, evalOnPlot = NULL, ...){
     dat <- attr(fit,"m_data")
     shared <- dat$sharedObs$hasSharedObs
     if(shared){
@@ -714,6 +728,8 @@ dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total"
             fn(addFits[[ii]], add = TRUE, col = addCols[ii], legend.pos = FALSE)
         }
     }
+    if(!is.null(evalOnPlot))
+        eval(evalOnPlot)
     usr <- par("usr")
     par(mar = c(0, 4.2, .1, .1))
     plot.new()
