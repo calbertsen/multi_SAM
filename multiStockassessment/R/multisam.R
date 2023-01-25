@@ -98,7 +98,7 @@ multisam.fit <- function(x,
             stop("When a list, the length of shared_proportionalHazard must match the length of x")
     }
     Xph <- lapply(shared_proportionalHazard, function(f){
-        if(is.null(f) || !(shared_selectivity %in% c(3,4)))
+        if(is.null(f) || !(shared_selectivity %in% c(3,4,6)))
             return(matrix(0,0,0))
         maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years))))
         minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years))))
@@ -179,7 +179,7 @@ multisam.fit <- function(x,
             lfsRDim <- attr(pars$logF,"cdim") * 0
             lfsCDim <- attr(pars$logF,"cdim") * 0
             initFdim <- attr(pars$logF,"rdim") * 0
-        }else{                          #Scale by scalar RW (+ parametric)
+        }else{                          #Scale by scalar AR/RW (+ parametric)
             lfsRDim <- attr(pars$logF,"rdim") * 0 + 1
             lfsCDim <- attr(pars$logF,"cdim")            
             lfsCDim[1] <- 0
@@ -190,9 +190,9 @@ multisam.fit <- function(x,
         initFdim <- attr(pars$logF,"rdim") * 0
     }
     pars$shared_logFscale <- combineMatrices(lapply(seq_along(lfsRDim),function(i) matrix(0,lfsRDim[i],lfsCDim[i])))
-    pars$shared_lfsMean <- matrix(0, nrow = lfsRDim,
+    pars$shared_lfsMean <- matrix(0, nrow = lfsRDim * (shared_selectivity %in% c(1,2,4)),
                                   ncol = length(dat$sam)-1)
-    pars$shared_lfsSd <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))
+    pars$shared_lfsSd <- numeric(ifelse(shared_selectivity %in% c(1,2,4,5,6),length(dat$sam)-1,0))
     pars$shared_lfsRho <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))    
     pars$shared_logitMissingVulnerability <- numeric(sum(is.na(dat$sharedObs$keyFleetStock)))
     pars$shared_missingObs <- numeric(sum(is.na(dat$sharedObs$logobs)))
