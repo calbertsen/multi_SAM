@@ -10,3 +10,7 @@ multiStockassessment/src/A_*
 multiStockassessment/src/M_*
 multiStockassessment/src/MSAM.h
 multiStockassessment/src/SAM.h
+multiStockassessment/autom4te.cache
+multiStockassessment/config.log
+multiStockassessment/config.status
+multiStockassessment/src/Makevars
