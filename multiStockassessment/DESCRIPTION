@@ -16,5 +16,5 @@ Suggests: parallel
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE
 BugReports: https://github.com/calbertsen/multi_SAM/issues
-Remotes: github::fishfollower/stockassessment@refpoint
+Remotes: github::fishfollower/SAM/stockassessment@refpoint
 RoxygenNote: 7.1.1
