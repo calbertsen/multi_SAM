@@ -16,6 +16,5 @@ Suggests: parallel
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE
 BugReports: https://github.com/calbertsen/multi_SAM/issues
-Additional_repositories: https://rrepo.calbertsen.dk/
-Remotes: github::fishfollower/stockassessment@chr_merge_compile
+Remotes: github::fishfollower/stockassessment@refpoints
 RoxygenNote: 7.1.1
