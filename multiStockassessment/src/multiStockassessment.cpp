@@ -584,20 +584,20 @@ Type objective_function<Type>::operator() ()
 	Type slfs = 0.0;
 	if(shared_F_type != 3){	// If not pure parametric
 	  if(shared_F_type == 2 || shared_F_type == 4){ // AR in time
-	  Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
-	  Type mu = shared_lfsMean(0,s-1);
-	  if(i > 0)
-	    mu += rho * (shared_logFscale.col(s)(0,i-1) - shared_lfsMean(0,s-1));	  
-	  Type sd = exp(shared_lfsSd(s-1));
-	  if(i == 0)
-	    sd /= sqrt(1.0 - rho * rho);
-	  ans -= dnorm(shared_logFscale.col(s)(0,i), mu, sd, true);
+	    Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
+	    Type mu = shared_lfsMean(0,s-1);
+	    if(i > 0)
+	      mu += rho * (shared_logFscale.col(s)(0,i-1) - shared_lfsMean(0,s-1));	  
+	    Type sd = exp(shared_lfsSd(s-1));
+	    if(i == 0)
+	      sd /= sqrt(1.0 - rho * rho);
+	    ans -= dnorm(shared_logFscale.col(s)(0,i), mu, sd, true);
 	  }else{ // 5 or 6: RW in time
 	    Type sd = exp(shared_lfsSd(s-1));
 	    if(i == 0){
-	      ans -= dnorm(shared_logFscale.col(s)(0,i), Type(0.0), Type(10.0) * sd, true);
+	      ans -= dnorm(shared_logFscale.col(s)(0,i), shared_lfsMean(0,s-1), Type(0.01), true);
 	    }else{
-	      ans -= dnorm(shared_logFscale.col(s)(0,i), hared_logFscale.col(s)(0,i-1), sd, true);
+	      ans -= dnorm(shared_logFscale.col(s)(0,i), shared_logFscale.col(s)(0,i-1), sd, true);
 	    }
 	  }
 	  slfs = shared_logFscale.col(s)(0,i);

@@ -190,7 +190,7 @@ multisam.fit <- function(x,
         initFdim <- attr(pars$logF,"rdim") * 0
     }
     pars$shared_logFscale <- combineMatrices(lapply(seq_along(lfsRDim),function(i) matrix(0,lfsRDim[i],lfsCDim[i])))
-    pars$shared_lfsMean <- matrix(0, nrow = lfsRDim * (shared_selectivity %in% c(1,2,4)),
+    pars$shared_lfsMean <- matrix(0, nrow = lfsRDim,
                                   ncol = length(dat$sam)-1)
     pars$shared_lfsSd <- numeric(ifelse(shared_selectivity %in% c(1,2,4,5,6),length(dat$sam)-1,0))
     pars$shared_lfsRho <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))    
