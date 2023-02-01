@@ -24,6 +24,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 				vector<vector<Type> >& varAlphaSCB,
 				vector<MortalitySet<Type> >& mortalities,
 				vector<Type> auxData,
+				matrix<Type> Parea,
 				// vector<Type> logssb,
 				// vector<Type> logtsb,
 				// vector<Type> logfsb,
@@ -138,9 +139,40 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 	}
       }
     }
-    for(int s = 0; s < datA.size(); ++s)
-      pred(s) = log(Cstock(s)) - log(Ctotal);
-  
+    for(int s = 0; s < datA.size(); ++s){
+
+      pred(s) = log(squeeze(Cstock(s) / Ctotal));
+    }
+
+  }else if(fleetType == 92){
+    SAM_ASSERT(auxData.size() >= 5,"aux is not large enough for fleet type 90");
+
+    Type Ctotal = 0.0;
+    Type Carea = 0.0;
+    int flt = CppAD::Integer(auxData(0))-1; // TODO: allow auxData(0)==0 to sum over all fleets
+    for(int s = 0; s < datA.size(); ++s){
+      int y = year - CppAD::Integer(datA(s).years(0));
+      int aMin = datA(s).minAgePerFleet(flt);
+      int aMax = datA(s).maxAgePerFleet(flt);
+      for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
+	//Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
+	// Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
+	  Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	  // 0: Catch numbers
+	  if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
+	    Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
+	  }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
+	    Cttmp *= datA(s).landFrac(y,aa, flt);
+	  }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
+	    Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+	  }
+	  Carea += Parea(CppAD::Integer(auxData(4)),s) * Cttmp;
+	  Ctotal += Cttmp;
+	}
+    }
+    pred(0) = log(Carea) - log(Ctotal);
+    
+    
   }else{ // if(fleetType <= 2){
     vector<Type> NAs(datA.size());
     NAs.setConstant(R_NaReal);
@@ -195,8 +227,8 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 				  })
 
 
-MSM_SPECIALIZATION(vector<double> predOneObsPerStock(int, int, int, int, vector<int>, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<array<double> >&,cmoe_3darray<double>&, vector<vector<double> >&, vector<MortalitySet<double> >&, vector<double>, vector<double>));
-MSM_SPECIALIZATION(vector<TMBad::ad_aug> predOneObsPerStock(int, int, int, int, vector<int>, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<array<TMBad::ad_aug> >&,cmoe_3darray<TMBad::ad_aug>&, vector<vector<TMBad::ad_aug> >&, vector<MortalitySet<TMBad::ad_aug> >&, vector<TMBad::ad_aug>, vector<TMBad::ad_aug>));
+				  MSM_SPECIALIZATION(vector<double> predOneObsPerStock(int, int, int, int, vector<int>, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<array<double> >&,cmoe_3darray<double>&, vector<vector<double> >&, vector<MortalitySet<double> >&, vector<double>,matrix<double>, vector<double>));
+MSM_SPECIALIZATION(vector<TMBad::ad_aug> predOneObsPerStock(int, int, int, int, vector<int>, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<array<TMBad::ad_aug> >&,cmoe_3darray<TMBad::ad_aug>&, vector<vector<TMBad::ad_aug> >&, vector<MortalitySet<TMBad::ad_aug> >&, vector<TMBad::ad_aug>,matrix<TMBad::ad_aug>, vector<TMBad::ad_aug>));
 
 
 
@@ -212,6 +244,7 @@ matrix<Type> predObsPerStock(shared_obs<Type>& obs,
 			     cmoe_3darray<Type>& logitFseason,
 			     vector<vector<Type> >& varAlphaSCB,
 			     vector<MortalitySet<Type> >& mortalities,
+			     matrix<Type>& Parea,
 			     // vector<Type> logSdObs,
 			     int minYearAll,
 			     int minAgeAll,
@@ -242,6 +275,7 @@ matrix<Type> predObsPerStock(shared_obs<Type>& obs,
 					     varAlphaSCB,
 					     mortalities,
 					     auxData,
+					     Parea,
 					     (vector<Type>)obs.keyFleetStock.row(obs.aux(i,1)-1));
   }
   REPORT_F(predPerStock,of);
@@ -251,8 +285,8 @@ matrix<Type> predObsPerStock(shared_obs<Type>& obs,
 
 
 
-MSM_SPECIALIZATION(matrix<double> predObsPerStock(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<array<double> >&, cmoe_3darray<double>&, vector<vector<double> >&, vector<MortalitySet<double> >&, int, int, vector<int>, objective_function<double>*));
-MSM_SPECIALIZATION(matrix<TMBad::ad_aug> predObsPerStock(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<array<TMBad::ad_aug> >&, cmoe_3darray<TMBad::ad_aug>&, vector<vector<TMBad::ad_aug> >&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, vector<int>, objective_function<TMBad::ad_aug>*));
+MSM_SPECIALIZATION(matrix<double> predObsPerStock(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<array<double> >&, cmoe_3darray<double>&, vector<vector<double> >&, vector<MortalitySet<double> >&,matrix<double>&, int, int, vector<int>, objective_function<double>*));
+MSM_SPECIALIZATION(matrix<TMBad::ad_aug> predObsPerStock(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<array<TMBad::ad_aug> >&, cmoe_3darray<TMBad::ad_aug>&, vector<vector<TMBad::ad_aug> >&, vector<MortalitySet<TMBad::ad_aug> >&,matrix<TMBad::ad_aug>&, int, int, vector<int>, objective_function<TMBad::ad_aug>*));
 
 
 
@@ -268,6 +302,7 @@ Type sharedObservation(shared_obs<Type>& obs,
 		       cmoe_matrix<Type>& logP,
 		       cmoe_3darray<Type>& logitFseason,
 		       vector<MortalitySet<Type> >& mortalities,
+		       matrix<Type>& Parea,
 		       // vector<Type> logSdObs,
 		       int minYearAll,
 		       int minAgeAll,
@@ -289,7 +324,7 @@ Type sharedObservation(shared_obs<Type>& obs,
     noYearsLAI(s) = yearsPFun(confA(s),datA(s));
   }
       
-  matrix<Type> predPerStock = predObsPerStock(obs, datA, confA, parA, forecastA, logF, logN, comps, logitFseason, weekContrib, mortalities, minYearAll, minAgeAll, noYearsLAI, of);
+  matrix<Type> predPerStock = predObsPerStock(obs, datA, confA, parA, forecastA, logF, logN, comps, logitFseason, weekContrib, mortalities, Parea, minYearAll, minAgeAll, noYearsLAI, of);
   vector<vector< MVMIX_t<Type> > > nllVecPerStock(datA.size());
   for(int s = 0; s < nllVecPerStock.size(); ++s)
     nllVecPerStock(s) = getnllVec(datA(s), confA(s), parA(s), of);
@@ -410,27 +445,58 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  // int iMax = dat.idx2(f,y);
 	  // Setup response and prediction vectors
 	  int nSeasons = CppAD::Integer(obs.auxData(iMin,5));
+
+	  Type log_alpha = R_NegInf;
+	  for(int s = 0; s < nStocks; ++s)
+	    log_alpha = logspace_add_SAM(log_alpha, parA(s).logSdLogObs(confA(s).keyVarObs(f,0)));
+
 	  vector<Type> log_X(nSeasons);
 	  log_X.setConstant(R_NegInf);
 	  vector<Type> log_P(nSeasons);
 	  log_P.setConstant(R_NegInf);
-	  vector<Type> Keep(nSeasons);
-	  Keep.setZero();
+	  // vector<Type> Keep(nSeasons);
+	  // Keep.setConstant(1);
+	  // vector<Type> LCDF(nSeasons);
+	  // LCDF.setConstant(0);
+	  // vector<Type> HCDF(nSeasons);
+	  // HCDF.setConstant(0);	    
+	  // for(int i=obs.idx1(f,y); i<=obs.idx2(f,y); ++i){
+	  //   log_X(CppAD::Integer(obs.auxData(i,4))-1) = exp(obs.logobs(i));
+	  //   log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,0);
+	  //   Keep(CppAD::Integer(obs.auxData(i,4))-1) = keep(i);
+	  //   LCDF(CppAD::Integer(obs.auxData(i,4))-1) = keep.cdf_lower(i);
+	  //   HCDF(CppAD::Integer(obs.auxData(i,4))-1) = keep.cdf_upper(i);
+	  // }
+	  data_indicator<vector<Type>, Type> K2 = keep.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1);
+	  Type xs = 1.0;
+	  Type ps = 0.0;
 	  for(int i=obs.idx1(f,y); i<=obs.idx2(f,y); ++i){
-	    log_X(CppAD::Integer(obs.auxData(i,4))-1) = exp(obs.logobs(i));
-	    log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,0);
-	    Keep(CppAD::Integer(obs.auxData(i,4))-1) = keep(i);
+	    log_X(CppAD::Integer(obs.auxData(i,4))-1) = obs.logobs(i); //exp(obs.logobs(i));
+	    xs += exp(obs.logobs(i));
+	    log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,0); //exp(-log_alpha + predPerStock(i,0));
+	    ps += exp(predPerStock(i,0));
 	  }
-	  log_X(nSeasons-1) = 1.0; //log(1.0 - log_X.exp().sum());// logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_X.segment(0,nSeasons-1)));	  
-	  log_X /= log_X.sum();
-	  log_X = log_X.log();
-	  log_P(nSeasons-1) = log(1.0 - log_P.exp().sum());//logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_P.segment(0,nSeasons-1)));
+	  log_X(nSeasons-1) = 1.0; //log(1.0 - log_X.exp().sum());// logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_X.segment(0,nSeasons-1)));
+	  // log_X += (Type)0.000001;
+	  // Contribution from logX -> X
+	  //nll += log(xs);
+	  // Contribution from X -> proportions
+	  //nll -= log(fabs(obs_fun::jacobianDet(log_X)));
+	  for(int i = 0; i < log_X.size(); ++i)
+	    log_X(i) -= log(xs);
+	  log_P(nSeasons-1) =  log(1.0 - squeeze(ps)); // exp(-log_alpha) *
+	  //  vector<int> OCDF = order_keep(Keep);	      
+	  // log_X(nSeasons-1) = 1.0; //log(1.0 - log_X.exp().sum());// logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_X.segment(0,nSeasons-1)));	  
+	  // log_X /= log_X.sum();
+	  // log_X += (Type)0.000001;
+	  // log_X = log_X.log();
+	  // log_P(nSeasons-1) = log(1.0 - squeeze(log_P.exp().sum()));//logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_P.segment(0,nSeasons-1)));
 	  // From aggregation property, alpha parameters should be summed:
-	  Type log_alpha = R_NegInf;
-	  for(int s = 0; s < nStocks; ++s)
-	    log_alpha = logspace_add_SAM(log_alpha, parA(s).logSdLogObs(confA(s).keyVarObs(f,0)));
 	  //Rcout << ddirichlet(log_X,log_P,log_alpha,Keep,true) << "\t" << ddirichlet_vtri((vector<Type>)(log_X.exp()),(vector<Type>)((log_P+log_alpha).exp()),true) << "\n";
-	  nll -= ddirichlet(log_X,log_P,log_alpha,Keep,true);
+	  nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);
+
+	  //nll -= ddirichlet_osa(log_X,log_P,K2,true);
+	  
 	}
       // }else if(obs.fleetTypes(f)==81){
       // 	// For fleet type 81, first column of predObs gives the total prediction
@@ -475,30 +541,95 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  int iMin = obs.idx1(f,y);
 	  // int iMax = dat.idx2(f,y);
 	  // Setup response and prediction vectors
+
+	  Type log_alpha = R_NegInf;
+	  for(int s = 0; s < nStocks; ++s)
+	    log_alpha = logspace_add_SAM(log_alpha, parA(s).logSdLogObs(confA(s).keyVarObs(f,0)));
+
+	  
 	  vector<Type> log_X(nStocks);
 	  log_X.setConstant(R_NegInf);
 	  vector<Type> log_P(nStocks);
 	  log_P.setConstant(R_NegInf);
 	  vector<Type> Keep(nStocks);
-	  Keep.setZero();
+	  Keep.setConstant(1);
+	  vector<Type> LCDF(nStocks);
+	  LCDF.setConstant(0);
+	  vector<Type> HCDF(nStocks);
+	  HCDF.setConstant(0);
+	  data_indicator<vector<Type>, Type> K2 = keep.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1);
+	  Type xs = 1.0;
+	  Type ps = 0.0;
 	  for(int i=obs.idx1(f,y); i<=obs.idx2(f,y); ++i){
-	    log_X(CppAD::Integer(obs.auxData(i,4))-1) = exp(obs.logobs(i));
-	    log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,CppAD::Integer(obs.auxData(i,4)-1));
+	    log_X(CppAD::Integer(obs.auxData(i,4))-1) = obs.logobs(i); //exp(obs.logobs(i));
+	    xs += exp(obs.logobs(i));
+	    log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,CppAD::Integer(obs.auxData(i,4)-1)); //exp(-log_alpha + predPerStock(i,CppAD::Integer(obs.auxData(i,4)-1)));
+	    ps += exp(predPerStock(i,CppAD::Integer(obs.auxData(i,4)-1)));
+	    
 	    Keep(CppAD::Integer(obs.auxData(i,4))-1) = keep(i);
-	  }	  
-	  log_X(nStocks-1) = 1.0; //log(1.0 - log_X.exp().sum());// logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_X.segment(0,nSeasons-1)));
-	  log_X /= log_X.sum();
-	  log_X = log_X.log();
-	  log_P(nStocks-1) = log(1.0 - log_P.exp().sum()); //logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_P.segment(0,nStocks-1)));
-	  Type log_alpha = R_NegInf;
-	  for(int s = 0; s < nStocks; ++s)
-	    log_alpha = logspace_add_SAM(log_alpha, parA(s).logSdLogObs(confA(s).keyVarObs(f,0)));
+	    LCDF(CppAD::Integer(obs.auxData(i,4))-1) = keep.cdf_lower(i);
+	    HCDF(CppAD::Integer(obs.auxData(i,4))-1) = keep.cdf_upper(i);	    
+	  }
+	 
+	  vector<int> OCDF = order_keep(Keep);
+	  log_X(nStocks-1) = 0.0; //log(1.0 - log_X.exp().sum());// logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_X.segment(0,nSeasons-1)));
+	  // log_X += (Type)0.000001;
+	  // Contribution from logX -> X
+	  //nll += log(xs);
+	  // Contribution from X -> proportions
+	  //nll -= log(fabs(obs_fun::jacobianDet(log_X)));
+	  for(int i = 0; i < log_X.size(); ++i)
+	    log_X(i) -= log(xs);
+	  log_P(nStocks-1) = log((1.0 - squeeze(ps))); //exp(-log_alpha) * (1.0 - squeeze(ps));	     
+	  // log_X /= log_X.sum();
+	  // log_X = log_X.log();
+	  // log_P(nStocks-1) = log(1.0 - squeeze(log_P.exp().sum())); //logspace_sub_SAM(Type(0.0), logspace_sum((vector<Type>)log_P.segment(0,nStocks-1)));
 	  // Rcout << log_X.exp().sum() << "\n";
 	  // Rcout << log_P.exp().sum() << "\n";
 	  // Rcout << log_alpha << "\n";
 	  // Rcout << ddirichlet(log_X,log_P,log_alpha,Keep,true) << "\t" << ddirichlet_vtri((vector<Type>)(log_X.exp()),(vector<Type>)((log_P+log_alpha).exp()),true) << "\n\n";
-	  nll -= ddirichlet(log_X,log_P,log_alpha,Keep,true);
+	  // Rcout << "From 90\n";
+	  // Rcout << "log_X:\n" << log_X << "\n";
+	  // Rcout << "log_P:\n" << log_P << "\n";
+	  // Rcout << "log_alpha:\n" << log_alpha << "\n";
+	  // Rcout << "Keep:\n" << Keep << "\n";
+	  // Rcout << ddirichlet(log_X,log_P,0*log_alpha,Keep,LCDF,HCDF,OCDF,true) << "\n";
+	  // Rcout << ddirichlet_osa(log_X,log_P,K2,true) << "\n";
+	  nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);
+	  //nll -= ddirichlet_osa(log_X,log_P,K2,true);
+	  // for(int j = 0; j < log_X.size(); ++j)
+	  //   nll += ((log_X(j) - log_P(j)) * (log_X(j) - log_P(j)));
 	  //nll -= ddirichlet_vtri((vector<Type>)(log_X.exp()),(vector<Type>)((log_P+log_alpha).exp()),true);
+	}
+	     }else if(obs.fleetTypes(f)==90){
+	if(!isNAINT(obs.idx1(f,y))){
+	  int iMin = obs.idx1(f,y);
+	  // int iMax = dat.idx2(f,y);
+	  // Setup response and prediction vectors
+	  Type log_alpha = R_NegInf;
+	  for(int s = 0; s < nStocks; ++s)
+	    log_alpha = logspace_add_SAM(log_alpha, parA(s).logSdLogObs(confA(s).keyVarObs(f,0)));
+
+	  
+	  vector<Type> log_X(nStocks);
+	  log_X.setConstant(R_NegInf);
+	  vector<Type> log_P(nStocks);
+	  log_P.setConstant(R_NegInf);
+	  data_indicator<vector<Type>, Type> K2 = keep.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1);
+	  Type xs = 1.0;
+	  Type ps = 0.0;
+	  for(int i=obs.idx1(f,y); i<=obs.idx2(f,y); ++i){
+	    log_X(CppAD::Integer(obs.auxData(i,4))-1) = obs.logobs(i); //exp(obs.logobs(i));
+	    xs += exp(obs.logobs(i));
+	    log_P(CppAD::Integer(obs.auxData(i,4))-1) = predPerStock(i,0); //exp(-log_alpha + predPerStock(i,CppAD::Integer(obs.auxData(i,4)-1)));
+	    ps += exp(predPerStock(i,0));	    
+	  }
+	 
+	  log_X(nStocks-1) = 0.0;
+	  for(int i = 0; i < log_X.size(); ++i)
+	    log_X(i) -= log(xs);
+	  log_P(nStocks-1) = log((1.0 - squeeze(ps))); //exp(-log_alpha) * (1.0 - squeeze(ps));	     
+	  nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);	  
 	}
       }else{
 	Rf_error("fleetType not implemented for shared observations");
@@ -510,6 +641,6 @@ Type sharedObservation(shared_obs<Type>& obs,
 			 });
 
 
-MSM_SPECIALIZATION(double sharedObservation(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, int, int, data_indicator<vector<double>, double>&, objective_function<double>*));
-MSM_SPECIALIZATION(TMBad::ad_aug sharedObservation(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, data_indicator<vector<TMBad::ad_aug>, TMBad::ad_aug>&, objective_function<TMBad::ad_aug>*));
+MSM_SPECIALIZATION(double sharedObservation(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, matrix<double>&, int, int, data_indicator<vector<double>, double>&, objective_function<double>*));
+MSM_SPECIALIZATION(TMBad::ad_aug sharedObservation(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, matrix<TMBad::ad_aug>&, int, int, data_indicator<vector<TMBad::ad_aug>, TMBad::ad_aug>&, objective_function<TMBad::ad_aug>*));
 			 

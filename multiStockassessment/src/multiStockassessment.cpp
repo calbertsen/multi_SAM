@@ -126,13 +126,17 @@ Type objective_function<Type>::operator() ()
     4: RW for first stock, others are scaled by log-linear relation + scalar RW
    */
   DATA_INTEGER(shared_F_type);
-  DATA_INTEGER(shared_Fseason_type); 
+  DATA_INTEGER(shared_Fseason_type);
+  DATA_INTEGER(skip_stock_observations);
+
+  DATA_IMATRIX(stockAreas); // areas x stocks. 1 if active, 0 otherwise
   
   // Related to residuals
   DATA_VECTOR(fake_obs);
   DATA_IVECTOR(fake_stock);
   DATA_IVECTOR(fake_indx);
   DATA_VECTOR_INDICATOR(fake_keep, fake_obs);
+  DATA_INTEGER(fake_includeOthers);
   DATA_INTEGER(doResiduals);
   
   // Create a keep indicator for each stock and for shared observations
@@ -140,17 +144,23 @@ Type objective_function<Type>::operator() ()
   
   for(int s = 0; s < sam.dataSets.size(); ++s){    
     data_indicator<vector<Type>,Type> keepTmp(sam.dataSets(s).logobs, true);
+    if(fake_includeOthers == 0)
+      keepTmp.setZero();
+    keepTmp.osa_flag = (bool)doResiduals;
     keep(s) = keepTmp;
   }
   if(sharedObs.hasSharedObs){
     data_indicator<vector<Type>,Type> keepTmp(sharedObs.logobs, true);
+    if(fake_includeOthers == 0)
+      keepTmp.setZero();
+    keepTmp.osa_flag = (bool)doResiduals;
     keep(keep.size()-1) = keepTmp;
   }
   
   if(doResiduals){
     for(int i = 0; i < fake_obs.size(); ++i){
       // Overwrite true observations with residual observations
-      if(fake_stock(i) == sam.dataSets.size()){ // Shared observation
+      if(sharedObs.hasSharedObs && (fake_stock(i) == sam.dataSets.size())){ // Shared observation
 	sharedObs.logobs(fake_indx(i)) = fake_obs(i);
       }else{
 	sam.dataSets(fake_stock(i)).logobs(fake_indx(i)) = fake_obs(i);
@@ -347,6 +357,33 @@ Type objective_function<Type>::operator() ()
   PARAMETER_ARRAY(logGst);
   PARAMETER_MATRIX(logGtrip);
 
+  PARAMETER_CMOE_VECTOR(logitArea);
+
+  matrix<Type> Parea(stockAreas.rows(), stockAreas.cols());
+  Parea.setZero();
+  for(int s = 0; s < Parea.cols(); ++s){
+    int indx = 0;
+    Type ps = 0.0;
+    vector<Type> pparsIn = logitArea.col(s);
+    vector<Type> pparsOut(Parea.rows());
+    pparsOut.setZero();
+    for(int a = 0; a < Parea.rows(); ++s){
+      if(stockAreas(a,s) == 1){
+	if(indx == pparsIn.size()){
+	  pparsOut(a) = 1.0;
+	  ps += 1.0;
+	  break;
+	}else{
+	  pparsOut(a) = exp(pparsIn(indx++));
+	  ps += pparsOut(a);
+	}
+      }
+    }
+    pparsOut /= ps;
+    Parea.col(s) = pparsOut;
+  }
+
+  
 
   // for(int s = 0; s < logF.cols(); ++s){  
   //   if(shared_logFscale.col(s).size() > 0){    
@@ -379,7 +416,7 @@ Type objective_function<Type>::operator() ()
     for(int i = 0; i < sam.dataSets(s).nobs; ++i){
       if(isNA(sam.dataSets(s).logobs(i))){
   	sam.dataSets(s).logobs(i) = missing(idxmis++);	
-	if(sam.dataSets(s).fleetTypes(sam.dataSets(s).aux(i,1)-1)>=80){//==90){
+	if(sam.dataSets(s).fleetTypes(sam.dataSets(s).aux(i,1)-1)>=90){//==90){
 	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
 	}
       }    
@@ -533,6 +570,11 @@ Type objective_function<Type>::operator() ()
       }else{
 	ans -= dnorm(shared_logFscale.col(s)(0,0), initLogF.col(s)(0), Type(0.01), true);
       }
+    }else if(doResiduals){
+      Type huge = 10.0;
+      for(int a = 0; a < logF.col(s).rows(); ++a)
+	ans -= dnorm(logF.col(s)(a,0), Type(0.0), huge, true);
+
     }
   }
   // bool overwriteF = false;
@@ -547,11 +589,13 @@ Type objective_function<Type>::operator() ()
     //if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
     if(shared_F_type == -1){
        matrix<Type> logFs = logF.col(s);
+       // Add fake likelihood contribution for unused random effects
        for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
 	 for(int j = 0; j < logFs.rows(); ++j){	  
 	   ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
 	 }
        }
+       // Overwrite logF
        logF.col(s) = logF.col(0);
   }else if(shared_F_type == 0){ // Nothing shared
       // SAVE FOR LATER
@@ -566,13 +610,14 @@ Type objective_function<Type>::operator() ()
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
 	for(int a = 0; a < logF0.rows(); ++a){ // Loop over F ages
 	  Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
-	  Type mu = shared_lfsMean(0,s-1);
+	  Type mu = shared_lfsMean(a,s-1);
 	  if(i > 0)
-	    mu += rho * (shared_logFscale.col(s)(a,i-1) - shared_lfsMean(0,s-1));
+	    mu += rho * (shared_logFscale.col(s)(a,i-1) - shared_lfsMean(a,s-1));
 	  Type sd = exp(shared_lfsSd(s-1));
 	  if(i == 0)
 	    sd /= sqrt(1.0 - rho * rho);
 	  ans -= dnorm(shared_logFscale.col(s)(a,i), mu, sd, true);
+	  ans -= dnorm(logFs(a,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
 	  logFs(a,i) = logF0(a,i) + shared_logFscale.col(s)(a,i);
 	}
       }
@@ -645,6 +690,28 @@ Type objective_function<Type>::operator() ()
     }
   }
 
+   ////////////////////////////////
+  ////////// Season /////////////
+  //////////////////////////////
+
+   for(int s = 0; s < nStocks; ++s){
+     oftmp<Type> of(this->do_simulate);
+     array<Type> logitFSa = getArray(logitFseason, s);
+     data_indicator<vector<Type>,Type> keepTmp = keep(s);
+     dataSet<Type> ds = sam.dataSets(s);
+     confSet cs = sam.confSets(s);
+     paraSet<Type> ps = paraSets(s);
+     if(shared_Fseason_type == 0 || s == 0){
+       ans += nllSeason(ds, cs, ps, sam.forecastSets(s), logitFSa, keepTmp, &of);
+       ofAll.addToReport(of.report,s);
+       moveADREPORT(&of,this,s);
+     // If simulate -> move grab new logF values and move them to the right place!         
+       logitFseason.col(s) = logitFSa;
+     }
+   }
+
+
+
  
   ////////////////////////////////////////
   /////////// Mortality /////////////////
@@ -696,27 +763,7 @@ Type objective_function<Type>::operator() ()
     }
    }
 
-  ////////////////////////////////
-  ////////// Season /////////////
-  //////////////////////////////
-
-   for(int s = 0; s < nStocks; ++s){
-     oftmp<Type> of(this->do_simulate);
-     array<Type> logitFSa = getArray(logitFseason, s);
-     data_indicator<vector<Type>,Type> keepTmp = keep(s);
-     dataSet<Type> ds = sam.dataSets(s);
-     confSet cs = sam.confSets(s);
-     paraSet<Type> ps = paraSets(s);
-     if(shared_Fseason_type == 0 || s == 0){
-       ans += nllSeason(ds, cs, ps, sam.forecastSets(s), logitFSa, keepTmp, &of);
-       ofAll.addToReport(of.report,s);
-       moveADREPORT(&of,this,s);
-     // If simulate -> move grab new logF values and move them to the right place!         
-       logitFseason.col(s) = logitFSa;
-     }
-   }
-
-
+ 
  
   ////////////////////////////////
   ////////// N PROCESS //////////
@@ -741,8 +788,9 @@ Type objective_function<Type>::operator() ()
 
       for(int a = 1; a < logNa.rows(); ++a){
       	Type m = logNa(a-1,0) - dat.natMor(0,a-1);
-      	if(conf.keyLogFsta(0,a-1)>(-1))
-      	  m -= exp(logFa(conf.keyLogFsta(0,a-1),0));	
+	for(int f = 0; f < conf.keyLogFsta.dim(0); ++f)
+	  if(conf.keyLogFsta(f,a-1)>(-1))
+	    m -= exp(logFa(conf.keyLogFsta(f,a-1),0));	
       	// ans -= dnorm((logNa(a,0)), (m), exp(par.logSdLogN(conf.keyVarLogN(a))), true); //
       	ans -= dnorm((logNa(a,0)), (m), Type(0.01), true); //
       }
@@ -820,12 +868,13 @@ Type objective_function<Type>::operator() ()
     if(doResiduals){
       Type huge = 10.0;
       for(int s = 0; s < nAreas; ++s){
-	for (int i = 0; i < logN.col(s).rows(); i++){
-	  ans -= dnorm((logN.col(s))(i, 0), Type(0.0), huge, true);
-	}
+	if(initLogN.col(s).size() == 0)
+	  for (int i = 0; i < logN.col(s).rows(); i++){
+	    ans -= dnorm((logN.col(s))(i, 0), Type(0.0), huge, true);
+	  }
       }
     } 
-    
+  
   density::MVNORM_t<Type> neg_log_densityN(ncov);
   // Loop over time
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
@@ -1058,7 +1107,9 @@ Type objective_function<Type>::operator() ()
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    ans += nllObs(ds, cs, ps, sam.forecastSets(s), logNa, logFa, logPa,logitFSa, recruits(s), mortalities(s), keepTmp, reportingLevel,  &of);
+    Type tmp = nllObs(ds, cs, ps, sam.forecastSets(s), logNa, logFa, logPa,logitFSa, recruits(s), mortalities(s), keepTmp, reportingLevel,  &of);
+    if(!skip_stock_observations)
+      ans += tmp;
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
@@ -1076,6 +1127,7 @@ Type objective_function<Type>::operator() ()
 			   logitFseason,
   			   mortalities,
   			   // shared_logSdObs,
+			   Parea,
   			   minYearAll,
   			   minAgeAll,
   			   keep(keep.size()-1),
@@ -1101,6 +1153,7 @@ Type objective_function<Type>::operator() ()
   		     geneticsData,
   		     logGst,
   		     logGtrip,
+		     Parea,
   		     maxAgeAll,
   		     minAgeAll);
 

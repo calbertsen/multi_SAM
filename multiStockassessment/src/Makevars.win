@@ -1,4 +1,4 @@
-PKG_CPPFLAGS = -Wa,-mbig-obj -DTMBAD_FRAMEWORK -DTMB_EIGEN_DISABLE_WARNINGS -DTMB_SAFEBOUNDS
+PKG_CPPFLAGS = -Wa,-mbig-obj -DTMBAD_FRAMEWORK -DTMB_EIGEN_DISABLE_WARNINGS -DTMB_SAFEBOUNDS  -DCOMPILING_FROM_MSAM
 
 SAM_PATH = $(shell $(R_HOME)/bin$(R_ARCH_BIN)/Rscript -e 'cat(system.file(file.path("include","SAM"),package="stockassessment"))')
 
@@ -116,6 +116,6 @@ MSAM.h: $(MSAM_HEADER)
 
 clean:
 	rm -f $(SAM_SRC) SAM.h
-	
-	
+
+
 include $(DEPENDS)

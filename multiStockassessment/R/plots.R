@@ -741,3 +741,88 @@ dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total"
         bgtext(0.5 * (minYearsFleet[[ii]] + maxYearsFleet[[ii]]),i,txt[ii], cex = 1, bgex = 1.1)
     }
 }
+
+
+
+## plot.msamres <- function(x, type = "bubble", fleets = NULL, ask = TRUE,
+##                          hist.args = list(nclass = 35, xlab = "Residual", prob = TRUE),
+##                          qq.args = list(pch = 16, col = rgb(0,0,0,0.2)),
+##                          ...){
+##     type <- match.arg(type, c("bubble","qq","hist","acf"), TRUE)
+##     x$xgrp <- ifelse(x$fleetType < 80, x$age, x$aux_5)
+##     acf_res <- function(xx){
+##         ## Modified from https://github.com/fishfollower/compResidual/blob/master/compResidual/R/plot.R
+##         tab <- xtabs(residual ~ xgrp + year, data = xx)
+##         dim <- dim(x)
+##         tmp <- matrix(NA, nrow=dim[1], ncol=dim[2])
+        
+##             v <- cbind(x, tmp)
+##             v <- as.vector(t(v))
+##             v <- v[-((length(v)-dim[2]+1):length(v))]
+##             return(acf(v, na.action = na.pass, lag.max = (dim[1]-1), plot = FALSE))
+##         } else {
+##             if (what=="column"){
+##                 v <- rbind(x, tmp)
+##                 v <- as.vector(v)
+##                 v <- v[-((length(v)-dim[1]+1):length(v))]
+##                 return(acf(v, na.action = na.pass, lag.max = (dim[1]-1), plot = FALSE))
+##             } else {
+##                 if (what=="diagonal"){
+##                     tmp <- matrix(NA, nrow=dim[1], ncol=(dim[1]-1+dim[2]))
+##                     idx <- cbind(as.vector(row(x)), as.vector(col(x)+(dim[1]-1)-row(x)+1))
+##                     tmp[idx] <- x
+##                     v <- rbind(tmp, tmp*NA)
+##                     v <- as.vector(v)
+##                     return(acf(v, na.action = na.pass, lag.max = (dim[1]-1), plot = FALSE))
+##                 } else {
+##                     stop("The argument 'what' should be 'row', 'column', or 'diagonal'")
+##                 }
+##             }
+##         }
+##     }
+
+    
+##     doBubble <- function(xx, f){
+
+##     }
+##     doQQ <- function(xx, f){
+##         args <- qq.args
+##         args$y <- na.omit(xx$residual)
+##         if(is.null(args[["main"]]))
+##             args$main <- as.character(f)
+##         do.call(stats::qqnorm, args)
+##         qqline(na.omit(xx$residual))
+##     }
+##     doHist <- function(xx, f){
+##         args <- hist.args
+##         args$x <- na.omit(xx$residual)
+##         if(is.null(args[["main"]]))
+##             args$main <- as.character(f)
+##         vv <- seq(min(xx$residual,na.rm=TRUE), max(xx$residual,na.rm=TRUE), length.out = 200)
+##         cnt <- ifelse(!is.null(args$prob) && args$prob, 1, length(na.omit(xx)))
+##         yy <- dnorm(vv, 0, 1) * cnt
+##         do.call(graphics::hist, args)
+##         lines(vv, yy, lwd = 2, lty = 2, col = "grey")
+##     }
+##     doACF <- function(xx){
+        
+
+##     }    
+##     fleetNum <- factor(paste0(x$stock,"_",x$fleet))
+##     fleetName <- attr(x,"fleetNames")[fleetNum]
+##     if(is.null(fleets)){
+##         fleets <- attr(x,"fleetNames")
+##     }else if(is.numeric(fleets)){
+##         fleets <- attr(x,"fleetNames")[fleets]
+##     }else if(is.character(fleets)){
+##         if(any(is.na(match(fleets,attr(x,"fleetNames")))))
+##             stop("Wrong fleet names")       
+##     }else{
+##         stop("Wrong fleet names")           
+##     }
+##     xL <- 
+
+    
+## plotby(x$year, x$age, x$residual, by=attr(x,"fleetNames")[x$fleet], xlab="Year", ylab="Age", ...)
+
+## }

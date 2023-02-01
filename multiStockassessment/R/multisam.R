@@ -58,6 +58,7 @@ multisam.fit <- function(x,
                          shared_fleetParameters = c(),
                          shared_proportionalHazard = NULL,
                          shared_phmap = NULL,
+                         skip_stock_observations = FALSE,
                          genetics_data = prepareGenetics(),
                          genetics_dirichlet = FALSE,
                          genetics_spatialAge = TRUE,
@@ -145,9 +146,11 @@ multisam.fit <- function(x,
                 Xph = Xph,
                 shared_F_type = as.integer(shared_selectivity),
                 shared_Fseason_type = as.integer(shared_seasonality),
+                skip_stock_observations = as.integer(skip_stock_observations),
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
+                fake_includeOthers = 1L,
                 doResiduals = as.integer(FALSE)
                 )
     ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
@@ -196,7 +199,7 @@ multisam.fit <- function(x,
     pars$shared_lfsRho <- numeric(ifelse(shared_selectivity %in% c(1,2,4),length(dat$sam)-1,0))    
     pars$shared_logitMissingVulnerability <- numeric(sum(is.na(dat$sharedObs$keyFleetStock)))
     pars$shared_missingObs <- numeric(sum(is.na(dat$sharedObs$logobs)))
-    pars$shared_phbeta <- combineVectors(lapply(dat$Xph, function(x) numeric(ncol(x))))
+    pars$shared_phbeta <- combineVectors(lapply(dat$Xph, function(x) rnorm(ncol(x),0,0.01)))
     
     if(initN == 0){
         pars$initLogN <- combineVectors(lapply(attr(pars$logN,"rdim") * 0,numeric))
@@ -390,6 +393,24 @@ multisam.fit <- function(x,
         srvd <- attr(pars$rec_pars,"vdim")
         if(sum(srvd) > 0)
             map0$rec_pars <- factor(unlist(lapply(seq_along(srvd), function(i){ if(srvd[i]==0) return(character(0)); paste0(sr[i],"_",seq_len(srvd[i]))})))
+    }
+    if(shared_selectivity != 0){
+        lfm0 <- lapply(splitParameter(pars$logF),seq_along)
+        lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
+        map0$logF <- factor(unlist(lfm0))
+        ## trans_rho should all be the same
+        itr0 <- lapply(splitParameter(pars$itrans_rho),seq_along)
+        map0$itrans_rho <- factor(unlist(itr0))
+    }
+    if(shared_seasonality != 0){
+        lfm0 <- lapply(splitParameter(pars$logitFseason),seq_along)
+        lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
+        map0$logitFseason <- factor(unlist(lfm0))
+    }
+    if(skip_stock_observations){
+        lfm0 <- lapply(splitParameter(pars$missing),seq_along)
+        lfm0 <- lapply(lfm0,function(x) x*NA)
+        map0$missing <- factor(unlist(lfm0))
     }
 
     ## Map F if using shared_selectivity or proportional hazard
