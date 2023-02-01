@@ -59,6 +59,7 @@ multisam.fit <- function(x,
                          shared_proportionalHazard = NULL,
                          shared_phmap = NULL,
                          skip_stock_observations = FALSE,
+                         stockAreas = matrix(1,1,length(x)),
                          genetics_data = prepareGenetics(),
                          genetics_dirichlet = FALSE,
                          genetics_spatialAge = TRUE,
@@ -147,6 +148,7 @@ multisam.fit <- function(x,
                 shared_F_type = as.integer(shared_selectivity),
                 shared_Fseason_type = as.integer(shared_seasonality),
                 skip_stock_observations = as.integer(skip_stock_observations),
+                stockAreas = stockAreas,
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
@@ -258,6 +260,7 @@ multisam.fit <- function(x,
                                     pmax(0,nStockG-1)))
     
     pars$logGtrip <- matrix(0, pmax(0,nStockG-1), attr(dat$geneticsData,"nTrips"))
+    pars$logitArea <- collectPars(lapply(colSums(stockAreas), function(n) numeric(n-1)))
                                  
     ## Prepare map for TMB
     map0 <- collect_maps(x)
