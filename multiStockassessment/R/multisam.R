@@ -260,7 +260,7 @@ multisam.fit <- function(x,
                                     pmax(0,nStockG-1)))
     
     pars$logGtrip <- matrix(0, pmax(0,nStockG-1), attr(dat$geneticsData,"nTrips"))
-    pars$logitArea <- collectPars(lapply(colSums(stockAreas), function(n) numeric(n-1)))
+    pars$logitArea <- combineParameter(lapply(colSums(stockAreas), function(n) numeric(n-1)))
                                  
     ## Prepare map for TMB
     map0 <- collect_maps(x)
