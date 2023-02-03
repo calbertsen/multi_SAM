@@ -2,7 +2,8 @@
 ##' @importFrom stockassessment runwithout reduce saveConf loadConf defpar sam.fit
 ##' @method runwithout msam
 ##' @export
-runwithout.msam <- function(fit, year = NULL, fleet = NULL, ...){
+runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRUE, initializeRandomEffects = FALSE, silent = FALSE, ...){
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
     fake_runwithout_sam <- function (fit, year = NULL, fleet = NULL, map = fit$obj$env$map, 
                                      ...) {
         data <- stockassessment::reduce(fit$data, year = year, fleet = fleet, conf = fit$conf)
@@ -13,11 +14,10 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, ...){
         sink()
         conf <- stockassessment::loadConf(data, fakefile, patch = TRUE)
         close(fakefile)
-        par <- stockassessment::defpar(data, conf)
-        par[!names(par) %in% c("logN", "logF")] <- fit$pl[!names(fit$pl) %in% 
-                                                          c("missing", "logN", "logF")]
+        par <- stockassessment::defpar(data, conf)        
+        par[!names(par) %in% ran] <- fit$pl[!names(fit$pl) %in% ran]
         ret <- stockassessment::sam.fit(data, conf, par, rm.unidentified = FALSE, map = map, 
-                       lower = fit$low, upper = fit$hig, run = FALSE, ...)
+                                        lower = fit$low, upper = fit$hig, run = FALSE, ...)
         class(ret) <- "sam"
         return(ret)
     }
@@ -46,9 +46,26 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, ...){
     ##     args$upper <- attr(fit,"upper")
     ## if(!is.null(attr(fit,"dotargs")))
     ##     args <- c(args, attr(fit,"dotargs"))
-    args$rm.unidentified <- TRUE
-    args$parlist <- attr(fit,"m_pl")
-    try({do.call(multisam.fit, args)})
+    ## args$rm.unidentified <- FALSE
+    oldDat <- attr(fit,"m_data")
+    oldPars <- attr(fit,"m_pl")
+    ##
+    defPars <- multiStockassessment:::collect_pars(fitRed)
+    if(initializePars){
+        nn <- setdiff(intersect(names(defPars),names(oldPars)),ran)
+        defPars[nn] <- oldPars[nn]
+    }
+    if(initializeRandomEffects){
+        vv <- multiStockassessment:::splitParameter(oldPars$logF)
+        defPars$logF <- multiStockassessment:::combineParameter(lapply(seq_along(vv), function(i) vv[[i]][,!(oldDat$sam[[i]]$years %in% year),drop=FALSE]))
+        vv <- multiStockassessment:::splitParameter(oldPars$logN)
+        defPars$logN <- multiStockassessment:::combineParameter(lapply(seq_along(vv), function(i) vv[[i]][,!(oldDat$sam[[i]]$years %in% year),drop=FALSE]))
+    }
+    ##
+    args$parlist <- defPars
+    args$silent <- silent
+
+    try({do.call(multisam.fit, args, envir = attr(fit,"m_envir"))})
 }
 
 
@@ -56,7 +73,7 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, ...){
 ##' @importFrom stockassessment runwithout reduce retro
 ##' @importFrom parallel detectCores makeCluster stopCluster clusterExport clusterEvalQ
 ##' @export
-retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, ...){   
+retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, initializePars = TRUE, initializeRandomEffects = FALSE, ...){   
     dd <- attr(fit,"m_data")
 
     if(length(year) != 1 || any(year > length(dd$minYearAll:dd$maxYearAll)))
@@ -65,7 +82,7 @@ retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, ...){
     
     yy <- lapply(tail(dd$minYearAll:dd$maxYearAll,year), function(y) seq(y, dd$maxYearAll, 1)) 
     doRun <- function(years){
-        runwithout(fit, year = years)
+        runwithout(fit, year = years, initializePars=initializePars, initializeRandomEffects=initializeRandomEffects)
     }
     if(ncores>1){
         if(!requireNamespace("parallel"))
@@ -74,7 +91,8 @@ retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, ...){
     on.exit(parallel::stopCluster(cl)) #shut it down
     lib.ver1 <- dirname(path.package("stockassessment"))
     lib.ver2 <- dirname(path.package("multiStockassessment"))
-    parallel::clusterExport(cl, varlist=c("fit","doRun","lib.ver1","lib.ver2"), envir=environment())
+        parallel::clusterExport(cl, varlist=c("fit","doRun","lib.ver1","lib.ver2"), envir=environment())
+               parallel::clusterExport(cl, varlist=ls(attr(fit,"m_envir")), envir=attr(fit,"m_envir"))
     parallel::clusterEvalQ(cl, {library(stockassessment, lib.loc=lib.ver1)})
     parallel::clusterEvalQ(cl, {library(multiStockassessment, lib.loc=lib.ver2)})
     runs <- parallel::parLapply(cl, yy, function(y)doRun(y))
@@ -167,6 +185,7 @@ holdout <- function(fit, nYears, ...){
 ##' @method holdout msam
 ##' @export
 holdout.msam <- function(fit, nYears, forecastYears = 1, ncores = 1, ...){
+    stop("This function needs to be updated!")
     dd <- attr(fit,"m_data")
     if(forecastYears > nYears)
         stop("forecastYears must be less than or equal to nYears.")
@@ -256,4 +275,55 @@ holdout.msam <- function(fit, nYears, forecastYears = 1, ncores = 1, ...){
     class(runs) <- c("msam_holdout")
     
     runs
+}
+
+
+as_samset <- function(x){
+    x <- x[]
+    class(x) <- "samset"
+    x
+}
+
+##' Jitter runs 
+##' @param fit a fitted model object as returned from sam.fit
+##' @param nojit a list of vectors. Each element in the list specifies a run where the fleets mentioned are omitted
+##' @param par initial values to jitter around. The defaule ones are returned from the defpar function
+##' @param sd the standard deviation used to jitter the initial values (most parameters are on a log scale, so similar to cv) 
+##' @param ncores the number of cores to attemp to use
+##' @return A "samset" object, which is basically a list of sam fits
+##' @details ...
+##' @importFrom parallel detectCores makeCluster clusterEvalQ parLapply stopCluster
+##' @importFrom stats rnorm
+##' @importFrom stockassessment jit
+##' @export
+jit.msam <- function(fit, nojit=10, par=NULL, sd=.25, ncores=parallel::detectCores()-1, silent = TRUE){
+    if(is.null(par))
+        par <- multiStockassessment:::collect_pars(as_samset(fit))
+    pars <- lapply(1:nojit, function(i){
+        lapply(par, function(xx) xx + rnorm(length(xx),sd=sd))
+    })
+    ##relist(parv+rnorm(length(parv),sd=sd), par))
+    doRun <- function(p){
+        args <- as.list(attr(fit,"m_call"))[-1]
+        args$parlist <- p
+        args$silent <- silent
+        try({do.call(multisam.fit, args, envir = attr(fit,"m_envir"))})
+    }
+    if(ncores>1){
+        cl <- parallel::makeCluster(ncores) #set up nodes
+        on.exit(parallel::stopCluster(cl)) #shut it down
+        lib.ver1 <- dirname(path.package("stockassessment"))
+        lib.ver2 <- dirname(path.package("multiStockassessment"))
+        parallel::clusterExport(cl, varlist=c("fit","doRun","lib.ver1","lib.ver2"), envir=environment())
+        parallel::clusterExport(cl, varlist=ls(attr(fit,"m_envir")), envir=attr(fit,"m_envir"))
+        parallel::clusterEvalQ(cl, {library(stockassessment, lib.loc=lib.ver1)})
+        parallel::clusterEvalQ(cl, {library(multiStockassessment, lib.loc=lib.ver2)})
+        fits <- parallel::parLapply(cl, pars, doRun) 
+    } else {
+        fits <- lapply(pars, doRun)
+    }
+    attr(fits,"fit") <- fit
+    attr(fits,"jitflag") <- 1
+    class(fits) <- c("samset")
+    fits
 }

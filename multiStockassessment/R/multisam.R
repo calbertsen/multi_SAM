@@ -73,6 +73,7 @@ multisam.fit <- function(x,
                          mohn = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
+    envir <- parent.frame(1L)
     ## Check input
     requireNamespace("TMB")
     if(!methods::is(x,"samset"))
@@ -572,6 +573,7 @@ multisam.fit <- function(x,
     attr(res,"nlminb.control") <- nlminb.control
     attr(res,"dotargs") <- list(...)
     attr(res,"m_call") <- mc
+    attr(res,"m_envir") <- envir
     corpars <- ssdrep[rownames(ssdrep)=="RE",]
     if(!is.null(obj$env$map$RE)){
         corpars <- corpars[obj$env$map$RE,]
