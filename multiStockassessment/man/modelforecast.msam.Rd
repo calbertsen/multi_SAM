@@ -6,6 +6,7 @@
 \usage{
 \method{modelforecast}{msam}(
   fit,
+  constraints = NULL,
   fscale = NULL,
   catchval = NULL,
   fval = NULL,
@@ -13,9 +14,9 @@
   landval = NULL,
   findMSY = NULL,
   hcr = NULL,
-  nosim = NULL,
+  nosim = 0,
   year.base = sapply(fit, function(x) max(x$data$years)),
-  ave.years = lapply(fit, function(x) max(x$data$years) + (-4:0)),
+  ave.years = lapply(fit, function(x) numeric(0)),
   rec.years = lapply(fit, function(x) numeric(0)),
   label = NULL,
   overwriteSelYears = NULL,
@@ -32,6 +33,12 @@
   nCatchAverageYears = rep(1, length(fit)),
   returnObj = FALSE,
   hcrConf = lapply(fit, function(x) numeric(0)),
+  hcrCurrentSSB = 0,
+  progress = TRUE,
+  estimate = median,
+  silent = TRUE,
+  newton_config = NULL,
+  useNonLinearityCorrection = FALSE,
   ...
 )
 }

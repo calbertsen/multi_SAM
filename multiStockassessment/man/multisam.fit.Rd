@@ -7,7 +7,7 @@
 multisam.fit(
   x,
   formula = ~-1,
-  corStructure = suggestCorStructure(x, nAgeClose = Inf, noCorInArea = FALSE),
+  corStructure = suggestCorStructure(x, nAgeClose = 0),
   usePartialCors = TRUE,
   newtonsteps = 0,
   rm.unidentified = FALSE,
@@ -19,12 +19,16 @@ multisam.fit(
   community_type = 1,
   shared_data = NULL,
   shared_keys = character(0),
-  shared_selectivity = FALSE,
+  shared_selectivity = 0,
+  shared_seasonality = 0,
   shared_stockrecruitment = FALSE,
-  shared_oneFScaleSd = FALSE,
+  shared_oneFScalePars = FALSE,
   shared_initN = FALSE,
   shared_fleetParameters = c(),
   shared_proportionalHazard = NULL,
+  shared_phmap = NULL,
+  skip_stock_observations = FALSE,
+  stockAreas = matrix(1, 1, length(x)),
   genetics_data = prepareGenetics(),
   genetics_dirichlet = FALSE,
   genetics_spatialAge = TRUE,
@@ -34,6 +38,8 @@ multisam.fit(
   parlist = NULL,
   run = TRUE,
   symbolicAnalysis = FALSE,
+  fullDerived = FALSE,
+  mohn = FALSE,
   ...
 )
 }

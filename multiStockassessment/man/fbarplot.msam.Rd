@@ -10,6 +10,7 @@
   drop = 0,
   page = NULL,
   plot = TRUE,
+  effectiveF = TRUE,
   add = FALSE,
   ex = numeric(0),
   ...

@@ -18,4 +18,4 @@ LazyData: TRUE
 Encoding: UTF-8
 BugReports: https://github.com/calbertsen/multi_SAM/issues
 Remotes: github::fishfollower/SAM/stockassessment@refpoint
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.3

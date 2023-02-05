@@ -10,8 +10,8 @@
   catchType = "landing",
   nYears = 300,
   Fsequence = seq(0, 2, len = 50),
-  aveYears = max(fit$data$years) + (-9:0),
-  selYears = max(fit$data$years),
+  aveYears = lapply(fit, function(x) max(x$data$years) + (-9:0)),
+  selYears = lapply(fit, function(x) max(x$data$years)),
   biasCorrect = FALSE,
   newton.control = list(),
   ...
@@ -37,9 +37,6 @@
 \item{newton.control}{}
 
 \item{...}{}
-}
-\value{
-
 }
 \description{
 Deterministic reference points
