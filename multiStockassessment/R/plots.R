@@ -743,6 +743,37 @@ dataperiodplot.msam <- function(fit, fn, showTotal = TRUE, totalLegend = "Total"
 }
 
 
+#' @export 
+plot.msamres <- function(x, ...){
+    add_legend <- function(x, ...) {
+        opar <- par(fig=c(0, 1, 0, 1), oma=c(0, 0, 0, 0), 
+                    mar=c(0, 0, 0, 0), new=TRUE)
+        on.exit(par(opar))
+        plot(0, 0, type='n', bty='n', xaxt='n', yaxt='n')
+        zscale <- pretty(x$residual,min.n=4)
+        uu<-par("usr")
+        yy<-rep(uu[3]+.03*(uu[4]-uu[3]), length(zscale))
+        xx<-seq(uu[1]+.10*(uu[2]-uu[1]),uu[1]+.4*(uu[2]-uu[1]), length=length(zscale))
+        text(xx,yy,labels=zscale)
+        colb <- ifelse(zscale<0, rgb(1, 0, 0, alpha=.5), rgb(0, 0, 1, alpha=.5))
+        bs<-1
+        if("bubblescale"%in%names(list(...))) bs <- list(...)$bubblescale
+        points(xx,yy,cex=sqrt(abs(zscale))/max(sqrt(abs(zscale)), na.rm=TRUE)*5*bs, pch=19, col=colb)
+    }
+    if(is.null(x[["aux_5"]])){
+        xgrp <- x$age
+    }else{
+        xgrp <- ifelse(x$fleetType >= 80, x$aux_5,x$age)
+    }
+    neg.age <- (xgrp < -1.0e-6)
+    xgrp[neg.age] <- mean(xgrp[!neg.age],na.rm=TRUE)
+    flt <- factor(sprintf("%05d_%05d",x$stock,x$fleet))
+    kpFlt <- which(!sapply(split(x$residual,flt),function(r)all(is.na(r))))
+    kpI <- which(flt %in% levels(flt)[kpFlt])
+    plotby(x$year[kpI], xgrp[kpI], x$residual[kpI], by=attr(x,"fleetNames")[flt[kpI]], xlab="Year", ylab="Age", ...)
+    add_legend(x, ...)
+
+}
 
 ## plot.msamres <- function(x, type = "bubble", fleets = NULL, ask = TRUE,
 ##                          hist.args = list(nclass = 35, xlab = "Residual", prob = TRUE),

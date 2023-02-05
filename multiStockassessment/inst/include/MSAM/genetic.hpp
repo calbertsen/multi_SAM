@@ -205,6 +205,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		 //array<Type> alleleFreq, // (nAllele-1) x nLoci x nStockGenetic
 		 array<Type>& logGst, // nSpace x nTime x nAges x (nStock-1) (??order)
 		 matrix<Type>& logGtrip, // (nStock-1) x nTrips
+		 matrix<int>& stockAreas,
 		 matrix<Type>& Parea,
 		 int maxAgeAll,
 		 int minAgeAll
@@ -298,6 +299,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 							 weekContrib,
 							 mortalities,
 							 auxData,
+							 stockAreas,
 							 Parea,
 							 (vector<Type>)obs.keyFleetStock.row(gs.fleet-1));
 			   }
@@ -350,6 +352,6 @@ Type nllGenetics(shared_obs<Type>& obs,
 		   )
 
 
-MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<double>&, int, int));
-MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, int, int));
+MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<int>&, matrix<double>&, int, int));
+MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, int, int));
 

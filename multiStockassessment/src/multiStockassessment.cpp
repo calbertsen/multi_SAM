@@ -367,7 +367,7 @@ Type objective_function<Type>::operator() ()
     vector<Type> pparsIn = logitArea.col(s);
     vector<Type> pparsOut(Parea.rows());
     pparsOut.setZero();
-    for(int a = 0; a < Parea.rows(); ++s){
+    for(int a = 0; a < Parea.rows(); ++a){
       if(stockAreas(a,s) == 1){
 	if(indx == pparsIn.size()){
 	  pparsOut(a) = 1.0;
@@ -382,7 +382,7 @@ Type objective_function<Type>::operator() ()
     pparsOut /= ps;
     Parea.col(s) = pparsOut;
   }
-
+  REPORT(Parea);
   
 
   // for(int s = 0; s < logF.cols(); ++s){  
@@ -1127,6 +1127,7 @@ Type objective_function<Type>::operator() ()
 			   logitFseason,
   			   mortalities,
   			   // shared_logSdObs,
+			   stockAreas,
 			   Parea,
   			   minYearAll,
   			   minAgeAll,
@@ -1153,6 +1154,7 @@ Type objective_function<Type>::operator() ()
   		     geneticsData,
   		     logGst,
   		     logGtrip,
+		     stockAreas,
 		     Parea,
   		     maxAgeAll,
   		     minAgeAll);
