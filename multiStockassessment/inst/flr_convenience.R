@@ -1,11 +1,11 @@
 
-as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted = FALSE){
+as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted = FALSE, biopar = TRUE){
     source(system.file("flr_convenience.R",package = "stockassessment"))
     toFLQ <- .SAM_FLR_HELP_toFLQ
     resize <- .SAM_FLR_HELP_resize
     na2zero <- .SAM_FLR_HELP_na2zero
 
-    fls <- lapply(seq_along(mfit), function(i) as.FLStock.sam(mfit[[i]], name = names(mfit)[i]))
+    fls <- lapply(seq_along(mfit), function(i) as.FLStock.sam(mfit[[i]], name = names(mfit)[i], biopar = FALSE))
     ## Update estimated things
     for(i in seq_along(fls)){
         fit <- mfit[[i]]
@@ -47,7 +47,26 @@ as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted
         harvest(fls[[i]]) <- toFLQ(resize(fixColnames(faytable(mfit,returnList=TRUE)[[i]]),ages,years,FALSE), "f")
         ## Need to update SN
         stock.n(fls[[i]]) <- toFLQ(resize(fixColnames(ntable(mfit,returnList=TRUE)[[i]]),ages,years))
-
+        if(biopar && mfit[[i]]$conf$matureModel > 0){
+            xx <- attr(mfit,"m_rep")$propMat[[i]]
+            dimnames(xx) <- dimnames(mfit[[i]]$data$propMat)
+            mat(fls[[i]]) <- toFLQ(resize(xx,ages,years,TRUE))
+        }
+        if(biopar && mfit[[i]]$conf$stockWeightModel > 0){
+            xx <- attr(mfit,"m_rep")$stockMeanWeight[[i]]
+            dimnames(xx) <- dimnames(mfit[[i]]$data$stockMeanWeight)
+            stock.wt(fls[[i]]) <- toFLQ(resize(xx,ages,years,TRUE))
+        }
+        if(biopar && mfit[[i]]$conf$catchWeightModel > 0){
+            xx <- attr(mfit,"m_rep")$catchMeanWeight[[i]]
+            dimnames(xx) <- dimnames(mfit[[i]]$data$catchMeanWeight)
+            catch.wt(fls[[i]]) <- toFLQ(resize(xx,ages,years,TRUE))
+        }
+        if(biopar && mfit[[i]]$conf$mortalityModel > 0){
+            xx <- attr(mfit,"m_rep")$natMor[[i]]
+            dimnames(xx) <- dimnames(mfit[[i]]$data$natMor)
+            m(fls[[i]]) <- toFLQ(resize(xx,ages,years,TRUE))
+        }
     }
   fls
 }
