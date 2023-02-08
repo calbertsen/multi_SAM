@@ -4,7 +4,7 @@
 \alias{jit.msam}
 \title{Jitter runs}
 \usage{
-jit.msam(
+\method{jit}{msam}(
   fit,
   nojit = 10,
   par = NULL,

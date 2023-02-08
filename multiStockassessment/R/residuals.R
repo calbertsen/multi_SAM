@@ -1,6 +1,6 @@
 
 ##' @export
-residuals.msam <- function(object, discrete = FALSE, trace = TRUE, ...) {
+residuals.msam <- function(object, discrete = FALSE, trace = TRUE, method = "oneStepGaussianOffMode", separateProportions = TRUE, ...) {
     oldObj <- attr(object,"m_obj")
     dat <- oldObj$env$data
     logobsList <- lapply(dat$sam,function(x)x$logobs)
@@ -34,7 +34,7 @@ residuals.msam <- function(object, discrete = FALSE, trace = TRUE, ...) {
                                 }))
     age <- do.call("c",lapply(auxList,function(x)x[,"age"]))
     xtr <- ifelse(fleetType >= 80, dpart,0)
-    kp <- which(!is.na(logobs) & fleetType < 80)
+    kp <- which(!is.na(logobs) & (fleetType < 80 | !separateProportions))
     sortVals <- order(year[kp],stock[kp],fleet[kp],age[kp], xtr[kp])
     dat$fake_obs <- logobs[kp][sortVals]
     dat$fake_stock <- stock[kp][sortVals]
@@ -53,29 +53,32 @@ residuals.msam <- function(object, discrete = FALSE, trace = TRUE, ...) {
                                  discrete = discrete,
                                  trace = trace,
                                  reverse = TRUE,
-                                 method = "oneStepGaussianOffMode")## ,
+                                 method = method)## ,
                                  ## ...)
 
-    ## Part 2
-    kp2 <- which(!is.na(logobs) & fleetType >= 80)
-    if(length(kp2) > 0){
-        sortVals2 <- order(year[kp2],stock[kp2],fleet[kp2],age[kp2], xtr[kp2])
-        dat$fake_obs <- logobs[kp2][sortVals2]
-        dat$fake_stock <- stock[kp2][sortVals2]
-        dat$fake_indx <- indx[kp2][sortVals2]
-        dat$fake_includeOthers <- 1
-        dat$doResiduals <- 1
-        ##rSubset <- which(!is.na(dat$fake_obs))
+    if(separateProportions){
+        ## Part 2
+        kp2 <- which(!is.na(logobs) & fleetType >= 80)
+        if(length(kp2) > 0){
+            sortVals2 <- order(year[kp2],stock[kp2],fleet[kp2],age[kp2], xtr[kp2])
+            dat$fake_obs <- logobs[kp2][sortVals2]
+            dat$fake_stock <- stock[kp2][sortVals2]
+            dat$fake_indx <- indx[kp2][sortVals2]
+            dat$fake_includeOthers <- 1
+            dat$doResiduals <- 1
+            ##rSubset <- which(!is.na(dat$fake_obs))
 
-        residObj2 <- TMB::MakeADFun(dat,attr(object,"m_pl"),oldObj$env$map, random=ran, DLL="multiStockassessment")
-        residObj2$fn()
-        resid2 <- TMB::oneStepPredict(residObj2,"fake_obs","fake_keep",
-                                      discrete = FALSE,
-                                      trace = trace,
-                                      reverse = FALSE,
-                                      method = "oneStepGaussianOffMode")
+            residObj2 <- TMB::MakeADFun(dat,attr(object,"m_pl"),oldObj$env$map, random=ran, DLL="multiStockassessment")
+            residObj2$fn()
+            resid2 <- TMB::oneStepPredict(residObj2,"fake_obs","fake_keep",
+                                          discrete = FALSE,
+                                          trace = trace,
+                                          reverse = FALSE,
+                                          method = method)
+        }
+    }else{
+        kp2 <- integer(0)
     }
-
 
     ## Should check for subset!.
     residCollect <- as.data.frame(lapply(colnames(resid1), function(nm){
