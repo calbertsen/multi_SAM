@@ -495,8 +495,9 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Transform log_X to log proportions
 	    for(int i = 0; i < log_X.size(); ++i)
 	      log_X(i) -= log(xs);
-	    Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
-	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));
+	    // Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
+	    // nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));
+	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);
 	  }else{
 	    Rf_error("Fleet type 80 must use obsLikelihoodFlag ALN or Dirichlet");
 	  }
@@ -553,8 +554,9 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Transform log_X to log proportions
 	    for(int i = 0; i < log_X.size(); ++i)
 	      log_X(i) -= log(xs);
-	    Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
-	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));     
+	    // Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
+	    // nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));     
+	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);
 	  }else{
 	    Rf_error("Fleet type 90 must use obsLikelihoodFlag ALN or Dirichlet");
 	  }
@@ -613,10 +615,11 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Transform log_X to log proportions
 	    for(int i = 0; i < log_X.size(); ++i)
 	      log_X(i) -= log(xs);
-	    Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
-	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));	      
+	    // Type d = obs_fun::jacobianDetProportions((vector<Type>)log_X.exp());
+	    // nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true) + log(fabs(d));
+	    nll -= ddirichlet(log_X,log_P,-log_alpha,K2,true);
 	  }else{
-	    Rf_error("Fleet type 90 must use obsLikelihoodFlag ALN or Dirichlet");
+	    Rf_error("Fleet type 92 must use obsLikelihoodFlag ALN or Dirichlet");
 	  }
 	  
 	  // log_X(nAreas-1) = 0.0;
