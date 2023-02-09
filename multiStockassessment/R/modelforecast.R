@@ -75,7 +75,7 @@ modelforecast.msam <- function(fit,
                           silent = TRUE,
                           newton_config = NULL,
                           custom_pl = NULL,
-                          useNonLinearityCorrection = FALSE,
+                          useNonLinearityCorrection = (nosim > 0 && !deterministicF),
                           ...){
 
     dots <- list(...)
