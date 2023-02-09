@@ -367,6 +367,7 @@ multisam.fit <- function(x,
                  "keyMatureMean","sdMO","phiMO","procSdMO",
                  "keyMortalityMean","keyMortalityObsVar","phiNM","procSdNM",
                  "keyLogFmu","keyLogFrho","seasonMu","seasonRho","seasonSd",
+                 "sigmaObsParUS",
                  "rec_transphi")
     parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist",
                  "meanLogSW","logSdLogSW","logPhiSW","logSdProcLogSW",
@@ -374,6 +375,7 @@ multisam.fit <- function(x,
                  "meanLogitMO","logSdMO","logPhiMO","logSdProcLogitMO",
                  "meanLogNM","logSdLogNM","logPhiNM","logSdProcLogNM",
                  "muF","trans_rho_F","seasonMu","seasonLogitRho","seasonLogSd",
+                 "sigmaObsParUS",
                  "rec_transphi")
     if(any(!(shared_keys %in% keyName)))
         stop(sprintf("shared keys not valid: %s",paste(shared_keys[!(shared_keys %in% keyName)],collapse=", ")))

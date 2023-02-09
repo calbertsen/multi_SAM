@@ -17,7 +17,7 @@ as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted
             grabFleet <- function(fit, fleet){
                 fidx <- fit$data$aux[, "fleet"] == fleet
                 aux <- fit$data$aux[fidx, ]
-                logout <- attr(mfit,"m_rep")$predObs[[i]]
+                logout <- attr(mfit,"m_rep")$predObs[[i]][fidx]
                 .goget <- function(y, a) {
                     ret <- exp(logout[aux[, "year"] == y & aux[, "age"] == a])
                     ifelse(length(ret) == 0, 0, ret)
@@ -32,12 +32,14 @@ as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted
                 return(tmp)
             }
             CN_all <- simplify2array(lapply(which(fit$data$fleetTypes %in% c(0,1,7)),function(i)grabFleet(fit,i)))
+            LN_all <- CN_all *  fit$data$landFrac
+            DN_all <- CN_all *  (1 - fit$data$landFrac)
             CN <- toFLQ(resize(na2zero(CN_all),ages,years))
-            DN <- CN * (1 - LF)
-            LN <- CN * LF
+            LN <- toFLQ(resize(na2zero(LN_all),ages,years))
+            DN <- toFLQ(resize(na2zero(DN_all),ages,years))
             catch.n(fls[[i]]) <- CN
-            discard.n(fls[[i]]) <- DN
-            landing.n(fls[[i]]) <- LN
+            discards.n(fls[[i]]) <- DN
+            landings.n(fls[[i]]) <- LN
         }
         ## Need to update F
         fixColnames <- function(x){

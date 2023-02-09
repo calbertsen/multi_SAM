@@ -51,8 +51,8 @@ modelforecast.msam <- function(fit,
                           fval = NULL,
                           nextssb = NULL,
                           landval = NULL,
-                          findMSY = NULL,
-                          hcr = NULL,
+                          ## findMSY = NULL,
+                          ## hcr = NULL,
                           nosim = 0,
                           year.base = sapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)numeric(0)),
@@ -68,17 +68,47 @@ modelforecast.msam <- function(fit,
                           addTSB = FALSE,
                           biasCorrect = FALSE,
                           returnAllYears = FALSE,
-                          useUniroot = FALSE,
-                          nCatchAverageYears = rep(1,length(fit)),
+                          ## useUniroot = FALSE,
                           returnObj = FALSE,
-                          hcrConf = lapply(fit, function(x)numeric(0)),
-                          hcrCurrentSSB = 0,
                           progress = TRUE,
                           estimate = median,
                           silent = TRUE,
                           newton_config = NULL,
+                          custom_pl = NULL,
                           useNonLinearityCorrection = FALSE,
                           ...){
+
+    dots <- list(...)
+    findMSY  <-  NULL
+    if(!is.na(match("findMSY",names(dots))))
+        findMSY <- dots[[match("findMSY",names(dots))]]
+    hcr  <-  NULL
+    if(!is.na(match("hcr",names(dots))))
+        hcr <- dots[[match("hcr",names(dots))]]
+    hcrConf = lapply(fit, function(x) numeric(0))
+    if(!is.na(match("hcrConf",names(dots))))
+        hcrConf <- dots[[match("hcrConf",names(dots))]]
+    hcrCurrentSSB = 0
+    if(!is.na(match("hcrCurrentSSB",names(dots))))
+        hcrCurrentSSB <- dots[[match("hcrCurrentSSB",names(dots))]]
+    nCatchAverageYears  <-  rep(1, length(fit))
+    if(!is.na(match("nCatchAverageYears",names(dots))))
+        nCatchAverageYears <- dots[[match("nCatchAverageYears",names(dots))]]
+    
+   if(!is.null(nosim) && nosim > 0){ 
+        estimateLabel <- paste(deparse(substitute(estimate), 500L), collapse = " ")
+    }else{
+        estimateLabel <- "mostLikelyTrajectory"
+    }
+ 
+    
+    if(progress && !returnObj && !is.null(nosim) && nosim > 0){
+        pb <- utils::txtProgressBar(min = 0, max = nosim+3, style = 3)
+        incpb <- function() utils::setTxtProgressBar(pb, pb$getVal()+1)
+    }else{
+        incpb <- function(){ return(invisible(NULL)) }
+    }
+
     
     ## Handle year.base < max(fit$data$years)
     ## if(year.base > max(fit$data$years)){
@@ -282,7 +312,15 @@ modelforecast.msam <- function(fit,
         pl$logSW <- makeBio(pl$logSW)
         pl$logCW <- makeBio(pl$logCW, TRUE)
     }
-
+    logitFSTmp <- split3DArrays(pl$logitFseason)
+    pl$logitFseason <- combine3DArrays(lapply(as.list(1:length(logitFSTmp)),
+                                              function(i){
+                                                  d0 <- dim(logitFSTmp[[i]]) 
+                                                  lfsOld <- logitFSTmp[[i]]
+                                                  lfsNew <- array(0, c(d0[1],nYears[i]+d0[2], d0[3]))
+                                                  lfsNew[,1:d0[2],] <- lfsOld
+                                                  lfsNew
+                                                  }))
     
     args$parameters <- pl
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
@@ -318,8 +356,8 @@ modelforecast.msam <- function(fit,
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)
 
-    if(returnObj)
-        return(obj)
+    if(as.integer(returnObj)==1)
+         return(obj)
 
     if(!is.null(nosim) && nosim > 0){
         if(all(year.base==sapply(fit, function(x) max(x$data$years)))){
@@ -336,29 +374,68 @@ modelforecast.msam <- function(fit,
         nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
         i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == year.base[i]))
-        doSim <- function(){            
-            sim0 <- rmvnorm(1, mu=est, Sigma=cov * as.numeric(resampleFirst))
+        plMap <- pl
+        map <- attr(fit,"m_obj")$env$map
+        with.map <- intersect(names(plMap), names(map))
+        applyMap <- function(par.name) {
+            tapply(plMap[[par.name]], map[[par.name]], mean)
+        }
+        plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+        sniii <- 1
+        doSim <- function(re_constraint = NULL, re_pl = NULL){
+            obj2 <- obj
+            if(!is.null(re_constraint)){
+                ## Check length of constraints?
+                re_constraint <- targetToList(re_constraint, nStocks, character)
+                cstr <- lapply(seq_len(nStocks), function(s){
+                    v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
+                    v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+                })
+                
+                obj2$env$data$forecast$constraints <- cstr
+            }
+            sim0 <- est
+            if(resampleFirst)
+                sim0 <- rmvnorm(1, mu=est, Sigma=cov)
             estList0 <- split(as.vector(sim0), nfSplit)
-            p <- obj$env$last.par.best
+            if(!is.null(re_pl)){
+                plMap2 <- re_pl
+                map <- fit$obj$env$map
+                with.map <- intersect(names(plMap2), names(map))
+                applyMap <- function(par.name) {
+                    tapply(plMap2[[par.name]], map[[par.name]], mean)
+                }
+                plMap2[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+                p <- unlist(plMap2)
+                names(p) <- rep(names(plMap2), times = sapply(plMap2,length))
+            }else{
+                p <- unlist(plMap)
+                names(p) <- rep(names(plMap), times = sapply(plMap,length))
+            }            
             ## Only works when year.base is last assessment year
             indxN <- local({
                 ii <- which(names(p) %in% "logN")
                 attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
                 attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
                 indxS <- splitMatrices(ii)
-                as.vector(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
             })
             indxF <- local({
                 ii <- which(names(p) %in% "logF")
                 attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
                 attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
                 indxS <- splitMatrices(ii)
-                as.vector(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
             })
             p[indxN] <- estList0$LogN
             p[indxF] <- estList0$LogF
-            obj$simulate(par = p)
-        }                
+            v <- obj2$simulate(par = p)
+            sniii <<- sniii+1
+            incpb()
+            return(v)
+        }
+        if(as.integer(returnObj)==2)
+            return(doSim)
         simvals <- replicate(nosim, doSim(), simplify = FALSE)
         stocksimlist <- vector("list",nStocks)
         for(ss in 1:nStocks){

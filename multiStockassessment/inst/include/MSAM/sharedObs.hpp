@@ -162,15 +162,16 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 	      Cttmp *= datA(s).landFrac(y,aa, flt);
 	    }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
 	      Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
-	    }
-	    if(stockAreas(CppAD::Integer(auxData(4)),s) == 1)
+	    }	    
+	    if(stockAreas(CppAD::Integer(auxData(4)),s) == 1){
 	      Carea += Parea(CppAD::Integer(auxData(4)),s) * Cttmp;
+	    }
 	    Ctotal += Cttmp;
 	  }
 	}
       }
     }
-    pred(0) = log(Carea) - log(Ctotal);
+    pred(0) = log(Carea + Type(1e-8)) - log(Ctotal + Type(1e-8) * Type(stockAreas.rows()));
     
     
   }else{ // if(fleetType <= 2){
@@ -466,21 +467,22 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  if(confA(0).obsLikelihoodFlag(f) == 1){ // Additive logistic normal
 
 	    // Combine using average method
-	    MVMIX_t<Type> thisNll;
+	    // MVMIX_t<Type> thisNll;
 	    // }else if(obs.covCombine(f) == shared_obs<Type>::CC_Average){
-	    matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
-	    Type pCombine = 0;
-	    Type d = 0;
-	    for(int s = 0; s < nllVecPerStock.size(); ++s){
-	      matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
-	      SigmaCombine += tmpMat;
-	      pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
-	      d += obs.keyFleetStock(s);
-	    }
-	    SigmaCombine /= d;
-	    pCombine /= d;
-	    // 4) Create MVMIX
-	    thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
+	    // matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
+	    // Type pCombine = 0;
+	    // Type d = 0;
+	    // for(int s = 0; s < nllVecPerStock.size(); ++s){
+	    //   matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
+	    //   SigmaCombine += tmpMat;
+	    //   pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
+	    //   d += obs.keyFleetStock(s);
+	    // }
+	    // SigmaCombine /= d;
+	    // pCombine /= d;
+	    // // 4) Create MVMIX
+	    // thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
+	    MVMIX_t<Type> thisNll = nllVecPerStock(0)(f);
 	    
 	    // Keep free observations, already on correct scale
 	    vector<Type> logXuse = log_X.segment(0,nSeasons-1);
@@ -524,22 +526,23 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  if(confA(0).obsLikelihoodFlag(f) == 1){ // Additive logistic normal
 
 	       // Combine using average method
-	    MVMIX_t<Type> thisNll;
-	    // }else if(obs.covCombine(f) == shared_obs<Type>::CC_Average){
-	    matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
-	    Type pCombine = 0;
-	    Type d = 0;
-	    for(int s = 0; s < nllVecPerStock.size(); ++s){
-	      matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
-	      SigmaCombine += tmpMat;
-	      pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
-	      d += obs.keyFleetStock(s);
-	    }
-	    SigmaCombine /= d;
-	    pCombine /= d;
-	    // 4) Create MVMIX
-	    thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
-	    
+	    // MVMIX_t<Type> thisNll;
+	    // // }else if(obs.covCombine(f) == shared_obs<Type>::CC_Average){
+	    // matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
+	    // Type pCombine = 0;
+	    // Type d = 0;
+	    // for(int s = 0; s < nllVecPerStock.size(); ++s){
+	    //   matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
+	    //   SigmaCombine += tmpMat;
+	    //   pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
+	    //   d += obs.keyFleetStock(s);
+	    // }
+	    // SigmaCombine /= d;
+	    // pCombine /= d;
+	    // // 4) Create MVMIX
+	    // thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
+	    MVMIX_t<Type> thisNll = nllVecPerStock(0)(f);
+
 	    // Keep free observations, already on correct scale
 	    vector<Type> logXuse = log_X.segment(0,nStocks-1);
 	    // Additive logistic transformation of predicted proportions
@@ -586,22 +589,23 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  log_P(nAreas-1) = log(1.0 - squeeze(ps));
 	  if(confA(0).obsLikelihoodFlag(f) == 1){ // Additive logistic normal
 	    // Combine using average method
-	    MVMIX_t<Type> thisNll;
-	    // }else if(obs.covCombine(f) == shared_obs<Type>::CC_Average){
-	    matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
-	    Type pCombine = 0;
-	    Type d = 0;
-	    for(int s = 0; s < nllVecPerStock.size(); ++s){
-	      matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
-	      SigmaCombine += tmpMat;
-	      pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
-	      d += obs.keyFleetStock(s);
-	    }
-	    SigmaCombine /= d;
-	    pCombine /= d;
-	    // 4) Create MVMIX
-	    thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
-	    
+	    // MVMIX_t<Type> thisNll;
+	    // // }else if(obs.covCombine(f) == shared_obs<Type>::CC_Average){
+	    // matrix<Type> SigmaCombine = nllVecPerStock(0)(f).cov() * 0;
+	    // Type pCombine = 0;
+	    // Type d = 0;
+	    // for(int s = 0; s < nllVecPerStock.size(); ++s){
+	    //   matrix<Type> tmpMat = obs.keyFleetStock(s) * nllVecPerStock(s)(f).cov();
+	    //   SigmaCombine += tmpMat;
+	    //   pCombine += obs.keyFleetStock(s) * confA(s).fracMixObs(f);
+	    //   d += obs.keyFleetStock(s);
+	    // }
+	    // SigmaCombine /= d;
+	    // pCombine /= d;
+	    // // 4) Create MVMIX
+	    // thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
+	    MVMIX_t<Type> thisNll = nllVecPerStock(0)(f);
+	    	    
 	    // Keep free observations, already on correct scale
 	    vector<Type> logXuse = log_X.segment(0,nAreas-1);
 	    // Additive logistic transformation of predicted proportions
