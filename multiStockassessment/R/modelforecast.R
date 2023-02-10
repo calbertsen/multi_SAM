@@ -1,6 +1,7 @@
 .forecastDefault <- getFromNamespace(".forecastDefault","stockassessment")
 .parseRel <- getFromNamespace(".parseRel","stockassessment")
 .parseForecast <- getFromNamespace(".parseForecast","stockassessment")
+.SAM_replicate <- getFromNamespace(".SAM_replicate","stockassessment")
 
 
 ## Change targets to lists if specified
@@ -76,6 +77,7 @@ modelforecast.msam <- function(fit,
                           newton_config = NULL,
                           custom_pl = NULL,
                           useNonLinearityCorrection = (nosim > 0 && !deterministicF),
+                          ncores = 1,
                           ...){
 
     dots <- list(...)
@@ -435,8 +437,8 @@ modelforecast.msam <- function(fit,
             return(v)
         }
         if(as.integer(returnObj)==2)
-            return(doSim)
-        simvals <- replicate(nosim, doSim(), simplify = FALSE)
+            return(doSim)    
+        simvals <- .SAM_replicate(nosim, doSim(), simplify = FALSE, ncores = ncores, env = environment(doSim))
         stocksimlist <- vector("list",nStocks)
         for(ss in 1:nStocks){
             simlist <- vector("list",length(FModel[[ss]]) + 1)

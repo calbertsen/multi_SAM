@@ -33,6 +33,8 @@
 #include "MSAM.h"
 //"../inst/include/multiSAM.hpp"
 
+
+
 template<class Type>
 void reportMort(MortalitySet<Type> mort, objective_function<Type>* of){
   REPORT_F(mort.cumulativeHazard,of);
@@ -96,6 +98,7 @@ extern "C" {
 template<class Type>
 Type objective_function<Type>::operator() ()
 {
+  
   DATA_STRUCT(sam,sam_data);
   DATA_STRUCT(sharedObs,shared_obs);
   DATA_STRUCT(geneticsData, genetic_data);
@@ -452,6 +455,7 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////
   /////////// Recruitment ///////////
   //////////////////////////////////
+
   vector<Recruitment<Type> > recruits(nStocks);
   for(int s = 0; s < nStocks; ++s){
     recruits(s) = makeRecruitmentFunction(sam.confSets(s), paraSets(s));
@@ -460,7 +464,7 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   /////////// Prepare forecast //////////
   //////////////////////////////////////
-
+  
   for(int s = 0; s < nStocks; ++s){
     // Calculate forecast
     array<Type> logNa = getArray(logN, s);
@@ -468,7 +472,8 @@ Type objective_function<Type>::operator() ()
     // Resize arrays
     prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s));
   }
-     
+
+  
   ofall<Type> ofAll(nStocks);
 
   /////////////////////////////////////
@@ -492,6 +497,7 @@ Type objective_function<Type>::operator() ()
   ////////// Bio PROCESS //////////
   ////////////////////////////////
 
+  
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa = getArray(logN, s);
@@ -538,11 +544,44 @@ Type objective_function<Type>::operator() ()
     ans += nllP(cs, ps, logPa, keepTmp, &of);
   }
      
+ 
+  ////////////////////////////////////////
+  /////////// Mortality /////////////////
+  //////////////////////////////////////
+
+     
+  vector<MortalitySet<Type> > mortalities(nStocks);
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);     
+    array<Type> logFa = getArray(logF, s);
+    array<Type> lfs = getArray(logitFseason,s);
+    mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
+    reportMort((MortalitySet<Type>)mortalities(s),&of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+
+
+  ////////////////////////////////////////
+  /////////// Calculate forecast ////////
+  //////////////////////////////////////
+
+  
+  for(int s = 0; s < nStocks; ++s){
+    // Calculate forecast
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    array<Type> logitFSa = getArray(logitFseason, s);
+    // Resize arrays
+    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+  }
+
 
   /////////////////////////////////////////
   ////////// F PRE-CALCULATIONS //////////
   ///////////////////////////////////////
 
+  
   vector<bool> hasPH(Xph.size());
   hasPH.setConstant(false);
   vector<matrix<Type> > phPred(Xph.size());
@@ -690,10 +729,12 @@ Type objective_function<Type>::operator() ()
     }
   }
 
+  
    ////////////////////////////////
   ////////// Season /////////////
   //////////////////////////////
 
+  
    for(int s = 0; s < nStocks; ++s){
      oftmp<Type> of(this->do_simulate);
      array<Type> logitFSa = getArray(logitFseason, s);
@@ -709,36 +750,7 @@ Type objective_function<Type>::operator() ()
        logitFseason.col(s) = logitFSa;
      }
    }
-
-
-
- 
-  ////////////////////////////////////////
-  /////////// Mortality /////////////////
-  //////////////////////////////////////
-  vector<MortalitySet<Type> > mortalities(nStocks);
-  for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of(this->do_simulate);     
-    array<Type> logFa = getArray(logF, s);
-    array<Type> lfs = getArray(logitFseason,s);
-    mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-    reportMort((MortalitySet<Type>)mortalities(s),&of);
-    ofAll.addToReport(of.report,s);
-    moveADREPORT(&of,this,s);
-  }
-
-  ////////////////////////////////////////
-  /////////// Calculate forecast ////////
-  //////////////////////////////////////
-
-  for(int s = 0; s < nStocks; ++s){
-    // Calculate forecast
-    array<Type> logNa = getArray(logN, s);
-    array<Type> logFa = getArray(logF, s);
-    array<Type> logitFSa = getArray(logitFseason, s);
-    // Resize arrays
-    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
-  }
+      
 
   ////////////////////////////////
   ////////// F PROCESS //////////
@@ -763,12 +775,33 @@ Type objective_function<Type>::operator() ()
     }
    }
 
- 
+
+  ///////////////////////////////////////////////
+  /////////// Mortality update /////////////////
+  /////////////////////////////////////////////
+
+     
+   SIMULATE_F(this){
+     for(int s = 0; s < nStocks; ++s){
+       if(sam.confSets(s).simFlag(0) == 0){
+	 oftmp<Type> of(this->do_simulate);     
+	 array<Type> logFa = getArray(logF, s);
+	 array<Type> lfs = getArray(logitFseason,s);
+	 mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
+	 reportMort((MortalitySet<Type>)mortalities(s),&of);
+	 ofAll.addToReport(of.report,s);
+	 moveADREPORT(&of,this,s);
+       }
+     }
+   }
+
+   
  
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
 
+   
   // Initial parameter contribution
   for(int s = 0; s < nStocks; ++s){
     if(initLogN.col(s).size() == logN.col(s).rows()){ // Initial value per age
@@ -1091,12 +1124,12 @@ Type objective_function<Type>::operator() ()
     } // End simulate
   } // End year loop
 
-
   
   ///////////////////////////////////
   ////////// OBSERVATIONS //////////
   /////////////////////////////////
 
+  
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa = getArray(logN, s);
@@ -1113,8 +1146,6 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
-
-
   
   ans += sharedObservation(sharedObs,
   			   sam.dataSets,
@@ -1133,7 +1164,6 @@ Type objective_function<Type>::operator() ()
   			   minAgeAll,
   			   keep(keep.size()-1),
   			   this);
-
 
 
   ///////////////////////////////
@@ -1183,10 +1213,9 @@ Type objective_function<Type>::operator() ()
   ////// ADD REPORTED OBJECTS FROM stockassessment //////
   //////////////////////////////////////////////////////
 
+  
   if(isDouble<Type>::value && this->current_parallel_region<0)
     moveREPORT(this->report,ofAll.report);
-
-
 
   getTotals(sam.dataSets,
 	    sam.confSets,
@@ -1200,6 +1229,6 @@ Type objective_function<Type>::operator() ()
 	    maxAgeAll,
 	    mohn,
 	    this);
-
+  
   return ans;
 }
