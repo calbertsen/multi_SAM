@@ -35,7 +35,8 @@ addRecruitmentCurve.msam <- function(fit,
     }
 
     stockIndex <- factor(gsub("(^SAM_)([[:digit:]]+)(_.+$)","\\2",colnames(covEst),perl=TRUE))
-    rpList <- splitParameter(attr(fit,"m_pl")$rec_pars)
+    pl <- attr(fit,"m_pl")
+    rpList <- splitParameter(pl$rec_pars)
     covList <- lapply(levels(stockIndex), function(ii){
         indx <- which(stockIndex == ii)
         covar[indx,indx]
@@ -47,82 +48,28 @@ addRecruitmentCurve.msam <- function(fit,
     
     doOne <- function(sii){
         srmc <- fit[[sii]]$conf$stockRecruitmentModelCode
-        if(srmc[sii] %in% c(0, 3)){
-            warning("addRecruitmentCurve is not implemented for this recruitment type.")
-            return(function(ssb){ NA*ssb})
+        if(srmc[sii] %in% c(-2,-1,0, 3,62)){
+            warning("addRecruitmentCurve is not implemented for time series models.")
         }
         rec_pars <- rpList[[sii]]
         covar <- covList[[sii]]
-        recPredSd <- recPredSdList[[sii]]
-        
-        srfit <- function(ssb, year = NA){
-            if(srmc %in% c(0)){
-                val <- NA
-                valsd <- NA
-                pisig <- NA
-            }else if(srmc %in% c(3)){
-                if(is.na(year) && length(year) == 1)
-                    stop("A single year must be given")
-                indx <- cut(year,c(-Inf,fit[[sii]]$conf$constRecBreaks,Inf))
-                val <- rec_pars[indx]
-                g <- matrix(0,1,nlevels(indx))
-                g[1,indx] <- 1
-                valsd <- as.vector(sqrt(g %*% covar %*% t(g)))
-                pisig <- recPredSd
-            }else if(srmc %in% c(62)){
-                val <- (rec_pars[1])
-                g <- matrix(c(1, 0),1)
-                valsd <- as.vector(sqrt(g %*% covar %*% t(g)))
-                rho <- 2 / ( 1 + exp( -rec_pars[2] ) ) - 1
-                pisig <- recPredSd / sqrt(1 - rho)
-            }else if(srmc %in% c(90,91,92)){
-                if(srmc == 90){
-                    srfun <- function(par){
-                        v <- log(ssb) + .Call("ibcdsplineR",
-                                              log(ssb),
-                                              fit[[sii]]$conf$constRecBreaks,
-                                              par)
-                        v
-                    }
-                }else if(srmc == 91){
-                    srfun <- function(par){
-                        v <- log(ssb) + .Call("ibcsplineR",
-                                              log(ssb),
-                                              fit[[sii]]$conf$constRecBreaks,
-                                              par)
-                        v
-                    }
-                }else{
-                    srfun <- function(par){
-                        v <- log(ssb) + .Call("bcsplineR",
-                                              log(ssb),
-                                              fit[[sii]]$conf$constRecBreaks,
-                                              par)
-                        v
-                    }
-                }
-                val <- srfun(rec_pars)
-                g <- matrix(grad(srfun, rec_pars),1)
-                valsd <- as.vector(sqrt(g %*% covar %*% t(g)))
-                pisig <- recPredSd
-            }else{
-                v <- .Call("stockRecruitmentModelR",
-                           ssb,
-                           rec_pars,
-                           srmc)
-                val <- log(v$Recruits)
-                g <- matrix(utils::head((1/v$Recruits) * v$Gradient,-1), 1)
-                valsd <- as.vector(sqrt(g %*% covar %*% t(g)))
-                pisig <- recPredSd
-            }
+        recPredSd <- recPredSdList[[sii]]        
+        srfit <- function(logssb, year = NA_real_, lastR = NA_real_) {
+            v <- stockassessment:::stockRecruitmentModelR(logssb, rec_pars, 
+                                                          srmc, fit[[sii]]$conf$constRecBreaks, 
+                                                          year, lastR)
+            val <- v$logRecruits
+            g <- matrix(v$Gradient_recpars, ncol = 1)
+            valsd <- as.vector(sqrt(t(g) %*% covar %*% g))
+            pisig <- exp(splitParameter(pl$logSdLogN)[[sii]][fit[[sii]]$conf$keyVarLogN[1] + 
+                                                             1])
             res <- exp(val)
-            attr(res,"ci_low") <- exp(val - 2 * valsd)
-            attr(res,"ci_high") <- exp(val + 2 * valsd)
-            attr(res,"pi_low") <- exp(val - 2 * pisig)
-            attr(res,"pi_high") <- exp(val + 2 * pisig)
+            attr(res, "ci_low") <- exp(val - 2 * valsd)
+            attr(res, "ci_high") <- exp(val + 2 * valsd)
+            attr(res, "pi_low") <- exp(val - 2 * pisig)
+            attr(res, "pi_high") <- exp(val + 2 * pisig)
             return(res)
         }
-
         getSSBtab <- function(x, year = NA) {
             tmp <- srfit(x, year)
             c(Estimate = as.vector(tmp),
@@ -132,8 +79,6 @@ addRecruitmentCurve.msam <- function(fit,
               PIhigh = as.vector(attr(tmp,"pi_high"))
               )
         }
-
-
         if(plot){
             ssbMax <- max(c(max(S), par("usr")[2]))
         }else{
@@ -146,19 +91,17 @@ addRecruitmentCurve.msam <- function(fit,
             brks <- c(min(fit[[sii]]$data$years),ceiling(fit[[sii]]$conf$constRecBreaks),max(fit[[sii]]$data$years))
             labels <- levels(cut(0,brks,dig.lab=4))
             mid <- head(brks,-1) + diff(brks)/2
-            tabList <- lapply(as.list(mid), function(y) sapply(ssb,getSSBtab, year = y))
+            tabList <- lapply(as.list(mid), function(y) sapply(log(ssb),getSSBtab, year = y))
             names(tabList) <- labels
         }else{
-            tabList <- list(sapply(ssb, getSSBtab))
+            tabList <- list(sapply(log(ssb), getSSBtab))
         }
-
         transp <- Vectorize(function(col){
             arg <- as.list(grDevices::col2rgb(col,TRUE)[,1])
             arg$alpha <- 0.1 * 255
             arg$maxColorValue <- 255
             do.call(grDevices::rgb, arg)
-        })
-        
+        })    
         if(plot){           
             if(CI)               
                 for(i in 1:length(tabList)){

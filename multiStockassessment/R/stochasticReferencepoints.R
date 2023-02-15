@@ -1,3 +1,6 @@
+.timeToSeed <- getFromNamespace(".timeToSeed","stockassessment")
+.getDoSim <- getFromNamespace(".getDoSim","stockassessment")
+
 ##' @method stochasticReferencepoints msam
 ##' @importFrom stockassessment stochasticReferencepoints
 ##' @export

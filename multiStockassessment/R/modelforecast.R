@@ -96,6 +96,9 @@ modelforecast.msam <- function(fit,
     nCatchAverageYears  <-  rep(1, length(fit))
     if(!is.na(match("nCatchAverageYears",names(dots))))
         nCatchAverageYears <- dots[[match("nCatchAverageYears",names(dots))]]
+    fastFixedF <- FALSE
+    if(!is.na(match("fastFixedF",names(dots))))
+        fastFixedF <- dots[[match("fastFixedF",names(dots))]]
     
    if(!is.null(nosim) && nosim > 0){ 
         estimateLabel <- paste(deparse(substitute(estimate), 500L), collapse = " ")
@@ -207,6 +210,8 @@ modelforecast.msam <- function(fit,
     FModel <- lapply(seq_len(nStocks), function(s){
         v <- rep(0,nYears[s])
         v[!is.na(constraints[[s]])] <- 1
+        if(fastFixedF)
+            v[!is.na(constraints[[s]])] <- 2
         v[!is.na(findMSY[[s]])] <- 3
         v[!is.na(hcr[[s]])] <- 4
         v
