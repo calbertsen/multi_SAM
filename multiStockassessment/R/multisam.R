@@ -159,10 +159,9 @@ multisam.fit <- function(x,
     ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
     if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
         ## First column of indx is fleet index, second is stock index
-        indx <- which(shared_data$fleetTypes[row(shared_data$keyFleetStock)] == 0 && shared_data$keyFleetStock ==0, arr.ind=TRUE)
-        iL <- lapply(split(indx[,1], indx[,2]), unique)
-        for(ii in seq_along(iL)){
-            dat$sam$keyLogFsta[iL[[ii]],] <- -1
+        indx <- which(shared_data$fleetTypes[row(shared_data$keyFleetStock)] == 0 & shared_data$keyFleetStock == 0, arr.ind=TRUE)
+        for(ii in seq_len(nrow(indx))){
+            dat$sam[[indx[ii,2]]]$keyLogFsta[indx[ii,1],] <- -1
         }
     }
     ## Prepare parameters for TMB
