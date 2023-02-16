@@ -415,8 +415,9 @@ Type objective_function<Type>::operator() ()
   for(int s = 0; s < nStocks; ++s)
     for(int i = 0; i < sam.dataSets(s).nobs; ++i){
       if(isNA(sam.dataSets(s).logobs(i))){
-  	sam.dataSets(s).logobs(i) = missing(idxmis++);	
-	if(sam.dataSets(s).fleetTypes(sam.dataSets(s).aux(i,1)-1)>=90){//==90){
+  	sam.dataSets(s).logobs(i) = missing(idxmis++);
+	int f = sam.dataSets(s).aux(i,1);
+	if(sam.dataSets(s).fleetTypes(sam.dataSets(s).aux(i,1)-1)>=90 || (sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)){//==90){
 	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
 	}
       }    
@@ -432,7 +433,8 @@ Type objective_function<Type>::operator() ()
   
  // patch missing shared observations with random effects 
   idxmis = 0;
-  for(int i = 0; i < sharedObs.logobs.size(); ++i)
+  if(sharedObs.hasSharedObs)
+    for(int i = 0; i < sharedObs.logobs.size(); ++i)
       if(isNA(sharedObs.logobs(i))){
   	sharedObs.logobs(i) = shared_missingObs(idxmis++);
       }    
@@ -543,6 +545,18 @@ Type objective_function<Type>::operator() ()
   ////////// F PRE-CALCULATIONS //////////
   ///////////////////////////////////////
 
+  // Overwrite keyLogFsta for observations
+  if(sharedObs.hasSharedObs){
+    for(int s = 0; s < nStocks; ++s){
+      confSet cs = sam.confSets(s);
+      for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	if(sharedObs.keyFleetStock(f,s) == 0){
+	  for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+	    sam.confSets(s).keyLogFsta(f,a) = -1;
+	}
+    }
+  }
+  
   vector<bool> hasPH(Xph.size());
   hasPH.setConstant(false);
   vector<matrix<Type> > phPred(Xph.size());
@@ -585,19 +599,28 @@ Type objective_function<Type>::operator() ()
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
+    confSet cs0 = sam.confSets(0);
     paraSet<Type> ps = paraSets(s);
     //if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
     if(shared_F_type == -1){
        matrix<Type> logFs = logF.col(s);
+       matrix<Type> logF0 = logF.col(0);
        // Add fake likelihood contribution for unused random effects
        for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
 	 for(int j = 0; j < logFs.rows(); ++j){	  
 	   ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+	   logFs(j,i) = logF0(j,i);
 	 }
+	 if(sharedObs.hasSharedObs)
+	   for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	     for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+	       if(cs0.keyLogFsta(f,a) > (-1))
+		 if(sharedObs.keyFleetStock(f,s) == 0)
+		   logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
        }
        // Overwrite logF
-       logF.col(s) = logF.col(0);
-  }else if(shared_F_type == 0){ // Nothing shared
+       logF.col(s) = logFs;
+    }else if(shared_F_type == 0){ // Nothing shared
       // SAVE FOR LATER
       // ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
       // ofAll.addToReport(of.report,s);
@@ -620,6 +643,12 @@ Type objective_function<Type>::operator() ()
 	  ans -= dnorm(logFs(a,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
 	  logFs(a,i) = logF0(a,i) + shared_logFscale.col(s)(a,i);
 	}
+	if(sharedObs.hasSharedObs)
+	for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	  for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+	    if(cs0.keyLogFsta(f,a) > (-1))
+	      if(sharedObs.keyFleetStock(f,s) == 0)
+		logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
       }
       logF.col(s) = logFs;
     }else{			// Any combination of scaling by parametric function and scalar RW
@@ -649,23 +678,32 @@ Type objective_function<Type>::operator() ()
 	}
 	vector<Type> lfPred = logF0.col(i);
 	vector<Type> lfAdd(lfPred.size()); lfAdd.setZero();
-	  vector<Type> lfNum(lfPred.size()); lfNum.setZero();
+	vector<Type> lfNum(lfPred.size()); lfNum.setZero();
+	vector<int> unused(lfPred.size()); unused.setZero();
 	  if(shared_F_type != 2 && shared_F_type != 5  && hasPH(s)){
 	    for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
 	      for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
-	      if(cs.keyLogFsta(f,a) > (-1)){
-		lfAdd(cs.keyLogFsta(f,a)) += phPred(s)(a,i);
-		lfNum(cs.keyLogFsta(f,a)) += 1.0;
+	      if(cs0.keyLogFsta(f,a) > (-1)){
+		lfAdd(cs0.keyLogFsta(f,a)) += phPred(s)(a,i);
+		lfNum(cs0.keyLogFsta(f,a)) += 1.0;
+		if(sharedObs.hasSharedObs)
+		  if(sharedObs.keyFleetStock(f,s) == 0){
+		    unused(cs0.keyLogFsta(f,a)) = 1;
 	      }
 	  }
 	  for(int j = 0; j < lfPred.size(); ++j){
-	    if(lfNum(j) > 0)
-	      lfPred(j) += lfAdd(j) / lfNum(j);
-	    ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
-	    logFs(j,i) = lfPred(j) + slfs;
+	      if(lfNum(j) > 0)
+		lfPred(j) += lfAdd(j) / lfNum(j);
+	      ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+	      if(unused(j)){
+		logFs(j,i) = R_NegInf;
+	      }else{
+		logFs(j,i) = lfPred(j) + slfs;
+	      }
+	    }
 	  }
-	// Implement simulation of logF with shared selectivity!
-      }
+	// Implement simulation of logF with shared selectivity!	 
+      }     
       logF.col(s) = logFs;
       //overwriteF = true;
     }
@@ -675,6 +713,7 @@ Type objective_function<Type>::operator() ()
   for(int s = 0; s < logF.cols(); ++s){
     oftmp<Type> of(this->do_simulate);
     matrix<Type> logFs = logF.col(s);
+    REPORT_F(logFs,(&of));
     ADREPORT_F(logFs,(&of));
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);

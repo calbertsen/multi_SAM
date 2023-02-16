@@ -157,13 +157,32 @@ multisam.fit <- function(x,
                 doResiduals = as.integer(FALSE)
                 )
     ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
-    if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
-        ## First column of indx is fleet index, second is stock index
-        indx <- which(shared_data$fleetTypes[row(shared_data$keyFleetStock)] == 0 & shared_data$keyFleetStock == 0, arr.ind=TRUE)
-        for(ii in seq_len(nrow(indx))){
-            dat$sam[[indx[ii,2]]]$keyLogFsta[indx[ii,1],] <- -1
-        }
-    }
+    ## if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
+    ##     ## First column of indx is fleet index, second is stock index
+    ##     indx <- which(shared_data$fleetTypes[row(shared_data$keyFleetStock)] == 0 & shared_data$keyFleetStock == 0, arr.ind=TRUE)
+    ##     for(ii in seq_len(nrow(indx))){
+    ##         dat$sam[[indx[ii,2]]]$keyLogFsta[indx[ii,1],] <- -1
+    ##         tmp <- dat$sam[[indx[ii,2]]]$keyLogFsta
+    ##         tmp[tmp == -1] <- NA
+    ##         tmp[] <- as.integer(factor(tmp))-1
+    ##         tmp[is.na(tmp)] <- -1
+    ##         dat$sam[[indx[ii,2]]]$keyLogFsta[] <- tmp
+    ##         ## season
+    ##         dat$sam[[indx[ii,2]]]$keyLogFseason[indx[ii,1],] <- -1
+    ##         tmp <- dat$sam[[indx[ii,2]]]$keyLogFseason
+    ##         tmp[tmp == -1] <- NA
+    ##         tmp[] <- as.integer(factor(tmp))-1
+    ##         tmp[is.na(tmp)] <- -1
+    ##         dat$sam[[indx[ii,2]]]$keyLogFseason <- tmp
+    ##         ## var
+    ##         dat$sam[[indx[ii,2]]]$keyVarF[indx[ii,1],] <- -1
+    ##         tmp <- dat$sam[[indx[ii,2]]]$keyVarF
+    ##         tmp[tmp == -1] <- NA
+    ##         tmp[] <- as.integer(factor(tmp))-1
+    ##         tmp[is.na(tmp)] <- -1
+    ##         dat$sam[[indx[ii,2]]]$keyVarF <- tmp
+    ##     }
+    ## }
     ## Prepare parameters for TMB
     pars <- collect_pars(x)
     pars$RE <- numeric(ncol(dat$X)) ##rep(0,sum(lower.tri(corStructure)))
