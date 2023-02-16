@@ -416,10 +416,12 @@ Type objective_function<Type>::operator() ()
     for(int i = 0; i < sam.dataSets(s).nobs; ++i){
       if(isNA(sam.dataSets(s).logobs(i))){
   	sam.dataSets(s).logobs(i) = missing(idxmis++);
-	int f = sam.dataSets(s).aux(i,1);
-	if(sam.dataSets(s).fleetTypes(sam.dataSets(s).aux(i,1)-1)>=90 || (sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)){//==90){
+	int f = sam.dataSets(s).aux(i,1) - 1;
+	if(sam.dataSets(s).fleetTypes(f)>=90){//==90){
 	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
 	}
+	if(sam.dataSets(s).fleetTypes(f) == 0 && sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)
+	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
       }    
     }
  
