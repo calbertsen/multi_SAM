@@ -56,12 +56,16 @@ struct shared_obs {
   array<int> aux;
   array<Type> auxData;
   vector<Type> logobs;
+  vector<Type> weight;
   matrix<Type> keyFleetStock;
   int noYears;
   int noFleets;
   array<int> idx1;
   array<int> idx2;
   array<int> idxCor;
+  listMatrixFromR<Type> corList;
+
+  
 
   vector<CovCombineType> covCombine;
 
@@ -78,12 +82,14 @@ SOURCE(
        aux(),
        auxData(),
        logobs(),
+       weight(),
        keyFleetStock(),
        noYears(0),
        noFleets(0),
        idx1(),
        idx2(),
        idxCor(),
+       corList(),
        covCombine() {};
        )
 
@@ -102,6 +108,7 @@ SOURCE(
 	   aux = asArray<int>(getListElement(x,"aux",&Rf_isArray));
 	   auxData = asArray<Type>(getListElement(x,"auxData",&Rf_isArray));   
 	   logobs = asVector<Type>(getListElement(x,"logobs",&Rf_isNumeric));
+	   weight = asVector<Type>(getListElement(x,"weight",&Rf_isNumeric));
 	   keyFleetStock = asMatrix<Type>(getListElement(x,"keyFleetStock",&Rf_isMatrix));   
 	   noYears = (int)*REAL(getListElement(x,"noYears",&isNumericScalar));
 	   noFleets = (int)*REAL(getListElement(x,"noFleets",&isNumericScalar));
@@ -109,6 +116,7 @@ SOURCE(
 	   idx2 = asArray<int>(getListElement(x,"idx2",&Rf_isArray));
 	   idxCor = asArray<int>(getListElement(x,"idxCor", &Rf_isArray));
 	   vector<int> covCombineTmp = asVector<int>(getListElement(x,"covCombine", &Rf_isNumeric));
+	   corList = listMatrixFromR<Type>(getListElement(x,"corList"));
 	   covCombine = vector<CovCombineType>(covCombineTmp.size());
 	   for(int i = 0; i < covCombine.size(); ++i)
 	     covCombine(i) = static_cast<CovCombineType>(covCombineTmp(i));

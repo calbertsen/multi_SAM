@@ -565,9 +565,11 @@ Type objective_function<Type>::operator() ()
   for(int s = 0; s < phPred.size(); ++s){
     if(shared_phbeta.col(s).size() > 0){
       vector<Type> v0 = Xph(s) * shared_phbeta.col(s);
-      if(v0.size() != (maxAgeAll - minAgeAll + 1)*(maxYearAll - minYearAll + 1))
-	Rf_error("Wrong size in proportional hazard");
-      phPred(s) = asMatrix(v0, maxAgeAll - minAgeAll + 1, maxYearAll - minYearAll + 1); // Age x stock
+      // if(v0.size() != (maxAgeAll - minAgeAll + 1)*(maxYearAll - minYearAll + 1))
+      // 	Rf_error("Wrong size in proportional hazard");
+      // phPred(s) = asMatrix(v0, maxAgeAll - minAgeAll + 1, maxYearAll - minYearAll + 1); // Age x stock
+      int nAge = maxAgeAll - minAgeAll + 1;
+      phPred(s) = asMatrix(v0, nAge, v0.size() / nAge); // Age x year
       hasPH(s) = true;
     }else{
       matrix<Type> m0(0,0);
@@ -686,7 +688,7 @@ Type objective_function<Type>::operator() ()
 	    for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
 	      for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
 	      if(cs0.keyLogFsta(f,a) > (-1)){
-		lfAdd(cs0.keyLogFsta(f,a)) += phPred(s)(a,i);
+		lfAdd(cs0.keyLogFsta(f,a)) += phPred(s)(a,std::min(i,(int)phPred(s).cols()-1));
 		lfNum(cs0.keyLogFsta(f,a)) += 1.0;
 		if(sharedObs.hasSharedObs)
 		  if(sharedObs.keyFleetStock(f,s) == 0){

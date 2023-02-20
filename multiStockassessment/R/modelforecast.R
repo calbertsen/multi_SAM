@@ -54,7 +54,7 @@ modelforecast.msam <- function(fit,
                           landval = NULL,
                           ## findMSY = NULL,
                           ## hcr = NULL,
-                          nosim = 0,
+                          nosim = 1000,
                           year.base = sapply(fit,function(x)max(x$data$years)),
                           ave.years = lapply(fit,function(x)numeric(0)),
                           rec.years = lapply(fit,function(x)numeric(0)),
@@ -283,6 +283,7 @@ modelforecast.msam <- function(fit,
     ## Prepare forecast
     obj0 <- attr(fit,"m_obj")
     args <- as.list(obj0$env)[methods::formalArgs(TMB::MakeADFun)[methods::formalArgs(TMB::MakeADFun) != "..."]]
+    args$random <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
     
     pl <- attr(fit,"m_pl")
     logFTmp <- splitMatrices(pl$logF)
@@ -293,6 +294,15 @@ modelforecast.msam <- function(fit,
     pl$logN <- combineMatrices(lapply(as.list(1:length(logNTmp)),
                                        function(i)cbind(logNTmp[[i]],
                                                         matrix(logNTmp[[i]][,ncol(logNTmp[[i]])],nrow(logNTmp[[i]]),nYears[i]))))
+
+    sfsTmp <- splitMatrices(pl$shared_logFscale)
+    pl$shared_logFscale <- combineMatrices(lapply(as.list(1:length(sfsTmp)),
+                                                  function(i){
+                                                      if(ncol(sfsTmp[[i]]) == 0) return(sfsTmp[[i]]);
+                                                      cbind(sfsTmp[[i]],
+                                                            matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),nYears[i]))
+                                                  }))
+ 
     if(any(useModelBio)){
         splitArray <- function(a){
             nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
@@ -359,6 +369,22 @@ modelforecast.msam <- function(fit,
         return(args)
     }
 
+    ## Correct maps for shared parameters
+    if(!is.null(attr(fit,"m_call")$shared_selectivity) && attr(fit,"m_call")$shared_selectivity != 0){
+        lfm0 <- lapply(splitParameter(args$parameters$logF),seq_along)
+        lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
+        args$map$logF <- factor(unlist(lfm0))
+        ## trans_rho should all be the same
+        itr0 <- lapply(splitParameter(args$parameters$itrans_rho),seq_along)
+        args$map$itrans_rho <- factor(unlist(itr0))
+    }
+    if(!is.null(attr(fit,"m_call")$shared_seasonality) && attr(fit,"m_call")$shared_seasonality != 0){
+        lfm0 <- lapply(splitParameter(args$parameters$logitFseason),seq_along)
+        lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
+        args$map$logitFseason <- factor(unlist(lfm0))
+    }
+
+    
 
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)
@@ -382,7 +408,7 @@ modelforecast.msam <- function(fit,
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
         i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == year.base[i]))
         plMap <- pl
-        map <- attr(fit,"m_obj")$env$map
+        map <- obj$env$map ##attr(fit,"m_obj")$env$map
         with.map <- intersect(names(plMap), names(map))
         applyMap <- function(par.name) {
             tapply(plMap[[par.name]], map[[par.name]], mean)
@@ -403,7 +429,7 @@ modelforecast.msam <- function(fit,
             }
             sim0 <- est
             if(resampleFirst)
-                sim0 <- rmvnorm(1, mu=est, Sigma=cov)
+                sim0 <- rmvnorm(1, mu=est, Sigma=cov + diag(1e-6,length(est)))
             estList0 <- split(as.vector(sim0), nfSplit)
             if(!is.null(re_pl)){
                 plMap2 <- re_pl
@@ -429,18 +455,26 @@ modelforecast.msam <- function(fit,
             })
             indxF <- local({
                 ii <- which(names(p) %in% "logF")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
-                indxS <- splitMatrices(ii)
+                if(any(names(map) %in% "logF")){
+                    ii2 <- attr(obj$env$parameters$logF,"map")+1
+                    ii2[ii2>0] <- ii[ii2[ii2>0]+1]
+                    attr(ii2,"cdim") <- attr(attr(obj$env$parameters$logF,"shape"),"cdim")
+                    attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
+                    indxS <- splitMatrices(ii2)
+                }else{
+                    attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
+                    attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
+                    indxS <- splitMatrices(ii)                    
+                }
                 unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
             })
             p[indxN] <- estList0$LogN
-            p[indxF] <- estList0$LogF
+            p[indxF] <- estList0$LogF[indxF>0]
             v <- obj2$simulate(par = p)
             sniii <<- sniii+1
             incpb()
             return(v)
-        }
+      }
         if(as.integer(returnObj)==2)
             return(doSim)    
         simvals <- .SAM_replicate(nosim, doSim(), simplify = FALSE, ncores = ncores, env = environment(doSim))

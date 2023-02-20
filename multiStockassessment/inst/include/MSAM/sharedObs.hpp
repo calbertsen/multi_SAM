@@ -410,12 +410,64 @@ Type sharedObservation(shared_obs<Type>& obs,
 	  sqrtW.setConstant(1.0);
 	  switch(confA(0).obsLikelihoodFlag(f)){
 	  case 0: // (LN) log-Normal distribution
-              
-	    nll += thisNll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment), keep.segment(idxfrom,idxlength)); ///sqrtW,keep.segment(idxfrom,idxlength));
-	    //     nll += (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
+
+
+
+	    for(int idxV=0; idxV<currentVar.size(); ++idxV){
+	      if(isNA(obs.weight(idxfrom+idxV))){
+		sqrtW(idxV)=Type(1.0);
+		int a = obs.aux(idxfrom+idxV,2)-confA(0).minAge;
+		if(confA(0).predVarObsLink(f,a)>(-1)){
+		  sqrtW(idxV) = sqrt(obs_fun::findLinkV(parA(0).logSdLogObs(confA(0).keyVarObs(f,a))+(exp(parA(0).predVarObs(confA(0).predVarObsLink(f,a))) -Type(1))*predObsSegment(idxV),0)/currentVar(idxV));
+		}
+		for(int idxXtraSd=0; idxXtraSd<(confA(0).keyXtraSd).rows(); ++idxXtraSd){
+		  int realfleet=f+1;
+		  int realyear=y+CppAD::Integer(min(datA(0).years));
+		  int realage=obs.aux(idxfrom+idxV,2);		    
+		  vector<int> fyac=confA(0).keyXtraSd.row(idxXtraSd);
+		  if((realfleet==fyac(0))&&(realyear==fyac(1))&&(realage==fyac(2))){
+		    sqrtW(idxV)=exp(parA(0).logXtraSd(fyac(3)));
+		    break;
+		  }
+		}
+	      }else{
+		if(confA(0).fixVarToWeight==1){
+		  sqrtW(idxV)=sqrt(obs.weight(idxfrom+idxV)/currentVar(idxV));
+		}else{
+		  sqrtW(idxV)=sqrt(Type(1)/obs.weight(idxfrom+idxV));
+		}
+	      }
+	    }
+	    if(isNAINT(obs.idxCor(f,y))){
+	      nll += thisNll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment)/sqrtW,keep.segment(idxfrom,idxlength));
+	      nll += (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
 	      SIMULATE_F(of){
 		obs.logobs.segment(idxfrom,idxlength) = predObsSegment + (thisNll.simulate()*sqrtW);
 	      }
+	    }else{
+	      int thisdim=currentVar.size();
+	      matrix<Type> thiscor=obs.corList(obs.idxCor(f,y));
+	      matrix<Type> thiscov(thisdim,thisdim);
+	      for(int r=0;r<thisdim;++r){
+		for(int c=0;c<thisdim;++c){
+		  thiscov(r,c)=thiscor(r,c)*sqrt(currentVar(r)*currentVar(c));
+		}
+	      }
+	      MVMIX_t<Type> thisnll(thiscov,Type(confA(0).fracMixObs(f)));
+	      nll+= thisnll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment)/sqrtW, keep.segment(idxfrom,idxlength));              
+	      nll+= (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
+	      SIMULATE_F(of){
+		obs.logobs.segment(idxfrom,idxlength) = predObsSegment + thisnll.simulate()*sqrtW;
+	      }
+	    }
+
+
+	    
+	    // nll += thisNll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment), keep.segment(idxfrom,idxlength)); ///sqrtW,keep.segment(idxfrom,idxlength));
+	    // //     nll += (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
+	    //   SIMULATE_F(of){
+	    // 	obs.logobs.segment(idxfrom,idxlength) = predObsSegment + (thisNll.simulate()*sqrtW);
+	    //   }
 	    break;
 	  case 1: // (ALN) Additive logistic-normal proportions + log-normal total numbers
 	    nll +=  thisNll(obs_fun::addLogratio((vector<Type>)obs.logobs.segment(idxfrom,idxlength))-obs_fun::addLogratio((vector<Type>)predObsSegment));
