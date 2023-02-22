@@ -535,9 +535,14 @@ multisam.fit <- function(x,
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
         h <- stats::optimHess(opt$par, obj$fn, obj$gr)
-        opt$par[!atBound] <- opt$par[!atBound]- solve(h[!atBound,!atBound], g[!atBound])
-        opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
-        opt$objective <- obj$fn(opt$par)
+        ss <- try({solve(h[!atBound,!atBound], g[!atBound])})
+        if(!is(ss,"try-error")){
+            opt$par[!atBound] <- opt$par[!atBound]- ss
+            opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
+            opt$objective <- obj$fn(opt$par)
+        }else{
+            break;
+        }
     }
     opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
     ##opt$he <- numDeriv::hessian(opt$par, obj$fn, obj$gr)
