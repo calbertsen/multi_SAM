@@ -91,7 +91,10 @@ residuals.msam <- function(object, discrete = FALSE, trace = TRUE, method = "one
     
     ##resid$residual[is.na(resid$observation)] <- NA
     cat("One-observation-ahead residuals. Done\n")
-    ret <- cbind(do.call("rbind",lapply(auxList,as.data.frame)), residCollect, stock = stock, do.call("rbind",lapply(auxDList,as.data.frame)))
+    ret <- cbind(do.call("rbind",lapply(auxList,as.data.frame)), residCollect, stock = stock)
+    daul <- do.call("rbind",lapply(auxDList,as.data.frame))
+    if(nrow(daul) > 0 && ncol(daul) > 0)
+        ret <- cbind(ret, daul)
     stockNames <- getStockNames(object)
     fleetNamesList <- lapply(as.list(1:length(object)),
                              function(i){

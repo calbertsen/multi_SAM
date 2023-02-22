@@ -424,8 +424,8 @@ modelforecast.msam <- function(fit,
                     v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
                     v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
                 })
-                
-                obj2$env$data$forecast$constraints <- cstr
+                for(i in seq_along(cstr))
+                    obj2$env$data$sam[[i]]$forecast$constraints <- cstr[[i]]
             }
             sim0 <- est
             if(resampleFirst)
