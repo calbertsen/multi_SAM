@@ -55,14 +55,18 @@ modelforecast.msam <- function(fit,
                           ## findMSY = NULL,
                           ## hcr = NULL,
                           nosim = 1000,
-                          year.base = sapply(fit,function(x)max(x$data$years)),
-                          ave.years = lapply(fit,function(x)numeric(0)),
+                          year.base = unlist(max(sapply(fit,function(x)max(x$data$years)))),
+                          ave.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
+                          overwriteBioModel = FALSE,
                           rec.years = lapply(fit,function(x)numeric(0)),
                           label = NULL,
                           overwriteSelYears = NULL,
                           deterministicF = FALSE,
                           processNoiseF = TRUE,
+                          fixedFdeviation = FALSE,
+                          useFHessian = FALSE,
                           resampleFirst = !is.null(nosim) && nosim > 0,
+                          fixFirstN = FALSE,
                           customSel = NULL,
                           lagR = FALSE,
                           splitLD = FALSE,
@@ -105,11 +109,17 @@ modelforecast.msam <- function(fit,
     }else{
         estimateLabel <- "mostLikelyTrajectory"
     }
- 
+
+    if(is.list(year.base)){
+        year.base <- unlist(year.base)
+    }
+    if(length(year.base) > 1)
+        stop("year.base should be a single year to use for all stocks")
     
     if(progress && !returnObj && !is.null(nosim) && nosim > 0){
         pb <- utils::txtProgressBar(min = 0, max = nosim+3, style = 3)
         incpb <- function() utils::setTxtProgressBar(pb, pb$getVal()+1)
+        on.exit(close(pb))
     }else{
         incpb <- function(){ return(invisible(NULL)) }
     }
@@ -229,7 +239,7 @@ modelforecast.msam <- function(fit,
         if(!is.null(overwriteSelYears)){
             for(i in 1:nStocks){
                 fromto <- fit[[i]]$conf$fbarRange-(fit[[i]]$conf$minAge-1)  
-                customSel[[i]] <- colMeans(FtabList[[i]][as.integer(rownames(Ftab)) %in% overwriteSelYears, , drop=FALSE])
+                customSel[[i]] <- colMeans(FtabList[[i]][as.integer(rownames(FtabList[[i]])) %in% overwriteSelYears, , drop=FALSE])
                 customSel[[i]] <- customSel[[i]]/mean(customSel[[i]][fromto[1]:fromto[2]])
             }
         }
@@ -243,6 +253,8 @@ modelforecast.msam <- function(fit,
     }
 
     ## Get recruitment model
+    if(!is.list(rec.years) && is.numeric(rec.years))
+        rec.years <- replicate(nStocks,rec.years, simplify=FALSE)
     recList <- replicate(nStocks,list(), FALSE)
     recTabAll <- rectable(fit,returnList = TRUE)
     for(i in 1:nStocks){
@@ -264,22 +276,28 @@ modelforecast.msam <- function(fit,
     fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(0,nYears[i]))
     if(deterministicF){ ## 'Zero' variance of F process
         fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(2,nYears[i]))
+    }else if(fixedFdeviation){
+        fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(3,nYears[i]))
     }else if(!processNoiseF){ ## Constant variance of F process
         fsdTimeScaleModel <- lapply(1:nStocks,function(i)rep(1,nYears[i]))
     }
     ## When F model is used, fsdTimeScaleModel should be 1
     for(i in 1:nStocks)
         fsdTimeScaleModel[[i]][FModel[[i]] == 0] <- 1
-
+    
     
     ## Convert average years to indices
-    useModelBio <- sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
+    useModelBio <- !overwriteBioModel  ##sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
     ave.yearsIn <- ave.years
-    ave.years[useModelBio] <- lapply(fit[useModelBio],function(x) max(x$data$years)+(-4:0))
+    ## ave.years[useModelBio] <- lapply(fit[useModelBio],function(x) max(x$data$years)+(-4:0))
     ave.years <- lapply(as.list(1:nStocks),function(i)match(ave.years[[i]], fit[[i]]$data$years) - 1)
     if(any(is.na(ave.years)))
         stop("ave.years has years without data.")
-    
+
+    ## Find base year number
+    preYears <- sapply(seq_along(fit), function(ii) match(year.base, fit[[ii]]$data$years))
+    postYears <- sapply(seq_along(fit), function(ii) nYears[[ii]] - (fit[[ii]]$data$noYears - preYears[[ii]]))
+
     ## Prepare forecast
     obj0 <- attr(fit,"m_obj")
     args <- as.list(obj0$env)[methods::formalArgs(TMB::MakeADFun)[methods::formalArgs(TMB::MakeADFun) != "..."]]
@@ -289,18 +307,18 @@ modelforecast.msam <- function(fit,
     logFTmp <- splitMatrices(pl$logF)
     pl$logF <- combineMatrices(lapply(as.list(1:length(logFTmp)),
                                        function(i)cbind(logFTmp[[i]],
-                                                        matrix(logFTmp[[i]][,ncol(logFTmp[[i]])],nrow(logFTmp[[i]]),nYears[i]))))
+                                                        matrix(logFTmp[[i]][,ncol(logFTmp[[i]])],nrow(logFTmp[[i]]),postYears[i]))))
     logNTmp <- splitMatrices(pl$logN)
     pl$logN <- combineMatrices(lapply(as.list(1:length(logNTmp)),
                                        function(i)cbind(logNTmp[[i]],
-                                                        matrix(logNTmp[[i]][,ncol(logNTmp[[i]])],nrow(logNTmp[[i]]),nYears[i]))))
+                                                        matrix(logNTmp[[i]][,ncol(logNTmp[[i]])],nrow(logNTmp[[i]]),postYears[i]))))
 
     sfsTmp <- splitMatrices(pl$shared_logFscale)
     pl$shared_logFscale <- combineMatrices(lapply(as.list(1:length(sfsTmp)),
                                                   function(i){
                                                       if(ncol(sfsTmp[[i]]) == 0) return(sfsTmp[[i]]);
                                                       cbind(sfsTmp[[i]],
-                                                            matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),nYears[i]))
+                                                            matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),postYears[i]))
                                                   }))
  
     if(any(useModelBio)){
@@ -308,7 +326,7 @@ modelforecast.msam <- function(fit,
             nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
             lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
         }
-        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x)],nYears,ncol(x)))
+        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x)],postYears,ncol(x)))
         makeBio <- function(x, isArray = FALSE){
             if(isArray){
                 biox <- split3DArrays(x)
@@ -334,7 +352,7 @@ modelforecast.msam <- function(fit,
                                               function(i){
                                                   d0 <- dim(logitFSTmp[[i]]) 
                                                   lfsOld <- logitFSTmp[[i]]
-                                                  lfsNew <- array(0, c(d0[1],nYears[i]+d0[2], d0[3]))
+                                                  lfsNew <- array(0, c(d0[1],postYears[i]+d0[2], d0[3]))
                                                   lfsNew[,1:d0[2],] <- lfsOld
                                                   lfsNew
                                                   }))
@@ -342,11 +360,38 @@ modelforecast.msam <- function(fit,
     args$parameters <- pl
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
 
+    if(useFHessian){
+        if(year.base==max(sapply(fit, function(x) max(x$data$years)))){
+            est <- attr(fit,"m_sdrep")$estY
+            cov <- attr(fit,"m_sdrep")$covY
+        }else if(year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+            est <- attr(fit,"m_sdrep")$estYm1
+            cov <- attr(fit,"m_sdrep")$covYm1
+        }        
+        ## if(year.base==(max(fit$data$years)-1)){
+        ##     stop("year.base before last assessment year is not implemented yet")
+        ##     est <- attr(fit,"m_sdrep")$estYm1
+        ##     cov <- attr(fit,"m_sdrep")$covYm1
+        ## }
+        nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
+        stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
+        FEstCov <- vector("list",nStocks)
+        for(i in 1:nStocks){
+            jj <- nfSplit == "LogF" & as.numeric(stockSplit) == i-1
+            FEstCov[[i]] <- cov[jj,jj]
+        }
+    }else{
+        FEstCov <- replicate(nStocks,matrix(0,0,0),simplify=FALSE)
+    }
+
+    
     for(i in 1:nStocks)
         args$data$sam[[i]]$forecast <- list(nYears = as.numeric(nYears[i]),
+                                            preYears = as.numeric(preYears[i]),
                                             nCatchAverageYears = as.numeric(nCatchAverageYears[i]),
                                             aveYears = as.numeric(ave.years[[i]]),
-                                            forecastYear = as.numeric(c(rep(0,fit[[i]]$data$noYears),seq(1,nYears[i],length=nYears[i]))),
+                                            ##forecastYear = as.numeric(c(rep(0,fit[[i]]$data$noYears),seq(1,nYears[i],length=nYears[i]))),
+                                            forecastYear = as.numeric(c(rep(0,preYears[i]),seq(1,nYears[i],length=nYears[i]))),
                                             FModel = as.numeric(FModel[[i]]),
                                             ##target = as.numeric(target[[i]]),
                                             constraints = cstr[[i]],
@@ -358,7 +403,12 @@ modelforecast.msam <- function(fit,
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
                                             simFlag = c(0,0),
                                             hcrConf = hcrConf[[i]],
-                                            hcrCurrentSSB = hcrCurrentSSB)
+                                            hcrCurrentSSB = hcrCurrentSSB,
+                                            Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
+                                            FdeviationCov = diag(1,nrow(splitMatrices(pl$logF)[[i]]),nrow(splitMatrices(pl$logF)[[i]])),
+                                            FEstCov = FEstCov[[i]],
+                                            fixFirstN = fixFirstN
+                                            )
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
     withFMSY <- which(sapply(findMSY,function(x)any(!is.na(x))))    
@@ -393,11 +443,12 @@ modelforecast.msam <- function(fit,
          return(obj)
 
     if(!is.null(nosim) && nosim > 0){
-        if(all(year.base==sapply(fit, function(x) max(x$data$years)))){
+        if(year.base==max(sapply(fit, function(x) max(x$data$years)))){
             est <- attr(fit,"m_sdrep")$estY
             cov <- attr(fit,"m_sdrep")$covY
-        }else{
-            stop("year.base before last assessment year is not implemented yet")
+        }else if(year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+            est <- attr(fit,"m_sdrep")$estYm1
+            cov <- attr(fit,"m_sdrep")$covYm1
         }        
         ## if(year.base==(max(fit$data$years)-1)){
         ##     stop("year.base before last assessment year is not implemented yet")
@@ -406,7 +457,7 @@ modelforecast.msam <- function(fit,
         ## }
         nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
-        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == year.base[i]))
+        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == year.base))
         plMap <- pl
         map <- obj$env$map ##attr(fit,"m_obj")$env$map
         with.map <- intersect(names(plMap), names(map))
@@ -427,10 +478,11 @@ modelforecast.msam <- function(fit,
                 for(i in seq_along(cstr))
                     obj2$env$data$sam[[i]]$forecast$constraints <- cstr[[i]]
             }
-            sim0 <- est
+            sim0 <- 0*est
             if(resampleFirst)
-                sim0 <- rmvnorm(1, mu=est, Sigma=cov + diag(1e-6,length(est)))
-            estList0 <- split(as.vector(sim0), nfSplit)
+                sim0 <- rmvnorm(1, mu=0*est, Sigma=cov + diag(1e-6,length(est)))
+            dList0 <- split(as.vector(sim0), nfSplit)
+            estList0 <- split(as.vector(sim0+est), nfSplit)
             if(!is.null(re_pl)){
                 plMap2 <- re_pl
                 map <- fit$obj$env$map
@@ -470,19 +522,35 @@ modelforecast.msam <- function(fit,
             })
             p[indxN] <- estList0$LogN
             p[indxF] <- estList0$LogF[indxF>0]
+            fdvAll <- dList0$LogF ## - mean(dList0$LogF)
+            for(i in 1:nStocks){
+                fdv <- fdvAll[as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)]
+                if(length(fdv) > 0){
+                    obj2$env$data$sam[[i]]$forecast$Fdeviation[] <- fdv
+                    cindx <- nfSplit == "LogF" & stockSplit == (i-1)
+                    obj2$env$data$sam[[i]]$forecast$FdeviationCov <- cov[cindx,cindx]
+                }
+            }
             v <- obj2$simulate(par = p)
             sniii <<- sniii+1
             incpb()
             return(v)
-      }
+        }
+        eSAM <- getNamespace("stockassessment")
+        for(x in ls(eSAM))
+            assign(x,get(x, envir = eSAM),envir=environment(doSim))
+        eMSAM <- getNamespace("multiStockassessment")
+        for(x in ls(eMSAM))
+            assign(x,get(x, envir = eMSAM),envir=environment(doSim))
         if(as.integer(returnObj)==2)
             return(doSim)    
         simvals <- .SAM_replicate(nosim, doSim(), simplify = FALSE, ncores = ncores, env = environment(doSim))
         stocksimlist <- vector("list",nStocks)
         for(ss in 1:nStocks){
+            fleetHasF <- apply(fit[[ss]]$conf$keyLogFsta>-1,1,any)
             simlist <- vector("list",length(FModel[[ss]]) + 1)
             for(i in 0:(length(FModel[[ss]]))){
-                y<-year.base[ss]+i
+                y<-year.base+i
                 ii <- i0[ss] + i
                 simlist[[i+1]] <- list(sim = do.call("rbind",lapply(simvals,function(x) c(x$logN[[ss]][,ii], x$logF[[ss]][,ii]))),
                                        fbar = sapply(simvals,function(x) exp(x$logfbar[[ss]][ii])),
@@ -491,17 +559,30 @@ modelforecast.msam <- function(fit,
                                        rec = sapply(simvals,function(x) exp(x$logN[[ss]][1,ii])),
                                        cwF = rep(NA_real_, nosim),
                                        catchatage = do.call("cbind",lapply(simvals,function(x) exp(x$logCatchAge[[ss]][,ii]))),
+                                       catchbyfleet = do.call("cbind",lapply(simvals,function(x) t(exp(x$logCatchByFleet[[ss]][ii,fleetHasF,drop=FALSE])))),
+                                       fbarbyfleet = do.call("cbind",lapply(simvals,function(x) exp(x$logFbarByFleet[[ss]][fleetHasF,ii,drop=FALSE]))),
                                        land = sapply(simvals,function(x) exp(x$logLand[[ss]][ii])),
                                        fbarL = sapply(simvals,function(x) exp(x$logfbarL[[ss]][ii])),
                                        tsb = sapply(simvals,function(x) exp(x$logtsb[[ss]][ii])),
+                                       logEmpiricalSPR  = sapply(simvals,function(x) (x$logEmpiricalSPR[[ss]][ii])),
+                                       logEmpiricalYPR  = sapply(simvals,function(x) (x$logEmpiricalYPR[[ss]][ii])),
+                                       logEmpiricalYPR_L  = sapply(simvals,function(x) (x$logEmpiricalYPR_L[[ss]][ii])),
+                                       logEmpiricalYPR_D  = sapply(simvals,function(x) (x$logEmpiricalYPR_D[[ss]][ii])),
                                        year=y)
                 rownames(simlist[[i+1]]$catchatage) <- seq(fit[[ss]]$conf$minAge,fit[[ss]]$conf$maxAge,1)
                 
             }
             attr(simlist, "fit")<-fit[[ss]]
+            ## collect <- function(x){
+            ##     quan <- quantile(x, c(.50,.025,.975, na.rm = TRUE))
+            ##     c(median=quan[1], low=quan[2], high=quan[3])
+            ## }
             collect <- function(x){
-                quan <- quantile(x, c(.50,.025,.975, na.rm = TRUE))
-                c(median=quan[1], low=quan[2], high=quan[3])
+                est <- estimate(x)
+                quan <- unname(quantile(x, c(.025,.975), na.rm = TRUE))
+                v <- c(estimate=est, low=quan[1], high=quan[2])
+                names(v)  <- c(estimateLabel, "low","high")
+                v
             }
 
             fbar <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbar))),3)
@@ -511,7 +592,12 @@ modelforecast.msam <- function(fit,
             tsb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$tsb))))
             catch <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$catch))))
             land <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$land))))  
-            caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect)))) 
+            caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect))))
+            cbftable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchbyfleet,1,collect))))
+            fbftable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$fbarbyfleet,1,collect))),3)
+            colnames(fbftable) <- attr(fit$data,"fleetNames")[fleetHasF]
+            colnames(cbftable) <- attr(fit$data,"fleetNames")[fleetHasF]
+
             tab <- cbind(fbar,rec,ssb,catch)
             if(splitLD){
                 tab<-cbind(tab,fbarL,fbar-fbarL,land,catch-land)
@@ -521,7 +607,7 @@ modelforecast.msam <- function(fit,
             }
             ## if(!missing(customWeights)) tab <- cbind(tab,cwF=round(do.call(rbind, lapply(simlist, function(xx)collect(xx$cwF))),3))
             rownames(tab) <- unlist(lapply(simlist, function(xx)xx$year))
-            nam <- c("median","low","high")
+            nam <- c(estimateLabel,"low","high")
             basename<-c("fbar:","rec:","ssb:","catch:")
             if(splitLD){
                 basename<-c(basename,"fbarL:","fbarD:","Land:","Discard:")    
@@ -540,13 +626,22 @@ modelforecast.msam <- function(fit,
             attr(simlist, "shorttab")<-shorttab
             attr(simlist, "label") <- label    
             attr(simlist, "caytable")<-caytable
+            attr(simlist, "catchby")<-cbftable
+            attr(simlist, "fbarby")<-fbftable
+            attr(simlist, "nosim") <- nosim
             class(simlist) <- "samforecast"
+            attr(simlist,"estimateLabel") <- estimateLabel
+            attr(simlist,"useNonLinearityCorrection") <- useNonLinearityCorrection
             stocksimlist[[ss]] <- simlist
         }
         names(stocksimlist) <- getStockNames(fit)
         attr(stocksimlist,"fit") <- fit
         attr(stocksimlist,"sdreport") <- NA
         class(stocksimlist) <- "msamforecast"
+        ## Done with reporting
+        incpb()
+        if(progress)
+            close(pb)        
         return(stocksimlist)
     }else{    
         obj$fn(attr(fit,"m_opt")$par)
@@ -568,11 +663,13 @@ modelforecast.msam <- function(fit,
                                                          )
                              )
         ssdr <- summary(sdr)
+        invisible(obj$fn(attr(fit,"m_opt")$par))       
+        rp <- obj$report(obj$env$last.par)
         stocksimlist <- vector("list",nStocks)
         for(ss in 1:nStocks){
             simlist <- list()
             for(i in 0:(length(FModel[[ss]]))){
-                y<-year.base[[ss]]+i            
+                y<-year.base+i            
                 simlist[[i+1]] <- list(sim=NA, fbar=NA, catch=NA, ssb=NA, rec=NA,
                                        cwF=NA, catchatage=NA, land=NA, fbarL=NA, tsb=NA, year=y)
             }
@@ -593,7 +690,11 @@ modelforecast.msam <- function(fit,
                 rec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLagR"),indx])
             ssb <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logssb"),indx])
             catch <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logCatch"),indx])
-            ## caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect)))) 
+            ## caytable<-round(do.call(rbind, lapply(simlist, function(xx)apply(xx$catchatage,1,collect))))
+            cayvec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logCatchAge"),indx])
+            cbfvec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logCatchByFleet"),indx])
+            fbfvec <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logFbarByFleet"),indx])
+                        
             tab <- cbind(fbar,rec,ssb,catch)
             if(splitLD){
                 land <- toCI(ssdr[rownames(ssdr) %in% toStockVarName(ss,"logLand"),indx])
@@ -617,7 +718,7 @@ modelforecast.msam <- function(fit,
             
             tab <- tab[as.numeric(rownames(tab)) %in% futureYears, , drop = FALSE]
             
-            nam <- c("median","low","high")
+            nam <- c(estimateLabel,"low","high")
             basename<-c("fbar:","rec:","ssb:","catch:")
             if(splitLD){
                 basename<-c(basename,"fbarL:","fbarD:","Land:","Discard:")    
@@ -629,6 +730,32 @@ modelforecast.msam <- function(fit,
             ##     basename<-c(basename,"cwF:")    
             ## }
 
+            if(FALSE){
+################# NEEED TO CHECK FOR MULTI-STOCK ############################
+                ## Make caycbftable and fbftable
+#### cay
+                ii <- matrix(seq_along(rp$logCatchAge), nrow(rp$logCatchAge), ncol(rp$logCatchAge))[,as.numeric(rownames(fullTable)) %in% futureYears,drop=FALSE]
+                caytable <- do.call("rbind",lapply(seq_len(ncol(ii)), function(yy){
+                    v <- t(cayvec[ii[,yy],,drop=FALSE])
+                }))
+#### cbf
+                ii <- matrix(seq_along(rp$logCatchByFleet), nrow(rp$logCatchByFleet), ncol(rp$logCatchByFleet))[as.numeric(rownames(fullTable)) %in% futureYears,fleetHasF,drop=FALSE]
+                cbftable <- do.call("rbind",lapply(seq_len(nrow(ii)), function(yy){
+                    v <- t(cbfvec[ii[yy,],,drop=FALSE])
+                }))
+#### fay
+                ii <- matrix(seq_along(rp$logFbarByFleet), nrow(rp$logFbarByFleet), ncol(rp$logFbarByFleet))[fleetHasF,as.numeric(rownames(fullTable)) %in% futureYears,drop=FALSE]
+                fbftable <- do.call("rbind",lapply(seq_len(ncol(ii)), function(yy){
+                    v <- t(fbfvec[ii[,yy],,drop=FALSE])
+                }))
+#### dimnames
+                rownames(caytable) <- rep(c(estimateLabel,"low","high"), length.out = nrow(caytable))
+                rownames(cbftable) <- rownames(fbftable) <- rep(c(estimateLabel,"low","high"), length.out = nrow(cbftable))
+                colnames(cbftable) <- colnames(fbftable) <- attr(fit$data,"fleetNames")[fleetHasF]
+                colnames(caytable) <- seq(fit$conf$minAge,fit$conf$maxAge,1)
+
+            }
+
             colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
             if(returnAllYears || !biasCorrect)
                 colnames(fullTable) <- colnames(tab)
@@ -639,7 +766,10 @@ modelforecast.msam <- function(fit,
             attr(simlist, "label") <- label    
             ## attr(simlist, "caytable")<-caytable
             attr(simlist, "fulltab") <- fullTable
+            attr(simlist,"nosim") <- 0    
             class(simlist) <- "samforecast"
+            attr(simlist,"estimateLabel") <- estimateLabel
+            attr(simlist,"useNonLinearityCorrection") <- useNonLinearityCorrection   
             stocksimlist[[ss]] <- simlist
         }
         names(stocksimlist) <- getStockNames(fit)

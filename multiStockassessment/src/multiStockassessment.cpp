@@ -475,6 +475,7 @@ Type objective_function<Type>::operator() ()
      
   ofall<Type> ofAll(nStocks);
 
+  
   /////////////////////////////////////
   ////////// Spline Penalty //////////
   ///////////////////////////////////
@@ -607,21 +608,23 @@ Type objective_function<Type>::operator() ()
     paraSet<Type> ps = paraSets(s);
     //if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
     if(shared_F_type == -1){
-       matrix<Type> logFs = logF.col(s);
-       matrix<Type> logF0 = logF.col(0);
-       // Add fake likelihood contribution for unused random effects
-       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	 for(int j = 0; j < logFs.rows(); ++j){	  
-	   ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
-	   logFs(j,i) = logF0(j,i);
-	 }
-	 if(sharedObs.hasSharedObs)
-	   for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
-	     for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
-	       if(cs0.keyLogFsta(f,a) > (-1))
-		 if(sharedObs.keyFleetStock(f,s) == 0)
-		   logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
-       }
+      matrix<Type> logFs = logF.col(s);
+      matrix<Type> logF0 = logF.col(0);
+      // Add fake likelihood contribution for unused random effects
+      for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
+	if(sam.forecastSets(s).nYears == 0 || sam.forecastSets(s).forecastYear(i) == 0){
+	  for(int j = 0; j < logFs.rows(); ++j){	  
+	    ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+	    logFs(j,i) = logF0(j,i);
+	  }
+	  if(sharedObs.hasSharedObs)
+	    for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	      for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+		if(cs0.keyLogFsta(f,a) > (-1))
+		  if(sharedObs.keyFleetStock(f,s) == 0)
+		    logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
+	}
+      }
        // Overwrite logF
        logF.col(s) = logFs;
     }else if(shared_F_type == 0){ // Nothing shared
@@ -635,67 +638,70 @@ Type objective_function<Type>::operator() ()
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	for(int a = 0; a < logF0.rows(); ++a){ // Loop over F ages
-	  Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
-	  Type mu = shared_lfsMean(a,s-1);
-	  if(i > 0)
-	    mu += rho * (shared_logFscale.col(s)(a,i-1) - shared_lfsMean(a,s-1));
-	  Type sd = exp(shared_lfsSd(s-1));
-	  if(i == 0)
-	    sd /= sqrt(1.0 - rho * rho);
-	  ans -= dnorm(shared_logFscale.col(s)(a,i), mu, sd, true);
-	  ans -= dnorm(logFs(a,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
-	  logFs(a,i) = logF0(a,i) + shared_logFscale.col(s)(a,i);
+	if(sam.forecastSets(s).nYears == 0 || sam.forecastSets(s).forecastYear(i) == 0){
+	  for(int a = 0; a < logF0.rows(); ++a){ // Loop over F ages
+	    Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
+	    Type mu = shared_lfsMean(a,s-1);
+	    if(i > 0)
+	      mu += rho * (shared_logFscale.col(s)(a,i-1) - shared_lfsMean(a,s-1));
+	    Type sd = exp(shared_lfsSd(s-1));
+	    if(i == 0)
+	      sd /= sqrt(1.0 - rho * rho);
+	    ans -= dnorm(shared_logFscale.col(s)(a,i), mu, sd, true);
+	    ans -= dnorm(logFs(a,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+	    logFs(a,i) = logF0(a,i) + shared_logFscale.col(s)(a,i);
+	  }
+	  if(sharedObs.hasSharedObs)
+	    for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	      for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+		if(cs0.keyLogFsta(f,a) > (-1))
+		  if(sharedObs.keyFleetStock(f,s) == 0)
+		    logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
 	}
-	if(sharedObs.hasSharedObs)
-	for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
-	  for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
-	    if(cs0.keyLogFsta(f,a) > (-1))
-	      if(sharedObs.keyFleetStock(f,s) == 0)
-		logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;
       }
       logF.col(s) = logFs;
     }else{			// Any combination of scaling by parametric function and scalar RW
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);      
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	Type slfs = 0.0;
-	if(shared_F_type != 3){	// If not pure parametric
-	  if(shared_F_type == 2 || shared_F_type == 4){ // AR in time
-	    Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
-	    Type mu = shared_lfsMean(0,s-1);
-	    if(i > 0)
-	      mu += rho * (shared_logFscale.col(s)(0,i-1) - shared_lfsMean(0,s-1));	  
-	    Type sd = exp(shared_lfsSd(s-1));
-	    if(i == 0)
-	      sd /= sqrt(1.0 - rho * rho);
-	    ans -= dnorm(shared_logFscale.col(s)(0,i), mu, sd, true);
-	  }else{ // 5 or 6: RW in time
-	    Type sd = exp(shared_lfsSd(s-1));
-	    if(i == 0){
-	      ans -= dnorm(shared_logFscale.col(s)(0,i), shared_lfsMean(0,s-1), Type(0.01), true);
-	    }else{
-	      ans -= dnorm(shared_logFscale.col(s)(0,i), shared_logFscale.col(s)(0,i-1), sd, true);
+	if(sam.forecastSets(s).nYears == 0 || sam.forecastSets(s).forecastYear(i) == 0){
+	  Type slfs = 0.0;
+	  if(shared_F_type != 3){	// If not pure parametric
+	    if(shared_F_type == 2 || shared_F_type == 4){ // AR in time
+	      Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
+	      Type mu = shared_lfsMean(0,s-1);
+	      if(i > 0)
+		mu += rho * (shared_logFscale.col(s)(0,i-1) - shared_lfsMean(0,s-1));	  
+	      Type sd = exp(shared_lfsSd(s-1));
+	      if(i == 0)
+		sd /= sqrt(1.0 - rho * rho);
+	      ans -= dnorm(shared_logFscale.col(s)(0,i), mu, sd, true);
+	    }else{ // 5 or 6: RW in time
+	      Type sd = exp(shared_lfsSd(s-1));
+	      if(i == 0){
+		ans -= dnorm(shared_logFscale.col(s)(0,i), shared_lfsMean(0,s-1), Type(0.01), true);
+	      }else{
+		ans -= dnorm(shared_logFscale.col(s)(0,i), shared_logFscale.col(s)(0,i-1), sd, true);
+	      }
 	    }
+	    slfs = shared_logFscale.col(s)(0,i);
 	  }
-	  slfs = shared_logFscale.col(s)(0,i);
-	}
-	vector<Type> lfPred = logF0.col(i);
-	vector<Type> lfAdd(lfPred.size()); lfAdd.setZero();
-	vector<Type> lfNum(lfPred.size()); lfNum.setZero();
-	vector<int> unused(lfPred.size()); unused.setZero();
+	  vector<Type> lfPred = logF0.col(i);
+	  vector<Type> lfAdd(lfPred.size()); lfAdd.setZero();
+	  vector<Type> lfNum(lfPred.size()); lfNum.setZero();
+	  vector<int> unused(lfPred.size()); unused.setZero();
 	  if(shared_F_type != 2 && shared_F_type != 5  && hasPH(s)){
 	    for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
 	      for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
-	      if(cs0.keyLogFsta(f,a) > (-1)){
-		lfAdd(cs0.keyLogFsta(f,a)) += phPred(s)(a,std::min(i,(int)phPred(s).cols()-1));
-		lfNum(cs0.keyLogFsta(f,a)) += 1.0;
-		if(sharedObs.hasSharedObs)
-		  if(sharedObs.keyFleetStock(f,s) == 0){
-		    unused(cs0.keyLogFsta(f,a)) = 1;
-	      }
-	  }
-	  for(int j = 0; j < lfPred.size(); ++j){
+		if(cs0.keyLogFsta(f,a) > (-1)){
+		  lfAdd(cs0.keyLogFsta(f,a)) += phPred(s)(a,std::min(i,(int)phPred(s).cols()-1));
+		  lfNum(cs0.keyLogFsta(f,a)) += 1.0;
+		  if(sharedObs.hasSharedObs)
+		    if(sharedObs.keyFleetStock(f,s) == 0){
+		      unused(cs0.keyLogFsta(f,a)) = 1;
+		    }
+		}
+	    for(int j = 0; j < lfPred.size(); ++j){
 	      if(lfNum(j) > 0)
 		lfPred(j) += lfAdd(j) / lfNum(j);
 	      ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
@@ -706,8 +712,9 @@ Type objective_function<Type>::operator() ()
 	      }
 	    }
 	  }
-	// Implement simulation of logF with shared selectivity!	 
-      }     
+	  // Implement simulation of logF with shared selectivity(?)	 
+	}
+      }
       logF.col(s) = logFs;
       //overwriteF = true;
     }
@@ -732,6 +739,7 @@ Type objective_function<Type>::operator() ()
 	ans -= dnorm(logitFSa[i], Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
     }
   }
+
 
    ////////////////////////////////
   ////////// Season /////////////
@@ -774,18 +782,23 @@ Type objective_function<Type>::operator() ()
   /////////// Calculate forecast ////////
   //////////////////////////////////////
 
-  for(int s = 0; s < nStocks; ++s){
-    // Calculate forecast
-    array<Type> logNa = getArray(logN, s);
-    array<Type> logFa = getArray(logF, s);
-    array<Type> logitFSa = getArray(logitFseason, s);
-    // Resize arrays
-    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+
+  if(!this->do_simulate){
+    for(int s = 0; s < nStocks; ++s){
+      // Calculate forecast
+      array<Type> logNa = getArray(logN, s);
+      array<Type> logFa = getArray(logF, s);
+      array<Type> logitFSa = getArray(logitFseason, s);
+      // Resize arrays
+      sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+    }
   }
 
+  
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
+
 
 
    for(int s = 0; s < nStocks; ++s){
@@ -801,17 +814,21 @@ Type objective_function<Type>::operator() ()
       ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
       ofAll.addToReport(of.report,s);
       moveADREPORT(&of,this,s);
-      // If simulate -> move grab new logF values and move them to the right place!         
+      // If simulate -> move grab new logF values and move them to the right place!
+      // Does this ruin things???
       logF.col(s) = logFa.matrix();
     }
    }
 
- 
+
+
  
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
 
+
+   
   // Initial parameter contribution
   for(int s = 0; s < nStocks; ++s){
     if(initLogN.col(s).size() == logN.col(s).rows()){ // Initial value per age
@@ -840,7 +857,9 @@ Type objective_function<Type>::operator() ()
     }
   }
 
+
   //////////////////////////////////////////
+
 
   int nAreas = sam.dataSets.size();
 
@@ -903,9 +922,11 @@ Type objective_function<Type>::operator() ()
   REPORT(L);
   REPORT(ncov)
 
+
     ////////////////////////////////////
     ////// CALCULATE CONTRIBUTION //////
     ////////////////////////////////////
+
 
     // add wide prior for first state, but _only_ when computing ooa residuals
     if(doResiduals){
@@ -917,44 +938,62 @@ Type objective_function<Type>::operator() ()
 	  }
       }
     } 
-  
-  density::MVNORM_t<Type> neg_log_densityN(ncov);
-  // Loop over time
-  for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
-    // Handle simulation of F for forecast and HCR
-    SIMULATE{
-      // Simulate new F for forecast and HCR
-     for(int s = 0; s < nAreas; ++s){
-       array<Type> logNa = getArray(logN, s);
-       array<Type> logFa = getArray(logF, s);
-       array<Type> logitFSa = getArray(logitFseason, s);
-       forecastSet<Type> fc = sam.forecastSets(s);
-       if(fc.nYears > 0){
-	 dataSet<Type> ds = sam.dataSets(s);
-	 confSet cs = sam.confSets(s);
-	 paraSet<Type> ps = paraSets(s);
-	 int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
-	 if(y > 0 && y < ds.noYears + fc.nYears){
-	   matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
-	   MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
-	   int nYears = fc.nYears;
-	   int fi = y - fc.forecastYear.size() + nYears;
-	   // Update forecast
-	   if(fi > 0){
-	     fc.updateForecast(fi, logFa, logNa, logitFSa, ds, cs, ps, recruits(s), mortalities(s));
-	     // Simulate F
-	     // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
-	     if(fc.simFlag(0) == 0){
-	       Type timeScale = fc.forecastCalculatedLogSdCorrection(fi);
-	       logF.col(s).col(y) = (vector<Type>)fc.forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;
-	       mortalities(s).updateYear(ds, cs, ps, logFa, logitFSa,y);
-	     }	   
-	   }	 
+
+
+
+   density::MVNORM_t<Type> neg_log_densityN(ncov);
+
+   // Loop over time
+   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
+
+     // Handle simulation of F for forecast and HCR
+     SIMULATE{
+
+       // Simulate new F for forecast and HCR
+       for(int s = 0; s < nAreas; ++s){
+	 array<Type> logNa = getArray(logN, s);
+	 array<Type> logFa = getArray(logF, s);
+	 array<Type> logitFSa = getArray(logitFseason, s);
+	 //forecastSet<Type> fc = sam.forecastSets(s); // While convenient with shorthand, this did not keep updates made by updateForecast!
+	 if(sam.forecastSets(s).nYears > 0){
+	   dataSet<Type> ds = sam.dataSets(s);
+	   confSet cs = sam.confSets(s);
+	   paraSet<Type> ps = paraSets(s);
+	   int y = yall - CppAD::Integer(ds.years(0) - minYearAll);
+	   int fcOffset = 0;
+	   if(sam.forecastSets(s).preYears > 0)
+	     fcOffset = ds.noYears - sam.forecastSets(s).preYears;
+	   if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears - fcOffset){
+	     matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
+	     if(sam.forecastSets(s).FEstCov.cols() > 0)
+	       fvar = sam.forecastSets(s).FEstCov;
+	     MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
+	     //int nYears = sam.forecastSets(s).nYears;
+	     // int fi = y - sam.forecastSets(s).preYears;
+	     int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	     //int fi = y - sam.forecastSets(s).forecastYear.size() + nYears;
+	     // Update forecast
+	     if(fi >= 0){
+	       sam.forecastSets(s).updateForecast(fi, logFa, logNa, logitFSa, ds, cs, ps, recruits(s), mortalities(s), this->do_simulate);
+	       // Simulate F
+	       // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
+	       if(sam.forecastSets(s).simFlag(0) == 0){
+		 Type timeScale = sam.forecastSets(s).forecastCalculatedLogSdCorrection(fi);
+		 if(sam.forecastSets(s).fsdTimeScaleModel(fi) == sam.forecastSets(s).fixedDeviation){
+		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi);
+		 }else{
+		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;
+		 }
+		 logF.col(s).col(y) = logFa.col(y);
+		 mortalities(s).updateYear(ds, cs, ps, logFa, logitFSa,y);
+	       }	   
+	     }	 
+	   }
 	 }
        }
+
      }
-    }
-    
+
     // Vector for predictions
     vector<Type> lastN(ncov.rows());
     lastN.setZero();
@@ -975,7 +1014,10 @@ Type objective_function<Type>::operator() ()
       
       array<Type> logNa = getArray(logN, s);
       array<Type> logFa = getArray(logF, s);
-      if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears){
+	int fcOffset = 0;
+	if(sam.forecastSets(s).preYears > 0)
+	  fcOffset = ds.noYears - sam.forecastSets(s).preYears;
+      if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears - fcOffset){
 	vector<Type> predNnz = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y);
 	keepN.segment(s * nages + ageOffset,predNnz.size()) = 1.0;
 	predN.segment(s * nages + ageOffset,predNnz.size()) = predNnz;
@@ -984,27 +1026,30 @@ Type objective_function<Type>::operator() ()
       }
     }
     predN -= AlphaCon * lastN;
+    vector<Type> Nscale(predN.size());
+    Nscale.setConstant(1.0);
     if(keepN.sum()>0){
       // forecast correction to recruitment
-      vector<Type> Nscale(predN.size());
-      Nscale.setZero();
-      Nscale += 1.0;
-      vector<Type> predNTmp = predN;
+       // Nscale += 1.0;
+      // vector<Type> predNTmp = predN;
 
       for(int s = 0; s < nAreas; ++s){
 	dataSet<Type> ds = sam.dataSets(s);
 	int ageOffset = sam.confSets(s).minAge - minAgeAll;
 	int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	int fcOffset = 0;
+	if(sam.forecastSets(s).preYears > 0)
+	  fcOffset = ds.noYears - sam.forecastSets(s).preYears;
 	if(y > 0 &&
-	   y < ds.noYears + sam.forecastSets(s).nYears &&
+	   y < ds.noYears + sam.forecastSets(s).nYears - fcOffset &&
 	   sam.forecastSets(s).nYears > 0 &&
 	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	   sam.forecastSets(s).forecastYear(y) > 0){
 	  Nscale(s * nages + ageOffset) = sqrt(sam.forecastSets(s).logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
-	  predNTmp(s * nages + ageOffset) = sam.forecastSets(s).logRecruitmentMedian;
+	  predN(s * nages + ageOffset) = sam.forecastSets(s).logRecruitmentMedian;
 	}
       }
-      ans+=neg_log_densityN((newN-predNTmp) / Nscale, keepN) + (keepN * log(Nscale)).sum();	  
+      ans+=neg_log_densityN((newN-predN) / Nscale, keepN) + (keepN * log(Nscale)).sum();	  
     }// else{	// end forecast correction to recruitment
     //   ans+=neg_log_densityN(newN-predN, keepN);
     // }
@@ -1017,15 +1062,25 @@ Type objective_function<Type>::operator() ()
 	 4) Insert into logN at the right places
       */
       // 1) Check if any simFlags are 0
+      matrix<Type> NscaleSim(Nscale.size(),Nscale.size());
+      NscaleSim.setZero();
+      NscaleSim.diagonal() = Nscale;
+      matrix<Type> ncovSim = NscaleSim * ncov * NscaleSim; // No need to transpose a diagonal matrix
       bool doSim = false;
       for(int s = 0; s < nAreas; ++s){
 	int nYears = sam.forecastSets(s).nYears;
 	if(nYears > 0){
 	  int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
-	  int fi = y - sam.forecastSets(s).forecastYear.size() + nYears;
-	  if(sam.confSets(s).simFlag(1) == 0 ||
-	     (fi > 0 && sam.forecastSets(s).simFlag(1) == 0)){
+	  //int fi = y - sam.forecastSets(s).preYears;// y - sam.forecastSets(s).forecastYear.size() + nYears;
+	  int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	  if(sam.confSets(s).simFlag(1) == 0){
 	    doSim = true;
+	  }else if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
+	    if(fi == 0 && sam.forecastSets(s).fixFirstN){
+	      doSim = false;
+	    }else{
+	      doSim = true;
+	    }
 	    break;
 	  }
 	}else{
@@ -1037,16 +1092,17 @@ Type objective_function<Type>::operator() ()
       }
       if(doSim){
 	// 2) Get conditional distribution of stocks with simFlag == 0 (and keepN = 1)
-	vector<int> notCondOn(ncov.cols());
+	vector<int> notCondOn(ncovSim.cols());
 	notCondOn.setZero();
 	for(int i = 0; i < notCondOn.size(); ++i){
 	  int s = (int)i / (int)nages;
 	  int nYears = sam.forecastSets(s).nYears;
 	  if(nYears > 0){
 	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
-	    int fi = y - sam.forecastSets(s).forecastYear.size() + nYears;
+	    //int fi = y - sam.forecastSets(s).preYears; // y - sam.forecastSets(s).forecastYear.size() + nYears;
+	    int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
 	    if((sam.confSets(s).simFlag(1) == 0 ||
-		(fi > 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
+		(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
 	       keepN(i) == 1){
 	      notCondOn(i) = 1;
 	    }
@@ -1055,7 +1111,7 @@ Type objective_function<Type>::operator() ()
 	  }
 	}
 
-	int nAll = ncov.cols();
+	int nAll = ncovSim.cols();
 	int nNotCond = notCondOn.sum();
 	int nCond = nAll - nNotCond;
 	if(nNotCond > 0){ // Only do this if there are any not conditional
@@ -1076,22 +1132,22 @@ Type objective_function<Type>::operator() ()
 
 	  for(int i = 0; i < ccond.size(); ++i)
 	    for(int j = 0; j < ccond.size(); ++j)
-	      Sigma_NN(i,j) = ncov(ccond(i),ccond(j));
+	      Sigma_NN(i,j) = ncovSim(ccond(i),ccond(j));
 
 	  for(int i = 0; i < cond.size(); ++i)
 	    for(int j = 0; j < cond.size(); ++j)
-	      Sigma_CC(i,j) = ncov(cond(i),cond(j));
+	      Sigma_CC(i,j) = ncovSim(cond(i),cond(j));
 	  matrix<Type> Sigma_CC_inv = Sigma_CC.inverse();
 
 	  for(int i = 0; i < ccond.size(); ++i)
 	    for(int j = 0; j < cond.size(); ++j)
-	      Sigma_NC(i,j) = ncov(ccond(i),cond(j));
+	      Sigma_NC(i,j) = ncovSim(ccond(i),cond(j));
 	  
 	  matrix<Type> meanCorrectionMat = Sigma_NC * Sigma_CC_inv;
 
 	  for(int i = 0; i < cond.size(); ++i)
 	    for(int j = 0; j < ccond.size(); ++j)
-	      Sigma_CN(i,j) = ncov(cond(i),ccond(j));
+	      Sigma_CN(i,j) = ncovSim(cond(i),ccond(j));
 
 	  matrix<Type> newSigma = Sigma_NN - (matrix<Type>)(meanCorrectionMat * Sigma_CN);
 
@@ -1209,10 +1265,8 @@ Type objective_function<Type>::operator() ()
 
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
-    array<Type> logNa(logN.col(s).rows(),logN.col(s).cols());
-    logNa = logN.col(s);
-    array<Type> logFa(logF.col(s).rows(),logF.col(s).cols());
-    logFa = logF.col(s);
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
