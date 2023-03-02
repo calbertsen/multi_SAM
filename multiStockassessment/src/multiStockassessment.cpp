@@ -626,7 +626,7 @@ Type objective_function<Type>::operator() ()
 	}
       }
        // Overwrite logF
-       logF.col(s) = logFs;
+      logF.col(s) = logFs;
     }else if(shared_F_type == 0){ // Nothing shared
       // SAVE FOR LATER
       // ans += nllF(ds, cs, ps, sam.forecastSets(s), logFa, keepTmp, &of);
@@ -783,15 +783,13 @@ Type objective_function<Type>::operator() ()
   //////////////////////////////////////
 
 
-  if(!this->do_simulate){
-    for(int s = 0; s < nStocks; ++s){
-      // Calculate forecast
-      array<Type> logNa = getArray(logN, s);
-      array<Type> logFa = getArray(logF, s);
-      array<Type> logitFSa = getArray(logitFseason, s);
-      // Resize arrays
-      sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
-    }
+  for(int s = 0; s < nStocks; ++s){
+    // Calculate forecast
+    array<Type> logNa = getArray(logN, s);
+    array<Type> logFa = getArray(logF, s);
+    array<Type> logitFSa = getArray(logitFseason, s);
+    // Resize arrays
+    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
   }
 
   
@@ -974,6 +972,7 @@ Type objective_function<Type>::operator() ()
 	     //int fi = y - sam.forecastSets(s).forecastYear.size() + nYears;
 	     // Update forecast
 	     if(fi >= 0){
+	       // SET sam.forecastSets(s).nvar HERE!!! SAM CODE WILL NOT WORK WITH CORRELATION IN N
 	       sam.forecastSets(s).updateForecast(fi, logFa, logNa, logitFSa, ds, cs, ps, recruits(s), mortalities(s), this->do_simulate);
 	       // Simulate F
 	       // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
