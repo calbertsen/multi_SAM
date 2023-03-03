@@ -304,6 +304,15 @@ modelforecast.msam <- function(fit,
     args$random <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
     
     pl <- attr(fit,"m_pl")
+
+    if(nosim > 0 && !is.na(match("logF",names(args$map)))){
+        cat("Removing F map\n")
+        ## Remove logF map for simulating
+        args$map$logF <- NULL
+        pl$logF <- combineParameter(attr(fit,"m_rep")$logFs)
+        
+    }
+    
     logFTmp <- splitMatrices(pl$logF)
     pl$logF <- combineMatrices(lapply(as.list(1:length(logFTmp)),
                                        function(i)cbind(logFTmp[[i]],
@@ -421,9 +430,10 @@ modelforecast.msam <- function(fit,
 
     ## Correct maps for shared parameters
     if(!is.null(attr(fit,"m_call")$shared_selectivity) && attr(fit,"m_call")$shared_selectivity != 0){
-        lfm0 <- lapply(splitParameter(args$parameters$logF),seq_along)
-        lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
-        args$map$logF <- factor(unlist(lfm0))
+        ## lfm0 <- lapply(splitParameter(args$parameters$logF),seq_along)
+        ## lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
+        ## args$map$logF <- factor(unlist(lfm0))
+        ## NOT FOR F!
         ## trans_rho should all be the same
         itr0 <- lapply(splitParameter(args$parameters$itrans_rho),seq_along)
         args$map$itrans_rho <- factor(unlist(itr0))
@@ -473,7 +483,7 @@ modelforecast.msam <- function(fit,
                 re_constraint <- targetToList(re_constraint, nStocks, character)
                 cstr <- lapply(seq_len(nStocks), function(s){
                     v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
-                    v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+                    v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonFALSELinearityCorrection)
                 })
                 for(i in seq_along(cstr))
                     obj2$env$data$sam[[i]]$forecast$constraints <- cstr[[i]]
@@ -485,7 +495,7 @@ modelforecast.msam <- function(fit,
             estList0 <- split(as.vector(sim0+est), nfSplit)
             if(!is.null(re_pl)){
                 plMap2 <- re_pl
-                map <- fit$obj$env$map
+                ##map <- obj2$env$map
                 with.map <- intersect(names(plMap2), names(map))
                 applyMap <- function(par.name) {
                     tapply(plMap2[[par.name]], map[[par.name]], mean)
@@ -507,17 +517,17 @@ modelforecast.msam <- function(fit,
             })
             indxF <- local({
                 ii <- which(names(p) %in% "logF")
-                if(any(names(map) %in% "logF")){
-                    ii2 <- attr(obj$env$parameters$logF,"map")+1
-                    ii2[ii2>0] <- ii[ii2[ii2>0]+1]
-                    attr(ii2,"cdim") <- attr(attr(obj$env$parameters$logF,"shape"),"cdim")
-                    attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
-                    indxS <- splitMatrices(ii2)
-                }else{
-                    attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
-                    attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
-                    indxS <- splitMatrices(ii)                    
-                }
+                ## if(any(names(map) %in% "logF")){
+                ##     ii2 <- attr(obj$env$parameters$logF,"map")+1
+                ##     ii2[ii2>0] <- ii[ii2[ii2>0]+1]
+                ##     attr(ii2,"cdim") <- attr(attr(obj$env$parameters$logF,"shape"),"cdim")
+                ##     attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
+                ##     indxS <- splitMatrices(ii2)
+                ## }else{
+                attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
+                indxS <- splitMatrices(ii)                    
+                ## }
                 unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
             })
             p[indxN] <- estList0$LogN
