@@ -55,7 +55,7 @@ modelforecast.msam <- function(fit,
                           ## findMSY = NULL,
                           ## hcr = NULL,
                           nosim = 1000,
-                          year.base = unlist(max(sapply(fit,function(x)max(x$data$years)))),
+                          year.base = unlist(min(sapply(fit,function(x)max(x$data$years)))),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
                           overwriteBioModel = FALSE,
                           rec.years = lapply(fit,function(x)numeric(0)),
@@ -306,7 +306,6 @@ modelforecast.msam <- function(fit,
     pl <- attr(fit,"m_pl")
 
     if(nosim > 0 && !is.na(match("logF",names(args$map)))){
-        cat("Removing F map\n")
         ## Remove logF map for simulating
         args$map$logF <- NULL
         pl$logF <- combineParameter(attr(fit,"m_rep")$logFs)

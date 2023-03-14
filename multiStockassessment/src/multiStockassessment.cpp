@@ -1013,7 +1013,7 @@ Type objective_function<Type>::operator() ()
       
       array<Type> logNa = getArray(logN, s);
       array<Type> logFa = getArray(logF, s);
-	int fcOffset = 0;
+      int fcOffset = 0;
 	if(sam.forecastSets(s).preYears > 0)
 	  fcOffset = ds.noYears - sam.forecastSets(s).preYears;
       if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears - fcOffset){
@@ -1042,6 +1042,7 @@ Type objective_function<Type>::operator() ()
 	if(y > 0 &&
 	   y < ds.noYears + sam.forecastSets(s).nYears - fcOffset &&
 	   sam.forecastSets(s).nYears > 0 &&
+	   sam.forecastSets(s).forecastYear(y) > 0 &&
 	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	   sam.forecastSets(s).forecastYear(y) > 0){
 	  Nscale(s * nages + ageOffset) = sqrt(sam.forecastSets(s).logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
@@ -1070,8 +1071,19 @@ Type objective_function<Type>::operator() ()
 	int nYears = sam.forecastSets(s).nYears;
 	if(nYears > 0){
 	  int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	  int fcOffset = 0;
+	   if(sam.forecastSets(s).preYears > 0)
+	     fcOffset = sam.dataSets(s).noYears - sam.forecastSets(s).preYears;
 	  //int fi = y - sam.forecastSets(s).preYears;// y - sam.forecastSets(s).forecastYear.size() + nYears;
-	  int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	  int fi = -100;	  
+	  if(y > 0 &&
+	     y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
+	   sam.forecastSets(s).nYears > 0 &&
+	   sam.forecastSets(s).forecastYear(y) > 0 &&
+	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
+	     sam.forecastSets(s).forecastYear(y) > 0){
+	    fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	  }
 	  if(sam.confSets(s).simFlag(1) == 0){
 	    doSim = true;
 	  }else if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
@@ -1099,7 +1111,19 @@ Type objective_function<Type>::operator() ()
 	  if(nYears > 0){
 	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
 	    //int fi = y - sam.forecastSets(s).preYears; // y - sam.forecastSets(s).forecastYear.size() + nYears;
-	    int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	    //int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	    int fcOffset = 0;
+	    if(sam.forecastSets(s).preYears > 0)
+	      fcOffset = sam.dataSets(s).noYears - sam.forecastSets(s).preYears;
+	    int fi = -100;
+	    if(y > 0 &&
+	       y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
+	       sam.forecastSets(s).nYears > 0 &&
+	       sam.forecastSets(s).forecastYear(y) > 0 &&
+	       sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
+	       sam.forecastSets(s).forecastYear(y) > 0){
+	      fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
+	    }	
 	    if((sam.confSets(s).simFlag(1) == 0 ||
 		(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
 	       keepN(i) == 1){
