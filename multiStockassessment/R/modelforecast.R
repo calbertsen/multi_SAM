@@ -75,7 +75,7 @@ modelforecast.msam <- function(fit,
                           returnAllYears = FALSE,
                           ## useUniroot = FALSE,
                           returnObj = FALSE,
-                          progress = TRUE,
+                          progress = nosim > 0 && ncores == 1,
                           estimate = median,
                           silent = TRUE,
                           newton_config = NULL,
@@ -630,8 +630,8 @@ modelforecast.msam <- function(fit,
             colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
             
             attr(simlist, "tab")<-tab
-            shorttab<-t(tab[,grep("median",colnames(tab))])
-            rownames(shorttab)<-sub(":median","",paste0(label,if(!is.null(label))":",rownames(shorttab)))
+            shorttab<-t(tab[,grep(estimateLabel,colnames(tab))])
+            ##rownames(shorttab)<-sub(sprintf(":%s",estimateLabel),"",paste0(label,if(!is.null(label)){":"},rownames(shorttab)))
             attr(simlist, "shorttab")<-shorttab
             attr(simlist, "label") <- label    
             attr(simlist, "caytable")<-caytable
