@@ -406,6 +406,8 @@ Type objective_function<Type>::operator() ()
 
   Type ans = 0.0; //negative log-likelihood
 
+  ofall<Type> ofAll(nStocks);
+
   ////////////////////////////////////
   /////////// Missing Obs ///////////
   //////////////////////////////////
@@ -466,16 +468,16 @@ Type objective_function<Type>::operator() ()
   //////////////////////////////////////
 
   for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);
     // Calculate forecast
     array<Type> logNa = getArray(logN, s);
     array<Type> logFa = getArray(logF, s);
     // Resize arrays
-    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s));
+    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s), &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
   }
-     
-  ofall<Type> ofAll(nStocks);
-
-  
+       
   /////////////////////////////////////
   ////////// Spline Penalty //////////
   ///////////////////////////////////
@@ -1087,7 +1089,7 @@ Type objective_function<Type>::operator() ()
 	  if(sam.confSets(s).simFlag(1) == 0){
 	    doSim = true;
 	  }else if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
-	    if(fi == 0 && sam.forecastSets(s).fixFirstN){
+	    if(fi == 0 && sam.forecastSets(s).useModelLastN){
 	      doSim = false;
 	    }else{
 	      doSim = true;
