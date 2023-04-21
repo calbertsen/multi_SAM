@@ -1082,7 +1082,7 @@ Type objective_function<Type>::operator() ()
 	     y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
 	   sam.forecastSets(s).nYears > 0 &&
 	   sam.forecastSets(s).forecastYear(y) > 0 &&
-	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
+	     //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	     sam.forecastSets(s).forecastYear(y) > 0){
 	    fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
 	  }
@@ -1122,7 +1122,7 @@ Type objective_function<Type>::operator() ()
 	       y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
 	       sam.forecastSets(s).nYears > 0 &&
 	       sam.forecastSets(s).forecastYear(y) > 0 &&
-	       sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
+	       //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	       sam.forecastSets(s).forecastYear(y) > 0){
 	      fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
 	    }	

@@ -565,7 +565,7 @@ modelforecast.msam <- function(fit,
             simlist <- vector("list",length(FModel[[ss]]) + 1)
             for(i in 0:(length(FModel[[ss]]))){
                 y<-year.base+i
-                ii <- i0[ss] + i
+                ii <- which(fit[[ss]]$data$year == year.base) + i
                 simlist[[i+1]] <- list(sim = do.call("rbind",lapply(simvals,function(x) c(x$logN[[ss]][,ii], x$logF[[ss]][,ii]))),
                                        fbar = sapply(simvals,function(x) exp(x$logfbar[[ss]][ii])),
                                        catch = sapply(simvals,function(x) exp(x$logCatch[[ss]][ii])),
