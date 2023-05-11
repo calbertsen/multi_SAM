@@ -592,7 +592,7 @@ modelforecast.msam <- function(fit,
             ##     c(median=quan[1], low=quan[2], high=quan[3])
             ## }
             collect <- function(x){
-                est <- estimate(x)
+                est <- estimate(x, na.rm = TRUE)
                 quan <- unname(quantile(x, c(.025,.975), na.rm = TRUE))
                 v <- c(estimate=est, low=quan[1], high=quan[2])
                 names(v)  <- c(estimateLabel, "low","high")
