@@ -84,7 +84,7 @@ modelforecast.msam <- function(fit,
                           useNonLinearityCorrection = (nosim > 0 && !deterministicF),
                           ncores = 1,
                           ...){
-
+   
     dots <- list(...)
     findMSY  <-  NULL
     if(!is.na(match("findMSY",names(dots))))
@@ -116,6 +116,9 @@ modelforecast.msam <- function(fit,
     }
     if(length(year.base) > 1)
         stop("year.base should be a single year to use for all stocks")
+
+    if(year.base > min(sapply(fit, function(x) max(x$data$years))))
+        stop("year.base is larger than the last year for some stocks.")
     
     if(progress && !returnObj && !is.null(nosim) && nosim > 0){
         pb <- utils::txtProgressBar(min = 0, max = nosim+3, style = 3)
@@ -170,6 +173,8 @@ modelforecast.msam <- function(fit,
     if(any(sapply(lengthVec,function(x) any(x > 0 & x < max(x)))))
         stop("...")    
     nYears <- sapply(lengthVec,max)
+    if(any(sapply(seq_along(fit),function(x)max(fit[[x]]$data$years) - year.base >= nYears[[x]])))
+        stop("Not enough constraints for the forecast")
 
     ## Convert input to an F model code and a target value
     for(i in 1:nStocks){
@@ -370,14 +375,18 @@ modelforecast.msam <- function(fit,
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
 
     if(useFHessian){
-        if(year.base==max(sapply(fit, function(x) max(x$data$years))) ||
-           (year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN)){
+        if(all(sapply(fit, function(x) max(x$data$years) == year.base)) ||
+           (all(sapply(fit, function(x) max(x$data$years)-1 == year.base)) && useModelLastN)){
             est <- attr(fit,"m_sdrep")$estY
             cov <- attr(fit,"m_sdrep")$covY
-        }else if(year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+        }else if(all(sapply(fit, function(x) max(x$data$years)-1 == year.base))){
             est <- attr(fit,"m_sdrep")$estYm1
             cov <- attr(fit,"m_sdrep")$covYm1
-        }        
+        }else{
+            warning("Using last year correlation for useFHessian")
+            est <- attr(fit,"m_sdrep")$estY
+            cov <- attr(fit,"m_sdrep")$covY
+        }
         ## if(year.base==(max(fit$data$years)-1)){
         ##     stop("year.base before last assessment year is not implemented yet")
         ##     est <- attr(fit,"m_sdrep")$estYm1
@@ -454,16 +463,69 @@ modelforecast.msam <- function(fit,
          return(obj)
 
     if(!is.null(nosim) && nosim > 0){
-        if(year.base==max(sapply(fit, function(x) max(x$data$years))) ||
-           (year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN)){
+        est <- attr(fit,"m_sdrep")$estY
+        cov <- attr(fit,"m_sdrep")$covY
+        D <- cov2cor(cov)
+        Sd <- sqrt(diag(cov))
+        yearInsert <- sapply(fit, function(x) max(x$data$years))
+        if(diff(range(sapply(fit,function(x)max(x$data$years)))) == 0 &&
+           (year.base==max(sapply(fit, function(x) max(x$data$years))) ||
+            (year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN))){
+            ## All have same last year and it is equal to year.base
             est <- attr(fit,"m_sdrep")$estY
             cov <- attr(fit,"m_sdrep")$covY
-            yearInsert <- max(sapply(fit, function(x) max(x$data$years)))
-        }else if(year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+            D <- cov2cor(cov)
+            Sd <- sqrt(diag(cov))
+            yearInsert <- sapply(fit, function(x) max(x$data$years))
+        }else if(diff(range(sapply(fit,function(x)max(x$data$years)))) == 0 &&
+                 year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+            ## All have sam last year and year.base is year before
             est <- attr(fit,"m_sdrep")$estYm1
             cov <- attr(fit,"m_sdrep")$covYm1
-            yearInsert <- (max(sapply(fit, function(x) max(x$data$years)))-1)
-        }        
+            D <- cov2cor(cov)
+            Sd <- sqrt(diag(cov))
+            yearInsert <- sapply(fit, function(x) max(x$data$years)-1)
+        }else{
+            ## Any other scenario
+            plsdx <- attr(fitMulti,"m_plsd")
+            plx <- attr(fitMulti,"m_pl")
+            sdLogN <- splitParameter(plsdx$logN)
+            eLogN <- splitParameter(plx$logN)
+            sdLogF <- splitParameter(plsdx$logF)
+            eLogF <- splitParameter(plx$logF)
+            Ngrab <- lapply(seq_len(nStocks), function(s){
+                i0 <- match(year.base, fit[[s]]$data$years)
+                eLogN[[s]][,i0]
+            })
+            Fgrab <- lapply(seq_len(nStocks), function(s){
+                i0 <- match(year.base, fit[[s]]$data$years)
+                eLogF[[s]][,i0]
+            })
+            sdNgrab <- lapply(seq_len(nStocks), function(s){
+                i0 <- match(year.base, fit[[s]]$data$years)
+                sdLogN[[s]][,i0]
+            })
+            sdFgrab <- lapply(seq_len(nStocks), function(s){
+                i0 <- match(year.base, fit[[s]]$data$years)
+                sdLogF[[s]][,i0]
+            })
+            est[] <- unname(c(unlist(Ngrab),unlist(Fgrab)))
+            Sd[]  <- unname(c(unlist(sdNgrab),unlist(sdFgrab)))
+            cov <- diag(Sd^2,length(Sd), length(Sd)) ## Does not use correlation
+            yearInsert <- rep(year.base, nStocks)
+        }
+        ## if(year.base==max(sapply(fit, function(x) max(x$data$years))) ||
+        ##    (year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN)){
+        ##     est <- attr(fit,"m_sdrep")$estY
+        ##     cov <- attr(fit,"m_sdrep")$covY
+        ##     yearInsert <- max(sapply(fit, function(x) max(x$data$years)))
+        ## }else if(year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
+        ##     est <- attr(fit,"m_sdrep")$estYm1
+        ##     cov <- attr(fit,"m_sdrep")$covYm1
+        ##     yearInsert <- (max(sapply(fit, function(x) max(x$data$years)))-1)
+        ## }else{
+        ##     stop("")
+        ## }
         ## if(year.base==(max(fit$data$years)-1)){
         ##     stop("year.base before last assessment year is not implemented yet")
         ##     est <- attr(fit,"m_sdrep")$estYm1
@@ -471,7 +533,7 @@ modelforecast.msam <- function(fit,
         ## }
         nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
-        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsert))
+        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsert[i]))
         plMap <- pl
         map <- obj$env$map ##attr(fit,"m_obj")$env$map
         with.map <- intersect(names(plMap), names(map))

@@ -1069,6 +1069,7 @@ Type objective_function<Type>::operator() ()
       NscaleSim.diagonal() = Nscale;
       matrix<Type> ncovSim = NscaleSim * ncov * NscaleSim; // No need to transpose a diagonal matrix
       bool doSim = false;
+      // Check if at least one stock should be simulated
       for(int s = 0; s < nAreas; ++s){
 	int nYears = sam.forecastSets(s).nYears;
 	if(nYears > 0){
@@ -1079,22 +1080,22 @@ Type objective_function<Type>::operator() ()
 	  //int fi = y - sam.forecastSets(s).preYears;// y - sam.forecastSets(s).forecastYear.size() + nYears;
 	  int fi = -100;	  
 	  if(y > 0 &&
-	     y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
+	     y < sam.forecastSets(s).forecastYear.size() && //sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
 	   sam.forecastSets(s).nYears > 0 &&
 	   sam.forecastSets(s).forecastYear(y) > 0 &&
 	     //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	     sam.forecastSets(s).forecastYear(y) > 0){
 	    fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
 	  }
-	  if(sam.confSets(s).simFlag(1) == 0){
-	    doSim = true;
-	  }else if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
+	  if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
 	    if(fi == 0 && sam.forecastSets(s).useModelLastN){
-	      doSim = false;
+	      //doSim = false;
 	    }else{
 	      doSim = true;
 	    }
 	    break;
+	  }else{
+	    //doSim = false;
 	  }
 	}else{
 	  if(sam.confSets(s).simFlag(1) == 0){
@@ -1119,7 +1120,7 @@ Type objective_function<Type>::operator() ()
 	      fcOffset = sam.dataSets(s).noYears - sam.forecastSets(s).preYears;
 	    int fi = -100;
 	    if(y > 0 &&
-	       y < sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
+	       y <  sam.forecastSets(s).forecastYear.size() && //sam.dataSets(s).noYears + sam.forecastSets(s).nYears - fcOffset &&
 	       sam.forecastSets(s).nYears > 0 &&
 	       sam.forecastSets(s).forecastYear(y) > 0 &&
 	       //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
@@ -1129,7 +1130,8 @@ Type objective_function<Type>::operator() ()
 	    if((sam.confSets(s).simFlag(1) == 0 ||
 		(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
 	       keepN(i) == 1){
-	      notCondOn(i) = 1;
+	      if(!(fi == 0 && sam.forecastSets(s).useModelLastN))
+		notCondOn(i) = 1;
 	    }
 	  }else if(sam.confSets(s).simFlag(1) == 0 && keepN(i) == 1){
 	    notCondOn(i) = 1;
@@ -1229,7 +1231,9 @@ Type objective_function<Type>::operator() ()
 	      dataSet<Type> ds = sam.dataSets(s);
 	      confSet cs = sam.confSets(s);
 	      paraSet<Type> ps = paraSets(s);
-	      predN(i) = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y)(0);
+	      // Overwrite (only) recruitment
+	      if(a - ageOffset == 0)
+		predN(i) = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y)(0);
 	      if(notCondOn(i) == 0){
 		if(keepN(i) == 0){
 		  avec(k1++) = 0.0;
