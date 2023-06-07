@@ -183,7 +183,8 @@ plotit.msamforecast <- function(fit,
         }else{
             ex <- sapply(1:length(fit),function(i){
                 x <- attr(fit[[i]],"tab")
-                range(x[,paste(what2,"estimate", sep=":")])
+                nm <- attr(fit[[i]],"estimateLabel")
+                range(x[,paste(what2,nm, sep=":")])
             })         
         }
     }
@@ -219,7 +220,8 @@ addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)
     for(s in 1:length(ylist)){
         y <- ylist[[s]]
         x <- xlist[[s]]
-        points(y,x[,paste(what,"estimate", sep=":")], pch=dotpch, cex=dotcex, col=dotcol[s])
+        nm <- attr(fit[[s]],"estimateLabel")
+        points(y,x[,paste(what,nm, sep=":")], pch=dotpch, cex=dotcex, col=dotcol[s])
     }
 }
 
@@ -281,8 +283,10 @@ fbarplot.msam <- function(fit,partial = FALSE, drop=0, page=NULL, plot = TRUE,
                 }
             }
         }
+    }else{
+        exx <- numeric(0)
+        fmatsInPage <- NA
     }
-    exx=numeric(0); fmatsInPage=NA
     invisible(list(fbarRange = fbarRange, fbarlab = expression(bar(F)),
               exx = exx, drop = drop, page = page,
               fmatsInPage = fmatsInPage, d = d, col = col,
