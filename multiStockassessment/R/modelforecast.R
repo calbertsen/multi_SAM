@@ -856,5 +856,3 @@ modelforecast.msam <- function(fit,
     }
 }
     
-
-

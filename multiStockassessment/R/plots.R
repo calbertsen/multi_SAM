@@ -67,24 +67,39 @@ plotit.msam <- function(fit, what,
                         unnamed.basename="current",
                         xlim=NULL,
                         ciAlpha = 0.3,
-                        col = .plotcols.crp(length(fit)),
+                        col = .plotcols.crp(length(fit)+1),
                         extraLabel=NULL,
                         addTotal = FALSE,
                         onlyTotal = FALSE,
                         legend.pos = "bottom",
+                        stocks = seq_len(length(fit)+addTotal),
                         ...){
-    col <- rep(col, length.out = length(fit))
+    col <- rep(col, length.out = length(fit)+1)
+    names(col) <- c(getStockNames(fit),"Total")
     dotargs <- list(...)
     tabList <- tableit(fit=fit,what=what,x=x,trans=trans, returnList = TRUE, addTotal = addTotal || onlyTotal)
-    if(onlyTotal)
+    if(onlyTotal){
         tabList <- tabList[match("Total",names(tabList))]
+        x <- list(min(unlist(x)):max(unlist(x)))
+    }else{
+        if(is.character(stocks)){
+            stocks <- lapply(stocks,function(s) grep(sprintf("^%s",s),getStockNames(fit)))
+            if(any(sapply(stocks,length)!=1))
+                stop("Stock name does not match fit")
+            stocks <- unlist(stocks)
+        }
+        ##stocks <- pmatch(stocks,getStockNames(fit))
+        tabList <- tabList[stocks]
+        x <- c(x,"Total"=list(min(unlist(x)):max(unlist(x))))[stocks]
+        col <- col[stocks]
+    }
     tab <- cbindYearTables(tabList)
 
     xTab <- as.numeric(rownames(tab))
     xAll <- min(unlist(x)):max(unlist(x))
     xindx <- which(xAll%in%xTab)
     
-    y <- low <- high <- matrix(NA,length(xAll),length(fit))
+    y <- low <- high <- matrix(NA,length(xAll),length(tabList))
     y[xindx,] <- tab[,(0:(length(tabList)-1))*3 + 1,drop=FALSE]
     low[xindx,] <- tab[,(0:(length(tabList)-1))*3 + 2,drop=FALSE]
     high[xindx,] <- tab[,(0:(length(tabList)-1))*3 + 3,drop=FALSE]
@@ -96,7 +111,7 @@ plotit.msam <- function(fit, what,
     }else{
         xr <- xlim
     }
-    x<-x[didx]
+    x<-lapply(x,function(xx) xx[didx])
     y<-y[didx,,drop=FALSE]
     low<-low[didx,,drop=FALSE]
     high<-high[didx,,drop=FALSE]
@@ -120,14 +135,14 @@ plotit.msam <- function(fit, what,
         grid(col="black")
     }
     if(ci){
-        for(i in 1:length(fit)){
+        for(i in 1:length(tabList)){
             xuse <- xAll%in%x[[i]]
             indx <- which(!is.na(low[,i]) & !is.na(high[,i]) & xuse)
             polygon(c(xAll[indx],rev(xAll[indx])), y = c((low[indx,i]),rev((high[indx,i]))), col = addTrans(col[i],ciAlpha), border=NA)
             ##lines(xAll, (y[,i]), lwd=3, col=col[i])
         }
     }
-    for(i in 1:length(fit)){
+    for(i in 1:length(tabList)){
         larg <- c(list(x = xAll,
                        y = y[,i]),
                   dotargs)
@@ -138,7 +153,7 @@ plotit.msam <- function(fit, what,
     }
     stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))
     if(!onlyTotal && !is.na(legend.pos))
-        legend(legend.pos,legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
+        legend(legend.pos,legend=stocknames[stocks], lwd=3, col=col, ncol=min(length(stocks),5), bty="n", merge=TRUE)
 }
 
 
@@ -202,6 +217,9 @@ addforecast<-function(fit, what, dotcol="black", dotpch=19, dotcex=1.5, interval
 ##' @export
 addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)), dotpch=19, dotcex=1.5, intervalcol=addTrans(dotcol,0.5),...){
     xlist <- lapply(fit,attr, which = "tab")
+    stocks <- list(...)$stocks
+    if(!is.null(stocks))
+        xlist <- xlist[stocks]    
     ylist <- lapply(xlist,function(x) as.numeric(rownames(x)))
     dummy <- sapply(1:length(xlist),function(s){
         y <- ylist[[s]]
