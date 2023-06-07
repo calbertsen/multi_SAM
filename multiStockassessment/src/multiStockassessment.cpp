@@ -1196,8 +1196,9 @@ Type objective_function<Type>::operator() ()
 	      muNew(k2++) = predN(i);
 	    }
 	  }
-	  vector<Type> simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + density::MVNORM(newSigma).simulate();
-	  
+	  vector<Type> noiseN = density::MVNORM(newSigma).simulate();
+	  vector<Type> simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + noiseN;
+	 	  
 	  // 4) Insert into logN at the right places
 	  k1 = 0;
 	  for(int i = 0; i < notCondOn.size(); ++i){
@@ -1210,7 +1211,52 @@ Type objective_function<Type>::operator() ()
 	      logN.col(s)(a - ageOffset,y) = simRes(k1++);
 	    }
 	  }
-	}
+	  // 5) Update if recruitment age is 0
+	  // Need to rerun all of this:
+	  bool hasZeroRec = false;
+	  k1 = 0; k2 = 0;
+	  for(int i = 0; i < notCondOn.size(); ++i){
+	    int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+	    // Age index = age - minAge
+	    int a = i % nages;
+	    int ageOffset = sam.confSets(s).minAge - minAgeAll;
+	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	    if(sam.confSets(s).minAge == 0 &&
+	       sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) == sam.forecastSets(s).asRecModel ){
+	      hasZeroRec = true;
+	      array<Type> logNa = getArray(logN, s);
+	      array<Type> logFa = getArray(logF, s);
+	      dataSet<Type> ds = sam.dataSets(s);
+	      confSet cs = sam.confSets(s);
+	      paraSet<Type> ps = paraSets(s);
+	      predN(i) = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y)(0);
+	      if(notCondOn(i) == 0){
+		if(keepN(i) == 0){
+		  avec(k1++) = 0.0;
+		}else{		  
+		  avec(k1++) = logN.col(s)(a - ageOffset,y) - predN(i);
+		}
+	      }else{
+		muNew(k2++) = predN(i);
+	      }
+	    }
+	  }
+	  // Update simres and insert
+	  if(hasZeroRec){
+	    simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + noiseN;
+	    k1 = 0;
+	    for(int i = 0; i < notCondOn.size(); ++i){
+	      if(notCondOn(i) == 1){
+		int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+		// Age index = age - minAge
+		int a = i % nages;
+		int ageOffset = sam.confSets(s).minAge - minAgeAll;
+		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+		logN.col(s)(a - ageOffset,y) = simRes(k1++);
+	      }
+	    }
+	  }	    
+	}	  
       }// End doSim
     } // End simulate
   } // End year loop
