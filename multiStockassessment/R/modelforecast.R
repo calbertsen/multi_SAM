@@ -174,7 +174,7 @@ modelforecast.msam <- function(fit,
         stop("...")    
     nYears <- sapply(lengthVec,max)
     if(any(sapply(seq_along(fit),function(x)max(fit[[x]]$data$years) - year.base >= nYears[[x]])))
-        stop("Not enough constraints for the forecast")
+        warning("The forecast does not go past the assessment.")
 
     ## Convert input to an F model code and a target value
     for(i in 1:nStocks){
