@@ -215,7 +215,7 @@ addforecast<-function(fit, what, dotcol="black", dotpch=19, dotcex=1.5, interval
 ##' @rdname addforecast
 ##' @method addforecast msamforecast
 ##' @export
-addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)), dotpch=19, dotcex=1.5, intervalcol=addTrans(dotcol,0.5),...){
+addforecast.msamforecast <- function(fit, what, dotcol=.plotcols.crp(length(fit)+1), dotpch=19, dotcex=1.5, intervalcol=addTrans(dotcol,0.5),...){
     xlist <- lapply(fit,attr, which = "tab")
     stocks <- list(...)$stocks
     if(!is.null(stocks))
