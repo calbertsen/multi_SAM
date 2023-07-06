@@ -125,7 +125,7 @@ multisam.fit <- function(x,
 
     if(any(!corStructure)){
         tms <- terms(formula)
-        if(length(attr(tms,"variables")) + attr(tms,"intercept")){
+        if(attr(tms,"order") + attr(tms,"intercept") > 0){
             warning("corStructure used with a formula without parameters. Using ~factor(Index) instead.")
             formula <- ~factor(Index)
         }
