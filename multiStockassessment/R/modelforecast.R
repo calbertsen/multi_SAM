@@ -66,6 +66,7 @@ modelforecast.msam <- function(fit,
                           fixedFdeviation = FALSE,
                           useFHessian = FALSE,
                           resampleFirst = !is.null(nosim) && nosim > 0,
+                          resampleParameters = FALSE,
                           useModelLastN = TRUE,
                           fixFirstN = FALSE,
                           customSel = NULL,
@@ -534,14 +535,18 @@ modelforecast.msam <- function(fit,
         nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
         i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsert[i]))
-        plMap <- pl
-        map <- obj$env$map ##attr(fit,"m_obj")$env$map
-        with.map <- intersect(names(plMap), names(map))
-        applyMap <- function(par.name) {
-            tapply(plMap[[par.name]], map[[par.name]], mean)
+        useMapOnPl <- function(plMap, map){
+            with.map <- intersect(names(plMap), names(map))
+            applyMap <- function(par.name) {
+                tapply(plMap[[par.name]], map[[par.name]], mean)
+            }
+            plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+            plMap
         }
-        plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+        map <- obj$env$map ##attr(fit,"m_obj")$env$map
+        plMap <- useMapOnPl(pl, map)
         sniii <- 1
+        parameterSigma <- svd_solve(attr(fit,"m_opt")$he)
         doSim <- function(re_constraint = NULL, re_pl = NULL){
             obj2 <- obj
             if(!is.null(re_constraint)){
@@ -560,18 +565,29 @@ modelforecast.msam <- function(fit,
             dList0 <- split(as.vector(sim0), nfSplit)
             estList0 <- split(as.vector(sim0+est), nfSplit)
             if(!is.null(re_pl)){
-                plMap2 <- re_pl
-                ##map <- obj2$env$map
-                with.map <- intersect(names(plMap2), names(map))
-                applyMap <- function(par.name) {
-                    tapply(plMap2[[par.name]], map[[par.name]], mean)
-                }
-                plMap2[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+                if(resampleParameters)
+                    warning("Parameters are not resamples when re_pl is given")
+                plMap2 <- useMapOnPl(re_pl, map)
+                ## ##map <- obj2$env$map
+                ## with.map <- intersect(names(plMap2), names(map))
+                ## applyMap <- function(par.name) {
+                ##     tapply(plMap2[[par.name]], map[[par.name]], mean)
+                ## }
+                ## plMap2[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
                 p <- unlist(plMap2)
                 names(p) <- rep(names(plMap2), times = sapply(plMap2,length))
             }else{
-                p <- unlist(plMap)
-                names(p) <- rep(names(plMap), times = sapply(plMap,length))
+                if(resampleParameters){
+                    p0 <- obj2$par
+                    pfix <- rmvnorm(1, p0, Sigma = parameterSigma + diag(1e-6,length(p0)))
+                    ## Should random effects back in time be updated?
+                    p <- unlist(plMap)
+                    names(p) <- rep(names(plMap), times = sapply(plMap,length))
+                    p[-obj$env$random] <- pfix
+                }else{
+                    p <- unlist(plMap)
+                    names(p) <- rep(names(plMap), times = sapply(plMap,length))
+                }
             }            
             ## Only works when year.base is last assessment year
             indxN <- local({
@@ -608,6 +624,7 @@ modelforecast.msam <- function(fit,
                 }
             }
             v <- obj2$simulate(par = p)
+            v$parameterVector <- p
             sniii <<- sniii+1
             incpb()
             return(v)
