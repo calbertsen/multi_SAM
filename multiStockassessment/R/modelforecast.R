@@ -583,12 +583,18 @@ modelforecast.msam <- function(fit,
                     p0 <- obj2$par
                     pfix <- rmvnorm(1, p0, Sigma = parameterSigma + diag(1e-6,length(p0)))
                     ## Update random effects
-                    objX$fn(pfix)
-                    ## p <- unlist(plMap)
-                    ## names(p) <- rep(names(plMap), times = sapply(plMap,length))
-                    ## p[-obj$env$random] <- pfix
-                    ## obj2$fn(pfix)
-                    p <- objX$env$last.par
+                    capture.output(objX$fn(pfix))
+                    ## Insert into plMap
+                    pXL <- useMapOnPl(objX$env$parList(),map)
+                    plMap2 <- plMap
+                    for(nm in intersect(names(plMap2),names(pXL))){
+                        ## This assumes that the new parameters are always the same dimenension or has more columns (i.e., extra years for random effects)                        
+                        tmp <- as.vector(pXL[[nm]])
+                        if(length(tmp) > 0)
+                            plMap2[[nm]][seq_along(tmp)] <- tmp
+                    }
+                    p <- unlist(plMap2)
+                    names(p) <- rep(names(plMap2), times = sapply(plMap2,length))
                 }else{
                     p <- unlist(plMap)
                     names(p) <- rep(names(plMap), times = sapply(plMap,length))
