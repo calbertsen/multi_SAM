@@ -547,6 +547,7 @@ modelforecast.msam <- function(fit,
         plMap <- useMapOnPl(pl, map)
         sniii <- 1
         parameterSigma <- svd_solve(attr(fit,"m_opt")$he)
+        objX <- attr(fit,"m_obj")
         doSim <- function(re_constraint = NULL, re_pl = NULL){
             obj2 <- obj
             if(!is.null(re_constraint)){
@@ -562,8 +563,9 @@ modelforecast.msam <- function(fit,
             sim0 <- 0*est
             if(resampleFirst)
                 sim0 <- rmvnorm(1, mu=0*est, Sigma=cov + diag(1e-6,length(est)))
+             ## update N & F before forecast
             dList0 <- split(as.vector(sim0), nfSplit)
-            estList0 <- split(as.vector(sim0+est), nfSplit)
+            ##estList0 <- split(as.vector(sim0+est), nfSplit)          
             if(!is.null(re_pl)){
                 if(resampleParameters)
                     warning("Parameters are not resamples when re_pl is given")
@@ -580,15 +582,18 @@ modelforecast.msam <- function(fit,
                 if(resampleParameters){
                     p0 <- obj2$par
                     pfix <- rmvnorm(1, p0, Sigma = parameterSigma + diag(1e-6,length(p0)))
-                    ## Should random effects back in time be updated?
-                    p <- unlist(plMap)
-                    names(p) <- rep(names(plMap), times = sapply(plMap,length))
-                    p[-obj$env$random] <- pfix
+                    ## Update random effects
+                    objX$fn(pfix)
+                    ## p <- unlist(plMap)
+                    ## names(p) <- rep(names(plMap), times = sapply(plMap,length))
+                    ## p[-obj$env$random] <- pfix
+                    ## obj2$fn(pfix)
+                    p <- objX$env$last.par
                 }else{
                     p <- unlist(plMap)
                     names(p) <- rep(names(plMap), times = sapply(plMap,length))
                 }
-            }            
+            }
             ## Only works when year.base is last assessment year
             indxN <- local({
                 ii <- which(names(p) %in% "logN")
@@ -612,8 +617,8 @@ modelforecast.msam <- function(fit,
                 ## }
                 unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
             })
-            p[indxN] <- estList0$LogN
-            p[indxF] <- estList0$LogF[indxF>0]
+            p[indxN] <- p[indxN] + dList0$LogN
+            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]
             fdvAll <- dList0$LogF ## - mean(dList0$LogF)
             for(i in 1:nStocks){
                 fdv <- fdvAll[as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)]
