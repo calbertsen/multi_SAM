@@ -10,7 +10,7 @@ Maintainer: Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>
 Description: Fitting multiple SAM models.
 License: GPL-2
 Copyright: Technical University of Denmark
-Depemds: stockassessment (>= 0.12.2)
+Depends: stockassessment (>= 0.12.2)
 Imports: TMB (>= 1.9.1), stockassessment (>= 0.12.2), grDevices, graphics, methods, stats
 LinkingTo: TMB (>= 1.9.1), RcppEigen, stockassessment (>= 0.12.2)
 Suggests: parallel
