@@ -130,6 +130,16 @@ multisam.fit <- function(x,
             formula <- ~factor(Index)
         }
     }
+
+    if(mohn > 0){
+        ## Check input
+    }
+    if(mohn == 3){
+        mohn_fake_obs <- dat0[[1]]$logobs
+        mohn_fake_obs[is.na(mohn_fake_obs)] <- 0
+    }else{
+        mohn_fake_obs <- numeric(0)
+    }
     
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
@@ -154,7 +164,8 @@ multisam.fit <- function(x,
                 fake_stock = integer(0),
                 fake_indx = integer(0),
                 fake_includeOthers = 1L,
-                doResiduals = as.integer(FALSE)
+                doResiduals = as.integer(FALSE),
+                useFakeObs = as.integer(FALSE)
                 )
     ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
     ## if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
@@ -231,6 +242,8 @@ multisam.fit <- function(x,
     }
     ##pars$initLogN <- combineVectors(lapply(attr(pars$logN,"rdim") * ifelse(initN,1,0),numeric))
     pars$initLogF <- combineVectors(lapply(initFdim,numeric))
+
+    pars$mohn_fake_obs <- mohn_fake_obs
 
     if(!is.null(parlist)){
         ## Message about wrong names in parlist
@@ -435,7 +448,7 @@ multisam.fit <- function(x,
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
         map0$logitFseason <- factor(unlist(lfm0))
     }
-    if(skip_stock_observations){
+    if(skip_stock_observations){## || mohn == 3){
         lfm0 <- lapply(splitParameter(pars$missing),seq_along)
         lfm0 <- lapply(lfm0,function(x) x*NA)
         map0$missing <- factor(unlist(lfm0))
@@ -454,7 +467,7 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip","mohn_fake_obs")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
     prf <- NULL

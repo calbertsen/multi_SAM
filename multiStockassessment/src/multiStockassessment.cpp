@@ -101,7 +101,12 @@ Type objective_function<Type>::operator() ()
   DATA_STRUCT(geneticsData, genetic_data);
 
   DATA_INTEGER(reportingLevel);
-  DATA_INTEGER(mohn);
+  // 0: Not for mohn's rho (i.e., multi stock assessment)  
+  // 1: independence for simplicity
+  // 2: quadratic form correction
+  // 3: replace data with random effects
+  DATA_INTEGER(mohn);		
+  
   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
@@ -138,6 +143,7 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR_INDICATOR(fake_keep, fake_obs);
   DATA_INTEGER(fake_includeOthers);
   DATA_INTEGER(doResiduals);
+  DATA_INTEGER(useFakeObs);
   
   // Create a keep indicator for each stock and for shared observations
   vector<data_indicator<vector<Type>,Type> > keep(sam.dataSets.size() + (sharedObs.hasSharedObs>0));
@@ -157,7 +163,7 @@ Type objective_function<Type>::operator() ()
     keep(keep.size()-1) = keepTmp;
   }
   
-  if(doResiduals){
+  if(doResiduals || useFakeObs){
     for(int i = 0; i < fake_obs.size(); ++i){
       // Overwrite true observations with residual observations
       if(sharedObs.hasSharedObs && (fake_stock(i) == sam.dataSets.size())){ // Shared observation
@@ -166,7 +172,8 @@ Type objective_function<Type>::operator() ()
 	sam.dataSets(fake_stock(i)).logobs(fake_indx(i)) = fake_obs(i);
       }
       // Overwrite keep value
-      keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
+      if(doResiduals)
+	keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
     }
   }
 
@@ -252,7 +259,9 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_3DARRAY(logitFseason);
   
   PARAMETER_CMOE_VECTOR(missing);
-  
+
+ 
+   
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
@@ -272,7 +281,8 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(initLogN);
   PARAMETER_CMOE_VECTOR(initLogF);
 
-  
+   PARAMETER_VECTOR(mohn_fake_obs);
+
   int nStocks = logF.cols();
 
   vector<paraSet<Type> > paraSets(nStocks);
@@ -409,51 +419,80 @@ Type objective_function<Type>::operator() ()
   ofall<Type> ofAll(nStocks);
 
   ////////////////////////////////////
-  /////////// Missing Obs ///////////
+  //////////// Mohn's rho ///////////
   //////////////////////////////////
 
- // patch missing single-stock observations with random effects 
-  int idxmis = 0;
-  for(int s = 0; s < nStocks; ++s)
-    for(int i = 0; i < sam.dataSets(s).nobs; ++i){
-      if(isNA(sam.dataSets(s).logobs(i))){
-  	sam.dataSets(s).logobs(i) = missing(idxmis++);
-	int f = sam.dataSets(s).aux(i,1) - 1;
-	if(sam.dataSets(s).fleetTypes(f)>=90){//==90){
-	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
-	}
-	if(sam.dataSets(s).fleetTypes(f) == 0 && sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)
-	  ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
-      }    
+  if(mohn == 3){ // Use random effects to add correlation
+    Type n = sam.dataSets.size();
+    int T = sam.dataSets(0).years.size();
+    for(int i = 0; i < mohn_fake_obs.size(); ++i){
+      if(!isNA(sam.dataSets(0).logobs(i))){
+	ans -= n * dnorm(sam.dataSets(0).logobs(i), mohn_fake_obs(i), Type(0.00001), true);
+      }else{
+       	ans -= n * dnorm(mohn_fake_obs(i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+      }
+      
     }
+    for(int s = 0; s < n; ++s){ // loop over peels
+      Type nobs_s = sam.dataSets(s).logobs.size();
+	for(int k = 0; k < nobs_s; ++k){
+	  if(!isNA(sam.dataSets(s).logobs(k)))
+	    sam.dataSets(s).logobs(k) = mohn_fake_obs(k);
+	}
+    }
+  }
+
+  if(mohn == 2){ // Quadratic form correction
+
+  }
+
+  
+  ////////////////////////////////////
+  /////////// Missing Obs ///////////
+  //////////////////////////////////
+  //if(mohn != 3){
+    // patch missing single-stock observations with random effects 
+    int idxmis = 0;
+    for(int s = 0; s < nStocks; ++s)
+      for(int i = 0; i < sam.dataSets(s).nobs; ++i){
+	if(isNA(sam.dataSets(s).logobs(i))){
+	  sam.dataSets(s).logobs(i) = missing(idxmis++);
+	  int f = sam.dataSets(s).aux(i,1) - 1;
+	  if(sam.dataSets(s).fleetTypes(f)>=90){//==90){
+	    ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
+	  }
+	  if(sam.dataSets(s).fleetTypes(f) == 0 && sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)
+	    ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
+	}    
+      }
  
-  // patch missing vulnerability keys with parameters
-  idxmis = 0;
-  for(int i = 0; i < sharedObs.keyFleetStock.rows(); ++i)
-    for(int j = 0; j < sharedObs.keyFleetStock.cols(); ++j)
-      if(isNA(sharedObs.keyFleetStock(i,j))){
-  	sharedObs.keyFleetStock(i,j) = invlogit(shared_logitMissingVulnerability(idxmis++));
-      }    
+    // patch missing vulnerability keys with parameters
+    idxmis = 0;
+    for(int i = 0; i < sharedObs.keyFleetStock.rows(); ++i)
+      for(int j = 0; j < sharedObs.keyFleetStock.cols(); ++j)
+	if(isNA(sharedObs.keyFleetStock(i,j))){
+	  sharedObs.keyFleetStock(i,j) = invlogit(shared_logitMissingVulnerability(idxmis++));
+	}    
   
- // patch missing shared observations with random effects 
-  idxmis = 0;
-  if(sharedObs.hasSharedObs)
-    for(int i = 0; i < sharedObs.logobs.size(); ++i)
-      if(isNA(sharedObs.logobs(i))){
-  	sharedObs.logobs(i) = shared_missingObs(idxmis++);
-      }    
+    // patch missing shared observations with random effects 
+    idxmis = 0;
+    if(sharedObs.hasSharedObs)
+      for(int i = 0; i < sharedObs.logobs.size(); ++i)
+	if(isNA(sharedObs.logobs(i))){
+	  sharedObs.logobs(i) = shared_missingObs(idxmis++);
+	}    
 
   
-  // add wide prior for missing random effects, but _only_ when computing ooa residuals
-  if(doResiduals){
-    Type huge = 10.0;
-    for (int i = 0; i < missing.size(); i++)
-      ans -= dnorm(missing(i), Type(0.0), huge, true);
-    for (int i = 0; i < shared_missingObs.size(); i++)
-      ans -= dnorm(shared_missingObs(i), Type(0.0), huge, true);
-  } 
+    // add wide prior for missing random effects, but _only_ when computing ooa residuals
+    if(doResiduals){
+      Type huge = 10.0;
+      for (int i = 0; i < missing.size(); i++)
+	ans -= dnorm(missing(i), Type(0.0), huge, true);
+      for (int i = 0; i < shared_missingObs.size(); i++)
+	ans -= dnorm(shared_missingObs(i), Type(0.0), huge, true);
+    } 
 
-
+    //}
   
   ////////////////////////////////////
   /////////// Recruitment ///////////

@@ -21,11 +21,12 @@
   unnamed.basename = "current",
   xlim = NULL,
   ciAlpha = 0.3,
-  col = .plotcols.crp(length(fit)),
+  col = .plotcols.crp(length(fit) + 1),
   extraLabel = NULL,
   addTotal = FALSE,
   onlyTotal = FALSE,
   legend.pos = "bottom",
+  stocks = seq_len(length(fit) + addTotal),
   ...
 )
 
