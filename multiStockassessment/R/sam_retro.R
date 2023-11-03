@@ -177,9 +177,36 @@ mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","
 }
 
 ##' @export
-mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1){
+mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1, modified = FALSE){
+
+    mohn_2 <- function(fits, what=NULL, lag=0, ...){
+        if(is.null(what)){
+            what <- function(fit){
+                ret <- cbind(rectable(fit,...)[,1], ssbtable(fit)[,1], fbartable(fit)[,1])
+                add <- 0
+                dots <- list(...)
+                if(!is.null(dots$lagR)){
+                    if(dots$lagR == TRUE){
+                        add <- 1
+                    }
+                }
+                colnames(ret) <- c(paste("R(age ", fit$conf$minAge + add, ")", sep = ""), "SSB",
+                                   paste("Fbar(", fit$conf$fbarRange[1], "-", fit$conf$fbarRange[2], ")", sep = ""))
+                ret
+            }
+        }
+        ref <- what(attr(fits,"fit"))
+        ret <- lapply(fits, what)
+        if(modified){
+            bias <- lapply(ret, function(x){y<-rownames(x)[nrow(x)-lag]; (log10(x)[rownames(x)==y,]-log10(ref)[rownames(ref)==y,])})
+        }else{
+            bias <- lapply(ret, function(x){y<-rownames(x)[nrow(x)-lag]; (x[rownames(x)==y,]-ref[rownames(ref)==y,])/ref[rownames(ref)==y,]})
+        }
+        colMeans(do.call(rbind,bias))
+    }
+    
     RETRO <- fit
-    def <- mohn(RETRO)
+    def <- mohn_2(RETRO)
     def[] <- NA
     if(type == "Tail"){
         doOne <- function(){
@@ -189,7 +216,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)            
-            mohn(re_retro)
+            mohn_2(re_retro)
         }
     }else{
         fit <- attr(RETRO,"fit")
@@ -238,10 +265,9 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
                 return(def)
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
-                return(def)            
-
+                return(def)
+            mohn_2(re_retro)
         }        
-
     }
     replicate(nsim, doOne())
 }
