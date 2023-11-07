@@ -548,12 +548,13 @@ multisam.fit <- function(x,
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
         h <- stats::optimHess(opt$par, obj$fn, obj$gr)
-        ss <- try({solve(h[!atBound,!atBound], g[!atBound])})
+        ss <- try({svd_solve(h[!atBound,!atBound], g[!atBound])})
         if(!is(ss,"try-error")){
             opt$par[!atBound] <- opt$par[!atBound]- ss
             opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
             opt$objective <- obj$fn(opt$par)
         }else{
+            message("Hessian could not be inverted for newton steps.");
             break;
         }
     }
