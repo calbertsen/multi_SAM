@@ -177,9 +177,9 @@ mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","
 }
 
 ##' @export
-mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1, modified = FALSE){
+mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1){
 
-    mohn_2 <- function(fits, what=NULL, lag=0, ...){
+    mohn_2 <- function(fits, what=NULL, lag=0, modified = FALSE, ...){
         if(is.null(what)){
             what <- function(fit){
                 ret <- cbind(rectable(fit,...)[,1], ssbtable(fit)[,1], fbartable(fit)[,1])
@@ -208,6 +208,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
     RETRO <- fit
     def <- mohn_2(RETRO)
     def[] <- NA
+    def <- list(Normal = def, Modified = def)
     if(type == "Tail"){
         doOne <- function(){
             simfit <- try({stockassessment:::addSimulatedYears(RETRO[[length(RETRO)]],rep(NA,length(RETRO)), resampleFirst = TRUE, refit = TRUE)})
@@ -216,7 +217,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)            
-            mohn_2(re_retro)
+            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro))
         }
     }else{
         fit <- attr(RETRO,"fit")
@@ -266,7 +267,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)
-            mohn_2(re_retro)
+            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro))
         }        
     }
     replicate(nsim, doOne())
