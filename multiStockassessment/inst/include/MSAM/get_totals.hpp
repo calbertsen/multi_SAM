@@ -298,8 +298,8 @@ void getTotals(vector<dataSet<Type> >& datA,
       mohnRhoVec_ssb(i-1,0) = vR;
       mohnRhoVec_ssb(i-1,1) = v;
       // Fbar
-      v = fbari(datA(0),confA(0),logFa0,T-i, false);
-      vR =fbari(datA(i),confA(i),logFaR,T-i, false);
+      v = fbari(datA(0),confA(0),logFa0,T-i, true);
+      vR =fbari(datA(i),confA(i),logFaR,T-i, true);
       mohnRho_fbar += (exp(vR)-exp(v))/exp(v);
       mohnRhoMod_fbar += (vR-v) / log(10.0);
       mohnRhoVec_fbar(i-1,0) = vR;
