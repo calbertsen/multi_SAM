@@ -20,8 +20,12 @@ retro_hessian <- function(mFit, oFit){
     years <- rev(tail(dataYears,length(mFit)))
     m_opt <- attr(mFit,"m_opt")
     ## match parameters to years
+    apOrig <- do.call("rbind",lapply(mFit, function(x) sapply(split(x$opt$par,names(x$opt$par)),length)))
     ap <- split(m_opt$par,factor(names(m_opt$par),unique(names(m_opt$par))))
-    parYear <- unlist(lapply(ap,function(x) rep(years, each = length(x) / length(years))))
+    parYear <- lapply(names(ap), function(nm) rep(years,times = apOrig[,nm]))
+    names(parYear) <- names(ap)
+    parYear <- unlist(parYear)
+    ##parYear <- unlist(lapply(ap,function(x) rep(years, each = length(x) / length(years))))
     isFirstYear <- parYear == min(parYear)
     ## Derivative of score function
     H <- m_opt$he
