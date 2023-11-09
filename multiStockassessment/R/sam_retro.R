@@ -82,7 +82,7 @@ retro_hessian <- function(mFit, oFit){
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Vy <- solve(A %*%Hy[isObs,isObs]%*%A)
+    Vy <- stockassessment:::svd_solve(A %*%Hy[isObs,isObs]%*%A)
     ## J1_2 is ordered by parameter then year
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),isObs] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))
@@ -94,7 +94,7 @@ retro_hessian <- function(mFit, oFit){
     info_H_par <- c(info_Hx_par[j11or],unlist(lapply(tail(years,1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) })))
     info_H_num <- c(info_Hx_num[j11or],unlist(lapply(tail(years,1), function(y){ seq_along(m_opt$par[parYear==y]) })))
     ## Full gradient for Delta Method
-    G <- -solve(J2) %*% (cbind(J1_1,J1_2) )
+    G <- -stockassessment:::svd_solve(J2) %*% (cbind(J1_1,J1_2) )
     G2 <- matrix(0,sum(isFirstYear),ncol(G))
     diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
     Gx <- rbind(G,G2)
