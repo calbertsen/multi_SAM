@@ -137,7 +137,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
 
     if(simDelta > 0){
         opt0 <- attr(retroMS,"m_opt")
-        Sig0 <- solve(he0)
+        Sig0 <- solve(Hes)
         obj0 <- attr(retroMS,"m_obj")
         
         doOne0 <- function(sim=TRUE){
