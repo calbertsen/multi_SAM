@@ -71,6 +71,7 @@ multisam.fit <- function(x,
                          symbolicAnalysis = FALSE,
                          fullDerived = FALSE,
                          mohn = FALSE,
+                         doSdreport = TRUE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     envir <- parent.frame(1L)
@@ -562,30 +563,37 @@ multisam.fit <- function(x,
     ##opt$he <- numDeriv::hessian(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
-    sdrep <- TMB::sdreport(obj,opt$par, opt$he)
-    ssdrep <- summary(sdrep)
+    if(doSdreport){
+        sdrep <- TMB::sdreport(obj,opt$par, opt$he)
+        ssdrep <- summary(sdrep)
+    }else{
+        sdrep <- NA
+        ssdrep <- NA
+    }
 
     ## Do as in stockassessment package
-    # Last two states
-    idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
-    sdrep$estY <- sdrep$value[idx]
-    sdrep$covY <- sdrep$cov[idx,idx]
+                                        # Last two states
+    if(doSdreport){
+        idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
+        sdrep$estY <- sdrep$value[idx]
+        sdrep$covY <- sdrep$cov[idx,idx]
 
-    idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
-    sdrep$estYm1 <- sdrep$value[idx]
-    sdrep$covYm1 <- sdrep$cov[idx,idx]
+        idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
+        sdrep$estYm1 <- sdrep$value[idx]
+        sdrep$covYm1 <- sdrep$cov[idx,idx]
 
-    ## covRecPars
-    idx <- grep("_rec_pars$",names(sdrep$value))
-    sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
-    colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
-
+        ## covRecPars
+        idx <- grep("_rec_pars$",names(sdrep$value))
+        sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
+        colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+    }
     ## parList    
     pl <- as.list(sdrep,"Est")
     plsd <- as.list(sdrep,"Std")
-    
-    sdrep$cov<-NULL # save memory
-    
+
+    if(doSdreport){
+        sdrep$cov<-NULL # save memory
+    }
 
     ## Prepare result
     res <- x
@@ -617,12 +625,16 @@ multisam.fit <- function(x,
     attr(res,"dotargs") <- list(...)
     attr(res,"m_call") <- mc
     attr(res,"m_envir") <- envir
-    corpars <- ssdrep[rownames(ssdrep)=="RE",]
-    if(!is.null(obj$env$map$RE)){
-        corpars <- corpars[obj$env$map$RE,]
-        ##corpars[is.na(corpars)] <- 0
+    if(doSdreport){
+        corpars <- ssdrep[rownames(ssdrep)=="RE",]
+        if(!is.null(obj$env$map$RE)){
+            corpars <- corpars[obj$env$map$RE,]
+            ##corpars[is.na(corpars)] <- 0
+        }
+        rownames(corpars) <- colnames(dat$X)
+    }else{
+        corpars <- NA
     }
-    rownames(corpars) <- colnames(dat$X)
     attr(res,"corParameters") <- corpars
     class(res) <- c("msam","samset")
     return(res)

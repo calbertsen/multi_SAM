@@ -122,31 +122,62 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorrelation = TRUE){
+mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
     ## Already fitted with retro
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
     fitList <- do.call("c",c(list(attr(fit,"fit")), fit))
-    retroMS <- multisam.fit(fitList, mohn=1)
+    retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
 
     if(addCorrelation){
-        Hes1 <- retro_hessian(retroMS, fitList[[length(fitList)]])
-        sdr <- sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes1)
-    }else{    
-        sdr <- attr(retroMS,"m_sdrep")
+        Hes <- retro_hessian(retroMS, fitList[[length(fitList)]])
+    }else{
+        Hes <- attr(retroMS,"m_opt")$he        
     }
-    ssdr <- summary(sdr)
 
-    res <- list(table = ssdr[grepl("mohnRho_",rownames(ssdr)),],
-                tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
+    if(simDelta > 0){
+        opt0 <- attr(retroMS,"m_opt")
+        Sig0 <- solve(he0)
+        obj0 <- attr(retroMS,"m_obj")
+        
+        doOne0 <- function(sim=TRUE){
+            if(sim){
+                p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0, pivot = TRUE)
+                p0[names(opt0$par)=="transfIRARdist"] <- pmin(pmax(p0[names(opt0$par)=="transfIRARdist"],-2),2)
+            }else{
+                p0 <- opt0$par
+            }
+            o <- capture.output(obj0$fn(p0))
+            rp0 <- obj0$report()
+            c(Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)),
+              SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
+              R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)))
+        }
+        estRho <- doOne0(FALSE)
+        simRho <- replicate(simDelta,doOne0())
+        tab <- cbind(Est = estRho,
+                     CI_low = apply(simRho,1,quantile,prob=0.025),
+                     CI_high = apply(simRho,1,quantile,prob=0.975))
+    }else{
+        sdr <- sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
+        ssdr <- summary(sdr)
+        ssb <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        fbar <- ssdr[grepl("mohnRho_fbar",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        rec <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        tab <- rbind(fbar,ssb,rec)
+    }
+
+    res <- list(table = tab,
+                #tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
                 addCorrelation = addCorrelation,
+                simDelta = simDelta,
                 mfit = retroMS)
     class(res) <- "sam_mohn"
     res    
 }
 
 ##' @export
-mohn_CI.sam <- function(fit, addCorrelation = TRUE, years = 5){
+mohn_CI.sam <- function(fit, addCorrelation = TRUE, years = 5, ...){
     ## Fake retro
     getRetroInputStocks <- function(fit, n){
         f <- runwithout(fit,year=tail(fit$data$years,n),run=FALSE)
@@ -156,7 +187,7 @@ mohn_CI.sam <- function(fit, addCorrelation = TRUE, years = 5){
     }
     fitList <- do.call("c",lapply(seq_len(years), getRetroInputStocks,fit=fit))
     attr(fitList,"fit") <- fit
-    mohn_CI.samset(fitList, addCorrelation = addCorrelation)
+    mohn_CI.samset(fitList, addCorrelation = addCorrelation, ...)
 }
 
 ##' @export
@@ -247,7 +278,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             ## Gauss: Posterior simulation of F and N
             if(type %in% c("GaussF","Gauss")){
                 p0 <- obj$env$last.par.best
-                p0[obj$env$random] <- stockassessment:::rmvnorm(1,p0[obj$env$random],C0)
+                p0[obj$env$random] <- stockassessment:::rmvnorm(1,p0[obj$env$random],C0, pivot = TRUE)
                 pl <- obj$env$parList(par = p0)
             }
             ##
