@@ -549,6 +549,7 @@ multisam.fit <- function(x,
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
         h <- stats::optimHess(opt$par, obj$fn, obj$gr)
+        ##h <- stockassessment:::hessian(obj$fn, opt$par)
         ss <- try({svd_solve(h[!atBound,!atBound]) %*% g[!atBound]})
         if(!is(ss,"try-error")){
             opt$par[!atBound] <- opt$par[!atBound]- ss
@@ -559,8 +560,8 @@ multisam.fit <- function(x,
             break;
         }
     }
-    opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
-    ##opt$he <- numDeriv::hessian(opt$par, obj$fn, obj$gr)
+    ##opt$he <- stockassessment:::hessian(obj$fn, opt$par)
+    opt$he <- optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
     if(doSdreport){

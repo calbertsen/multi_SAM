@@ -14,7 +14,7 @@ block <- function(...){
 }
 
 
-retro_hessian <- function(mFit, oFit){
+retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
 ##### Calculate hessian with correlation #####
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -31,7 +31,7 @@ retro_hessian <- function(mFit, oFit){
     H <- m_opt$he
     ## Derivative wrt each of the old parameter sets
     Hx <- lapply(head(years,-1), function(y){
-        optimHess(m_opt$par[parYear==y],oFit$obj$fn,oFit$obj$gr)
+        optimHess(m_opt$par[parYear==y], oFit$obj$fn, oFit$obj$gr)
     })
     info_Hx_peel <- unlist(lapply(head(years,-1), function(y){ rep(max(years)-y, sum(parYear==y)) }))
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) }))
@@ -81,7 +81,7 @@ retro_hessian <- function(mFit, oFit){
     Obj1 <- TMB::MakeADFun(dat,pl,map, random=ran, DLL="multiStockassessment",inner.control=list(maxit=100))
     isObs <- names(Obj1$par) == "fake_obs"
     Obj1$fn()
-    Hy <- optimHess(Obj1$par, Obj1$fn, Obj1$gr)
+    Hy <- t(stockassessment:::hessian_gr(Obj1$gr, Obj1$par, rows = which(isObs)))
 ### The data appears multiple times for some years, use average
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
@@ -106,6 +106,11 @@ retro_hessian <- function(mFit, oFit){
     Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
     ## Delta method to get correlation
     Sig1 <- Gx %*% block(stockassessment:::svd_solve(oFit$opt$he),Vy) %*% t(Gx)
+    if(keep.diagonal){
+        D <- diag(sqrt(diag(m_opt$he)))
+        CC <- cov2cor(Sig1)
+        Sig1 <- D %*% CC %*% D
+    }
     ## Convert to Hessian for sdreport
     Hes1 <- try({solve(Sig1)},silent=TRUE)
     i <- 18
@@ -143,21 +148,28 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
         doOne0 <- function(sim=TRUE){
             if(sim){
                 p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0, pivot = TRUE)
-                p0[names(opt0$par)=="transfIRARdist"] <- pmin(pmax(p0[names(opt0$par)=="transfIRARdist"],-2),2)
+                ## Respect bounds
+                lower2 <- attr(retroMS,"m_low")
+                upper2 <- attr(retroMS,"m_high")
+                p0 <- pmax(pmin(upper2, p0), lower2)
+                ## bound transfIRARdist further
+                p0[names(opt0$par)=="transfIRARdist"] <- pmin(pmax(p0[names(opt0$par)=="transfIRARdist"],-5),5)
+                ## Bound i
             }else{
                 p0 <- opt0$par
             }
-            o <- capture.output(obj0$fn(p0))
+            obj0$fn(p0)
             rp0 <- obj0$report()
             c(Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)),
               SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
               R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)))
         }
         estRho <- doOne0(FALSE)
-        simRho <- replicate(simDelta,doOne0())
+        simRho <- replicate(simDelta,tryCatch(doOne0(), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
+        bginfo <- list(est = estRho, sim = simRho)
         tab <- cbind(Est = estRho,
-                     CI_low = apply(simRho,1,quantile,prob=0.025),
-                     CI_high = apply(simRho,1,quantile,prob=0.975))
+                     CI_low = apply(simRho,1,quantile,prob=0.025, na.rm=TRUE),
+                     CI_high = apply(simRho,1,quantile,prob=0.975, na.rm=TRUE))
     }else{
         sdr <- sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
         ssdr <- summary(sdr)
@@ -165,12 +177,14 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
         fbar <- ssdr[grepl("mohnRho_fbar",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
         rec <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
         tab <- rbind(fbar,ssb,rec)
+        bginfo <- ssdr
     }
 
     res <- list(table = tab,
                 #tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
                 addCorrelation = addCorrelation,
                 simDelta = simDelta,
+                bginfo = bginfo,
                 mfit = retroMS)
     class(res) <- "sam_mohn"
     res    
@@ -252,7 +266,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)            
-            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro))
+            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
         }
     }else{
         fit <- attr(RETRO,"fit")
@@ -302,7 +316,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)
-            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro))
+            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
         }        
     }
     replicate(nsim, doOne())
