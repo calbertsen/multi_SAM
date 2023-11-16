@@ -31,7 +31,7 @@ retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
     H <- m_opt$he
     ## Derivative wrt each of the old parameter sets
     Hx <- lapply(head(years,-1), function(y){
-        optimHess(m_opt$par[parYear==y], oFit$obj$fn, oFit$obj$gr)
+        hessian_gr(oFit$obj$gr, m_opt$par[parYear==y], method = "central")
     })
     info_Hx_peel <- unlist(lapply(head(years,-1), function(y){ rep(max(years)-y, sum(parYear==y)) }))
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) }))
@@ -81,14 +81,14 @@ retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
     Obj1 <- TMB::MakeADFun(dat,pl,map, random=ran, DLL="multiStockassessment",inner.control=list(maxit=100))
     isObs <- names(Obj1$par) == "fake_obs"
     Obj1$fn()
-    Hy <- t(stockassessment:::hessian_gr(Obj1$gr, Obj1$par, rows = which(isObs)))
+    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = "central", symmetrize = FALSE)) ## Subsets on rows, so transform to organize by columns
 ### The data appears multiple times for some years, use average
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Vy <- stockassessment:::svd_solve(A %*%Hy[isObs,isObs]%*%A)
+    Vy <- stockassessment:::svd_solve(A %*%Hy[which(isObs),which(isObs)]%*%A)
     ## J1_2 is ordered by parameter then year
-    J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),isObs] # Derivative wrt new parameter then y
+    J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))
     ## Reorder to match J1_2
     j11or <- order(info_Hx_par,info_Hx_peel,info_Hx_num)

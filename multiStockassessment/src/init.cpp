@@ -50,16 +50,21 @@ extern "C" {
     {NULL,NULL,0}
   };
 
+#define CALLABLE(name) R_RegisterCCallable("multiStockassessment", #name, (DL_FUNC) &name)
+  
   void R_init_multiStockassessment(DllInfo *info)
   {
     /* Register the .C and .Call routines.
        No .Fortran() or .External() routines,
        so pass those arrays as NULL.
     */
+    SAM_CALLABLE(multiStockassessment);
+    
     R_registerRoutines(info,
 		       NULL, callMethods,
 		       NULL, NULL);
-    R_useDynamicSymbols(info, (Rboolean)FALSE);
+    R_useDynamicSymbols(info, (Rboolean)FALSE);    
+    R_forceSymbols(info, (Rboolean)FALSE);
   }
 
 

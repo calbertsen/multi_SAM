@@ -72,6 +72,7 @@ multisam.fit <- function(x,
                          fullDerived = FALSE,
                          mohn = FALSE,
                          doSdreport = TRUE,
+                         skip.hessian = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     envir <- parent.frame(1L)
@@ -561,7 +562,8 @@ multisam.fit <- function(x,
         }
     }
     ##opt$he <- stockassessment:::hessian(obj$fn, opt$par)
-    opt$he <- optimHess(opt$par, obj$fn, obj$gr)
+    if(!skip.hessian)
+        opt$he <- optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
     if(doSdreport){
@@ -588,9 +590,14 @@ multisam.fit <- function(x,
         sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
         colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
     }
-    ## parList    
-    pl <- as.list(sdrep,"Est")
-    plsd <- as.list(sdrep,"Std")
+    ## parList
+    if(doSdreport){
+        pl <- as.list(sdrep,"Est")
+        plsd <- as.list(sdrep,"Std")
+    }else{
+        pl <- obj$env$parList(par = obj$env$last.par.best)
+        plsd <- NA
+    }
 
     if(doSdreport){
         sdrep$cov<-NULL # save memory
