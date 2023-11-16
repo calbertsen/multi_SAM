@@ -219,14 +219,14 @@ mohn_sim_CI <- function(fit, ...){
 
 
 ##' @export
-mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1, year = 5){
+mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), resampleParameters=FALSE, ncores = 1, year = 5){
     RETRO <- retro(fit, year = year, ncores = ncores)
-    mohn_sim_CI(RETRO, nsim = nsim, type = type, ncores = ncores)
+    mohn_sim_CI(RETRO, nsim = nsim, type = type, resampleParameters = resampleParameters, ncores = ncores)
     
 }
 
 ##' @export
-mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), ncores = 1){
+mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), resampleParameters=FALSE, ncores = 1){
 
     mohn_2 <- function(fits, what=NULL, lag=0, modified = FALSE, ...){
         if(is.null(what)){
@@ -260,7 +260,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
     def <- list(Normal = def, Modified = def)
     if(type == "Tail"){
         doOne <- function(){
-            simfit <- try({stockassessment:::addSimulatedYears(RETRO[[length(RETRO)]],rep(NA,length(RETRO)), resampleFirst = TRUE, refit = TRUE)})
+            simfit <- try({stockassessment:::addSimulatedYears(RETRO[[length(RETRO)]],rep(NA,length(RETRO)), resampleFirst = TRUE, refit = TRUE, resampleParameters = resampleParameters)})
             if(is(simfit,"try-error"))
                 return(def)
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
@@ -278,6 +278,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
         obj$env$data$simFlag <- c(ifelse(type %in% c("Full"),0,1),
                                   ifelse(type %in% c("Gauss"),1,0),0)
         obj$retape()
+        
         obj$fn(fit$opt$par)
         pl <- fit$pl
         map <- fit$obj$env$map
@@ -290,10 +291,23 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             ## FixF: Let $simulate handle everything
             ## GaussF: Posterior simulation of F (simulate N and overwrite in $simulate)
             ## Gauss: Posterior simulation of F and N
+            if(resampleParameters){
+                
+            }
             if(type %in% c("GaussF","Gauss")){
-                p0 <- obj$env$last.par.best
+                if(resampleParameters){
+                    px <- stockassessment:::rmvnorm(1, fit$opt$par, solve(fit$opt$he), TRUE)
+                    obj$fn(px)
+                    p0 <- obj$env$last.par
+                }else{
+                    p0 <- obj$env$last.par.best
+                }
                 p0[obj$env$random] <- stockassessment:::rmvnorm(1,p0[obj$env$random],C0, pivot = TRUE)
                 pl <- obj$env$parList(par = p0)
+            }else if(resampleParameters){
+                px <- stockassessment:::rmvnorm(1, fit$opt$par, solve(fit$opt$he), TRUE)
+                obj$fn(px)
+                pl <- obj$env$parList(par = obj$env$last.par)
             }
             ##
             with.map <- intersect(names(pl), names(map))
