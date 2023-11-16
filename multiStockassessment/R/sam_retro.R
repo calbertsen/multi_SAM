@@ -144,6 +144,17 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
         opt0 <- attr(retroMS,"m_opt")
         Sig0 <- solve(Hes)
         obj0 <- attr(retroMS,"m_obj")
+
+        C0 <- try({chol(Sig0, pivot=TRUE)},silent=TRUE)
+        if(is(C0,"try-error")){
+            i <- 18
+            while(is(C0,"try-error")){
+                i <- i - 1
+                Sig0 <- Sig0 
+                C0 <- try({chol(Sig0 + diag(10^(-i),ncol(Sig0)), pivot=TRUE)},silent=TRUE)
+            }
+            Sig0 <- Sig0 + diag(10^(-i),ncol(Sig0))
+        }
         
         doOne0 <- function(sim=TRUE){
             if(sim){
@@ -219,14 +230,14 @@ mohn_sim_CI <- function(fit, ...){
 
 
 ##' @export
-mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), resampleParameters=FALSE, ncores = 1, year = 5){
+mohn_sim_CI.sam <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF","Obs"), resampleParameters=FALSE, ncores = 1, year = 5){
     RETRO <- retro(fit, year = year, ncores = ncores)
     mohn_sim_CI(RETRO, nsim = nsim, type = type, resampleParameters = resampleParameters, ncores = ncores)
     
 }
 
 ##' @export
-mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF"), resampleParameters=FALSE, ncores = 1){
+mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail","FixF","Obs"), resampleParameters=FALSE, ncores = 1){
 
     mohn_2 <- function(fits, what=NULL, lag=0, modified = FALSE, ...){
         if(is.null(what)){
@@ -273,10 +284,10 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
         obj <- unserialize(serialize(fit$obj, NULL))
         ## Fix in simulation:
 #### F (all but Full and Tail),
-#### N (Fix for Gauss),
+#### N (Fix for Gauss and Obs),
 #### Obs (None)
-        obj$env$data$simFlag <- c(ifelse(type %in% c("Full"),0,1),
-                                  ifelse(type %in% c("Gauss"),1,0),0)
+        obj$env$data$simFlag <- c(ifelse(type %in% c("Full","Tail"),0,1),
+                                  ifelse(type %in% c("Gauss","Obs"),1,0),0)
         obj$retape()
         
         obj$fn(fit$opt$par)
