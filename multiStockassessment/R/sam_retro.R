@@ -278,7 +278,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
         obj$env$data$simFlag <- c(ifelse(type %in% c("Full"),0,1),
                                   ifelse(type %in% c("Gauss"),1,0),0)
         obj$retape()
-        obj$fn()
+        obj$fn(fit$opt$par)
         pl <- fit$pl
         map <- fit$obj$env$map
         if(type %in% c("GaussF","Gauss")){
