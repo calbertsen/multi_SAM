@@ -142,14 +142,15 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     ## Already fitted with retro
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
-    fitList <- do.call("c",c(list(attr(fit,"fit")), fit))
+    fitFinal <- attr(fit,"fit")
+    fitList <- do.call("c",c(list(fitFinal), fit))
     retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
 
     ## Does not allow for lag in R
     add <- 0
-    nms <- c(paste("R(age ", fit$conf$minAge + add, ")", sep = ""),
+    nms <- c(paste("R(age ", fitFinal$conf$minAge + add, ")", sep = ""),
              "SSB",
-             paste("Fbar(", fit$conf$fbarRange[1], "-", fit$conf$fbarRange[2], ")", sep = ""))
+             paste("Fbar(", fitFinal$conf$fbarRange[1], "-", fitFinal$conf$fbarRange[2], ")", sep = ""))
 
     
     if(addCorrelation){
@@ -211,10 +212,10 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     }else{
         sdr <- sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
         ssdr <- summary(sdr)
-        ssb <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        fbar <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        rec <- ssdr[grepl("mohnRho_bar",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        tab <- rbind(fbar,ssb,rec)
+        ssb <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        fbar <- ssdr[grepl("mohnRho_fbar",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        rec <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        tab <- rbind(rec,ssb, fbar)
         bginfo <- ssdr
     }
 
