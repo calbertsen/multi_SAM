@@ -138,13 +138,20 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
+mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, ...){
     ## Already fitted with retro
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
     fitList <- do.call("c",c(list(attr(fit,"fit")), fit))
     retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
 
+    ## Does not allow for lag in R
+    add <- 0
+    nms <- c(paste("R(age ", fit$conf$minAge + add, ")", sep = ""),
+             "SSB",
+             paste("Fbar(", fit$conf$fbarRange[1], "-", fit$conf$fbarRange[2], ")", sep = ""))
+
+    
     if(addCorrelation){
         Sig0 <- retro_hessian(retroMS, fitList[[length(fitList)]], returnSigma = TRUE)
         Hes <- solve(Sig0)
@@ -182,25 +189,34 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
             }
             obj0$fn(p0)
             rp0 <- obj0$report()
-            c(Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)),
+            c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
               SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
-              R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)))
+              Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
         }
         estRho <- doOne0(FALSE)
         simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
         bginfo <- list(est = estRho, sim = simRho)
-        tab <- cbind(Est = estRho,
-                     CI_low = apply(simRho,1,quantile,prob=0.025, na.rm=TRUE),
-                     CI_high = apply(simRho,1,quantile,prob=0.975, na.rm=TRUE))
+        if(quantile_CI){
+            cil <- apply(simRho,1,quantile,prob=0.025, na.rm=TRUE)
+            cih <- apply(simRho,1,quantile,prob=0.975, na.rm=TRUE)
+        }else{
+
+        }
+        tab <- cbind(Estimate = estRho,
+                     CI_low = cih,
+                     CI_high = cih)
+        
     }else{
         sdr <- sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
         ssdr <- summary(sdr)
-        ssb <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        fbar <- ssdr[grepl("mohnRho_fbar",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        rec <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Est = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        ssb <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        fbar <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
+        rec <- ssdr[grepl("mohnRho_bar",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
         tab <- rbind(fbar,ssb,rec)
         bginfo <- ssdr
     }
+
+    rownames(tab) <- nms
 
     res <- list(table = tab,
                 #tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
