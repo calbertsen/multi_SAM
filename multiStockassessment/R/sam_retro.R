@@ -200,7 +200,9 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
             cil <- apply(simRho,1,quantile,prob=0.025, na.rm=TRUE)
             cih <- apply(simRho,1,quantile,prob=0.975, na.rm=TRUE)
         }else{
-
+            sdv <- apply(simRho,1,sd,na.rm=TRUE)
+            cil <- estRho - 2 * sdv
+            cih <- estRho + 2 * sdv
         }
         tab <- cbind(Estimate = estRho,
                      CI_low = cih,
