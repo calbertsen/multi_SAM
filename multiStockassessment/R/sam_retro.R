@@ -14,7 +14,7 @@ block <- function(...){
 }
 
 
-retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
+retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE, HyMethod = "forward", forcePosDef = TRUE, returnSigma = FALSE){
 ##### Calculate hessian with correlation #####
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -31,7 +31,7 @@ retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
     H <- m_opt$he
     ## Derivative wrt each of the old parameter sets
     Hx <- lapply(head(years,-1), function(y){
-        hessian_gr(oFit$obj$gr, m_opt$par[parYear==y], method = "central")
+        hessian_gr(oFit$obj$gr, m_opt$par[parYear==y], method = "central", symmetrize=TRUE)
     })
     info_Hx_peel <- unlist(lapply(head(years,-1), function(y){ rep(max(years)-y, sum(parYear==y)) }))
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) }))
@@ -81,7 +81,7 @@ retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
     Obj1 <- TMB::MakeADFun(dat,pl,map, random=ran, DLL="multiStockassessment",inner.control=list(maxit=100))
     isObs <- names(Obj1$par) == "fake_obs"
     Obj1$fn()
-    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = "central", symmetrize = FALSE)) ## Subsets on rows, so transform to organize by columns
+    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = HyMethod, symmetrize = TRUE)) ## Subsets on rows, so transform to organize by columns
 ### The data appears multiple times for some years, use average
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
@@ -106,18 +106,29 @@ retro_hessian <- function(mFit, oFit, keep.diagonal = TRUE){
     Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
     ## Delta method to get correlation
     Sig1 <- Gx %*% block(stockassessment:::svd_solve(oFit$opt$he),Vy) %*% t(Gx)
+    ## Symmetrize for safety
+    Sig1 <- 0.5 * (Sig1 + t(Sig1))    
     if(keep.diagonal){
-        D <- diag(sqrt(diag(m_opt$he)))
+        D <- diag(sqrt(diag(svd_solve(m_opt$he))))
         CC <- cov2cor(Sig1)
         Sig1 <- D %*% CC %*% D
+        Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
-    ## Convert to Hessian for sdreport
-    Hes1 <- try({solve(Sig1)},silent=TRUE)
-    i <- 18
-    while(is(Hes1,"try-error")){
-        i <- i - 1
-        Hes1 <- try({solve(Sig1 + diag(10^(-i),ncol(Sig1)))},silent=TRUE)
+    if(forcePosDef){
+        ee <- eigen(Sig1, symmetric = TRUE)
+        if(returnSigma){
+            Sig1 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
+            Sig1 <- 0.5 * (Sig1 + t(Sig1))
+        }else{
+            Hes1 <- ee$vectors %*% diag(1.0 / (pmax(ee$values,1e-6 / max(ee$values)))) %*% solve(ee$vectors)
+            Hes1 <- 0.5 * (Hes1 + t(Hes1))
+        }
+    }else if(!returnSigma){
+        ## Convert to Hessian for sdreport
+        Hes1 <- solve(Sig1)
     }
+    if(returnSigma)
+        return(Sig1)
     Hes1
 }
 
@@ -135,30 +146,30 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
     retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
 
     if(addCorrelation){
-        Hes <- retro_hessian(retroMS, fitList[[length(fitList)]])
+        Sig0 <- retro_hessian(retroMS, fitList[[length(fitList)]], returnSigma = TRUE)
+        Hes <- solve(Sig0)
     }else{
-        Hes <- attr(retroMS,"m_opt")$he        
+        Hes <- attr(retroMS,"m_opt")$he
+        if(simDelta > 0)
+            Sig0 <- solve(Hes)
     }
 
     if(simDelta > 0){
         opt0 <- attr(retroMS,"m_opt")
-        Sig0 <- solve(Hes)
         obj0 <- attr(retroMS,"m_obj")
-
-        C0 <- try({chol(Sig0, pivot=TRUE)},silent=TRUE)
-        if(is(C0,"try-error")){
-            i <- 18
-            while(is(C0,"try-error")){
-                i <- i - 1
-                Sig0 <- Sig0 
-                C0 <- try({chol(Sig0 + diag(10^(-i),ncol(Sig0)), pivot=TRUE)},silent=TRUE)
-            }
-            Sig0 <- Sig0 + diag(10^(-i),ncol(Sig0))
+        ## check rank
+        rnk <- qr(Sig0,LAPACK=TRUE)$rank
+        if(rnk < nrow(Sig0)){
+            ee <- eigen(Sig0, symmetric = TRUE)
+            Sig0 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
+            Sig0 <- 0.5 * (Sig1 + t(Sig1))
         }
+        ## Get error now if it won't make chol
+        C0 <- chol(Sig0)
         
         doOne0 <- function(sim=TRUE){
             if(sim){
-                p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0, pivot = TRUE)
+                p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0)
                 ## Respect bounds
                 lower2 <- attr(retroMS,"m_low")
                 upper2 <- attr(retroMS,"m_high")
@@ -176,7 +187,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, ...){
               R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)))
         }
         estRho <- doOne0(FALSE)
-        simRho <- replicate(simDelta,tryCatch(doOne0(), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
+        simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
         bginfo <- list(est = estRho, sim = simRho)
         tab <- cbind(Est = estRho,
                      CI_low = apply(simRho,1,quantile,prob=0.025, na.rm=TRUE),
