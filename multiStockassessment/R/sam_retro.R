@@ -333,7 +333,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     
     if(addCorrelation){
         Sig0 <- retro_hessian(retroMS, returnSigma = TRUE)
-        Sig0_Chol <- Matrix::Cholesky(Sig0)
+        Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
         Hes <- Matrix::solve(Sig0_Chol)
         if(resampleRE){
             Sig_uu <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE)
