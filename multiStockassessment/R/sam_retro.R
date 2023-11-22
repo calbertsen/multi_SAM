@@ -247,7 +247,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
     Hy2 <- A %*%Hy[which(isObs),which(isObs)]%*%A
-    Vy <- Matrix::solve(Matrix::Cholesky(Hy2))
+    Vy <- Matrix::solve(Matrix::Cholesky(as(Hy2,"sparseMatrix")))
     ## J1_2 is ordered by parameter then year
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(seq_along(Hx), function(i){
@@ -266,7 +266,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     info_H_par <- c(info_Hx_par[j11or],unlist(lapply(tail(years,1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) })))
     info_H_num <- c(info_Hx_num[j11or],unlist(lapply(tail(years,1), function(y){ seq_along(m_opt$par[parYear==y]) })))
     ## Full gradient for Delta Method
-    G <- -Matrix::solve(Matrix::Cholesky(J2)) %*% as(cbind(J1_1,J1_2), "sparseMatrix")
+    G <- -Matrix::solve(Matrix::Cholesky(as(J2,"sparseMatrix"))) %*% as(cbind(J1_1,J1_2), "sparseMatrix")
     ## G2 <- matrix(0,sum(isFirstYear),ncol(G))
     ## diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
     G2 <- Matrix::sparseMatrix(i=1:sum(isFirstYear),
@@ -300,7 +300,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
         }
     }else if(!returnSigma){
         ## Convert to Hessian for sdreport
-        Hes1 <- Matrix::solve(Matrix::Cholesky(Sig1))
+        Hes1 <- Matrix::solve(Matrix::Cholesky(as(Sig1,"sparseMatrix")))
     }
     if(returnSigma)
         return(Sig1)
