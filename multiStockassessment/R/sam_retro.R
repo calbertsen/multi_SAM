@@ -196,7 +196,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_obj$env$last.par.best[m_obj$env$random][parYear==y]),unique(names(m_obj$env$last.par.best[m_obj$env$random]))) }))
     info_Hx_num <- unlist(lapply(head(years,-1), function(y){ seq_along(m_obj$env$last.par.best[m_obj$env$random][parYear==y]) }))
     ## Derivative of score function wrt new parameters (ordered by parameter then year)
-    J2 <- H[!isFirstYear, !isFirstYear]
+    J2 <- Matrix::symmpart(as(H[!isFirstYear, !isFirstYear],"sparseMatrix"))
     ## Get derivative and (Gaussian) variance for data
     oldObj <- attr(mFit,"m_obj")
     dat <- oldObj$env$data
@@ -246,8 +246,8 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Hy2 <- A %*%Hy[which(isObs),which(isObs)]%*%A
-    Vy <- Matrix::solve(Matrix::Cholesky(as(Hy2,"sparseMatrix")))
+    Hy2 <- Matrix::symmpart(as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
+    Vy <- Matrix::solve(Matrix::Cholesky(Hy2))
     ## J1_2 is ordered by parameter then year
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(seq_along(Hx), function(i){
@@ -266,7 +266,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     info_H_par <- c(info_Hx_par[j11or],unlist(lapply(tail(years,1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) })))
     info_H_num <- c(info_Hx_num[j11or],unlist(lapply(tail(years,1), function(y){ seq_along(m_opt$par[parYear==y]) })))
     ## Full gradient for Delta Method
-    G <- -Matrix::solve(Matrix::Cholesky(as(J2,"sparseMatrix"))) %*% as(cbind(J1_1,J1_2), "sparseMatrix")
+    G <- -Matrix::solve(Matrix::Cholesky(J2)) %*% as(cbind(J1_1,J1_2), "sparseMatrix")
     ## G2 <- matrix(0,sum(isFirstYear),ncol(G))
     ## diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
     G2 <- Matrix::sparseMatrix(i=1:sum(isFirstYear),
@@ -277,26 +277,26 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     ## Need to reorder to match fit
     Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
     ## Delta method to get correlation
-    Hold <- oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE)
+    Hold <- Matrix::symmpart(oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
     Vold <- Matrix::solve(Matrix::Cholesky(Hold))
     combiVar <- sparse_block(Vold,as(Vy,"sparseMatrix"))
     Sig1 <- (Gx %*% combiVar) %*% Matrix::t(Gx)
     ## Symmetrize for safety
-    Sig1 <- Matrix::forceSymmetric(Sig1) 
+    Sig1 <- Matrix::symmpart(Sig1) 
     if(keep.diagonal){
         D <- diag(sqrt(Matrix::diag(Matrix::solve(H))))
         CC <- Matrix::cov2cor(Sig1)
         Sig1 <- D %*% CC %*% D
-        Sig1 <- Matrix::forceSymmetric(Sig1) 
+        Sig1 <- Matrix::symmpart(Sig1) 
     }
     if(forcePosDef){
         ee <- eigen(Sig1, symmetric = TRUE)
         if(returnSigma){
             Sig1 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
-            Sig1 <- Matrix::forceSymmetric(Sig1)
+            Sig1 <- Matrix::symmpart(Sig1)
         }else{
             Hes1 <- ee$vectors %*% diag(1.0 / (pmax(ee$values,1e-6 / max(ee$values)))) %*% solve(ee$vectors)
-            Hes1 <- Matrix::forceSymmetric(Hes1)
+            Hes1 <- Matrix::symmpart(Hes1)
         }
     }else if(!returnSigma){
         ## Convert to Hessian for sdreport
@@ -332,21 +332,21 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
 
     
     if(addCorrelation){
-        Sig0 <- retro_hessian(retroMS, returnSigma = TRUE)
+        Sig0 <- Matrix::symmpart(retro_hessian(retroMS, returnSigma = TRUE))
         Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
-        Hes <- Matrix::solve(Sig0_Chol)
+        Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
         if(resampleRE){
-            Sig_uu <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE)
+            Sig_uu <- Matrix::symmpart(retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE))
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-            Hes_uu <- Matrix::solve(Sig_Chol_uu)
+            Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }
     }else{
         Hes <- attr(retroMS,"m_opt")$he
-        Sig0 <- solve(Hes)
+        Sig0 <- Matrix::symmpart(solve(Hes))
         if(resampleRE){
             obj0 <- attr(retroMS,"m_obj")
-            Hes_uu <- obj0$env$spHess(obj0$env$last.par.best, random = TRUE)
-            Sig_uu <- Matrix::solve(Matrix::Cholesky(Hes_uu))
+            Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
+            Sig_uu <- Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu)))
         }
     }
 
@@ -446,9 +446,9 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         
     }else{
         if(addCorrelation){
-            Sig_uu <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE)        
+            Sig_uu <- Matrix::symmpart(retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE))        
         }else{
-            Hes_uu <- obj0$env$spHess(obj0$env$last.par.best, random = TRUE)
+            Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
             Sig_uu <- Matrix::solve(Matrix::Cholesky(Hes_uu))
         }
         ## Manual version of sdreport
