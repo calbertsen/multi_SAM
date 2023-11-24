@@ -158,7 +158,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     Hes1
 }
 
-retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, returnSigma = FALSE){
+retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, returnSigma = TRUE){
     oFit <- mFit[[length(mFit)]]
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -275,7 +275,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
                                dims = c(sum(isFirstYear),ncol(G)))
     Gx <- rbind(G,G2)
     ## Need to reorder to match fit
-    Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
+    Gx <- as(Gx[order(info_H_par,info_H_peel,info_H_num),],"sparseMatrix")
     ## Delta method to get correlation
     Hold <- Matrix::symmpart(oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
     Vold <- Matrix::solve(Matrix::Cholesky(Hold))
@@ -284,9 +284,12 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = FALSE, r
     ## Symmetrize for safety
     Sig1 <- Matrix::symmpart(Sig1) 
     if(keep.diagonal){
-        D <- diag(sqrt(Matrix::diag(Matrix::solve(H))))
-        CC <- Matrix::cov2cor(Sig1)
-        Sig1 <- D %*% CC %*% D
+        D <- Matrix::Diagonal(x = sqrt(Matrix::diag(Matrix::solve(Matrix::Cholesky(H)))))
+        Do <- Matrix::Diagonal(x = 1.0 / sqrt(Matrix::diag(Sig1)))
+        Dx <- D %*% Do
+        ## CC <- Do %*% Sig1 %*% Do ##Matrix::cov2cor(Sig1)
+        ## Sig1 <- D %*% CC %*% D
+        Sig1 <- Dx %*% Sig1 %*% Dx
         Sig1 <- Matrix::symmpart(Sig1) 
     }
     if(forcePosDef){
@@ -332,11 +335,14 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
 
     
     if(addCorrelation){
-        Sig0 <- Matrix::symmpart(retro_hessian(retroMS, returnSigma = TRUE))
+        Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE)
+        Sig0 <- Matrix::symmpart(Sig0_tmp)
         Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
         Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
         if(resampleRE){
-            Sig_uu <- Matrix::symmpart(retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE))
+            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
+
+            Sig_uu <- as(Matrix::symmpart(Sig_uu_tmp),"sparseMatrix")
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }
