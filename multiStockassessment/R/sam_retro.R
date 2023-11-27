@@ -141,11 +141,14 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
         Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
     if(forcePosDef){
-         ss <- Matrix::Schur(Sig1)
-        ss@EValues <- pmax(ss@EValues,1e-6 / max(ss@EValues))
-        Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
-        Sig1 <- Matrix::symmpart(Sig1)
-
+        ## ss <- Matrix::Schur(Sig1)
+        ## ss@EValues <- pmax(ss@EValues,1e-6 / max(ss@EValues))
+        ## Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
+        ## Sig1 <- Matrix::symmpart(Sig1)
+        ee <- eigen(Sig1, symmetric = TRUE)
+        ee$values <- pmax(ee$values,1e-6 / max(ee$Values))
+        Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
+        Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
     if(!returnSigma){
         Hes1 <- solve(Sig1)
@@ -394,7 +397,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## Cuu <- Matrix::chol(Siguu)
         ## }
         #C0 <- as(C0,"sparseMatrix")
-        doOne0 <- function(sim=TRUE){
+        doOne0 <- function(sim=TRUE, modified = FALSE){
             ## if(sim & resampleRE){
             ##     cat("HELLO\n")
             ##     p1 <- obj0$env$last.par.best
@@ -425,9 +428,16 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
             ##     p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% Cuu)
             ## }
             rp0 <- obj0$report(p1)
-            c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
-              SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
-              Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
+            if(modified){
+                v <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
+                       SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
+                       Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
+            }else{
+                v <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
+                       SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
+                       Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
+            }
+            v
         }
         estRho <- doOne0(FALSE)
         simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
@@ -445,12 +455,20 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
                      CI_high = cih)
         
     }else{
-        if(addCorrelation){
-            Sig_uu <- Matrix::symmpart(retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE))        
-        }else{
-            Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
-            Sig_uu <- Matrix::solve(Matrix::Cholesky(Hes_uu))
-        }
+        if(!resampleRE){
+            if(addCorrelation){
+                Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
+                Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
+                Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+                Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+            }else{
+                obj0 <- attr(retroMS,"m_obj")
+                Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
+                Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
+                ##Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+            }
+        }## Otherwise calculated above
+        
         ## Manual version of sdreport
         ## Modified from TMB
         obj <- attr(retroMS,"m_obj")
