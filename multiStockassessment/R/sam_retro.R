@@ -141,21 +141,17 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
         Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
     if(forcePosDef){
-        ee <- eigen(Sig1, symmetric = TRUE)
-        if(returnSigma){
-            Sig1 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
-            Sig1 <- 0.5 * (Sig1 + t(Sig1))
-        }else{
-            Hes1 <- ee$vectors %*% diag(1.0 / (pmax(ee$values,1e-6 / max(ee$values)))) %*% solve(ee$vectors)
-            Hes1 <- 0.5 * (Hes1 + t(Hes1))
-        }
-    }else if(!returnSigma){
-        ## Convert to Hessian for sdreport
-        Hes1 <- solve(Sig1)
+         ss <- Matrix::Schur(Sig1)
+        ss@EValues <- pmax(ss@EValues,1e-6 / max(ss@EValues))
+        Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
+        Sig1 <- Matrix::symmpart(Sig1)
+
     }
-    if(returnSigma)
-        return(Sig1)
-    Hes1
+    if(!returnSigma){
+        Hes1 <- solve(Sig1)
+        return(Hes1)
+    }
+    return(Sig1)
 }
 
 retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, returnSigma = TRUE){
@@ -244,7 +240,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
     Hy <- Obj1$env$spHess(Obj1$env$last.par, random=TRUE)
 ### The data appears multiple times for some years, use average
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
-    A <- diag(sqrt(1/diagA),length(diagA))
+    A <- Matrix::Diagonal(x = sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
     Hy2 <- Matrix::symmpart(as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
     Vy <- Matrix::solve(Matrix::Cholesky(Hy2))
@@ -293,21 +289,17 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
         Sig1 <- Matrix::symmpart(Sig1) 
     }
     if(forcePosDef){
-        ee <- eigen(Sig1, symmetric = TRUE)
-        if(returnSigma){
-            Sig1 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
-            Sig1 <- Matrix::symmpart(Sig1)
-        }else{
-            Hes1 <- ee$vectors %*% diag(1.0 / (pmax(ee$values,1e-6 / max(ee$values)))) %*% solve(ee$vectors)
-            Hes1 <- Matrix::symmpart(Hes1)
-        }
-    }else if(!returnSigma){
-        ## Convert to Hessian for sdreport
-        Hes1 <- Matrix::solve(Matrix::Cholesky(as(Sig1,"sparseMatrix")))
+        ##ee <- eigen(Sig1, symmetric = TRUE)
+        ss <- Matrix::Schur(Sig1)
+        ss@T@x[] <- ss@EValues[] <- pmax(ss@T@x,1e-6 / max(ss@T@x))
+        Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
+        ##Sig1 <- Matrix::symmpart(Sig1)
     }
-    if(returnSigma)
-        return(Sig1)
-    Hes1
+    if(!returnSigma){
+        Hes1 <- Matrix::solve(Matrix::Cholesky(as(Sig1,"sparseMatrix")))
+        return(Hes1)
+    }
+    Sig1
     
     
 }
@@ -341,8 +333,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
         if(resampleRE){
             Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
-
-            Sig_uu <- as(Matrix::symmpart(Sig_uu_tmp),"sparseMatrix")
+            Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }
@@ -352,7 +343,8 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         if(resampleRE){
             obj0 <- attr(retroMS,"m_obj")
             Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
-            Sig_uu <- Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu)))
+            Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
+            Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
         }
     }
 
@@ -392,8 +384,10 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## jointCov <- Matrix::solve(jp_Chol)
         ## C0 <- Matrix::chol(jointCov)
         C0f <- Matrix::chol(Sig0)
-        if(resampleRE)
-            C0u <- Matrix::chol(Sig_uu)
+        if(resampleRE){
+            C0u <- Matrix::expand2(Sig_uu, LDL = FALSE)$`L.`
+            ##C0u <- Matrix::chol(Sig_uu)
+        }
         #C0 <- Matrix::solve(pC0)
         ##jointCov <- Matrix::solve(jointPrecision)
         ## Siguu <- jointCov[!isFixed,!isFixed] - jointCov[!isFixed,isFixed] %*% Matrix::solve(jointCov[isFixed,isFixed]) %*% jointCov[isFixed,!isFixed]
