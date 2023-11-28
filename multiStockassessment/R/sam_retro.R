@@ -388,7 +388,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## C0 <- Matrix::chol(jointCov)
         C0f <- Matrix::chol(Sig0)
         if(resampleRE){
-            C0u <- Matrix::expand2(Sig_uu, LDL = FALSE)$`L.`
+            C0u <- Matrix::expand2(Sig_Chol_uu, LDL = FALSE)$`L.`
             ##C0u <- Matrix::chol(Sig_uu)
         }
         #C0 <- Matrix::solve(pC0)
