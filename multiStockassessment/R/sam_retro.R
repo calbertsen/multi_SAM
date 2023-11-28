@@ -146,7 +146,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
         ## Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
         ## Sig1 <- Matrix::symmpart(Sig1)
         ee <- eigen(Sig1, symmetric = TRUE)
-        ee$values <- pmax(ee$values,1e-6 / max(ee$Values))
+        ee$values <- pmax(ee$values,1e-6 / max(ee$values))
         Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
         Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
