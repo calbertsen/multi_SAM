@@ -314,10 +314,12 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, ...){
+mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, onlyRE = FALSE, ...){
     ## Already fitted with retro
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
+    if(simDelta == 0 & onlyRE)
+        stop("onlyRE is only for simulation")
     fitFinal <- attr(fit,"fit")
     fitList <- do.call("c",c(list(fitFinal), fit))
     retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
@@ -330,27 +332,31 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
 
     
     if(addCorrelation){
-        Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE)
-        Sig0 <- Matrix::symmpart(Sig0_tmp)
-        Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
-        Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
-        if(resampleRE){
+        if(!onlyRE){
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE)
+            Sig0 <- Matrix::symmpart(Sig0_tmp)
+            Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
+            Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
+        }
+        if(resampleRE | onlyRE){
             Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
             Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }
     }else{
-        Hes <- attr(retroMS,"m_opt")$he
-        Sig0 <- Matrix::symmpart(solve(Hes))
-        if(resampleRE){
+        if(!onlyRE){
+            Hes <- attr(retroMS,"m_opt")$he
+            Sig0 <- Matrix::symmpart(solve(Hes))
+        }
+        if(resampleRE | onlyRE){
             obj0 <- attr(retroMS,"m_obj")
             Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
             Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
         }
     }
-
+    
     if(simDelta > 0){
         opt0 <- attr(retroMS,"m_opt")
         obj0 <- attr(retroMS,"m_obj")
@@ -386,8 +392,9 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## jp_Chol <- Matrix::Cholesky(jointPrecision)
         ## jointCov <- Matrix::solve(jp_Chol)
         ## C0 <- Matrix::chol(jointCov)
-        C0f <- Matrix::chol(Sig0)
-        if(resampleRE){
+        if(!onlyRE)
+            C0f <- Matrix::chol(Sig0)
+        if(resampleRE | onlyRE){
             C0u <- Matrix::expand2(Sig_Chol_uu, LDL = FALSE)$`L.`
             ##C0u <- Matrix::chol(Sig_uu)
         }
@@ -397,7 +404,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## Cuu <- Matrix::chol(Siguu)
         ## }
         #C0 <- as(C0,"sparseMatrix")
-        doOne0 <- function(sim=TRUE, modified = FALSE){
+        doOne0 <- function(sim=TRUE){
             ## if(sim & resampleRE){
             ##     cat("HELLO\n")
             ##     p1 <- obj0$env$last.par.best
@@ -405,7 +412,13 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
             ## }else{
             if(sim){
                 ## p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0)
-                p0 <- opt0$par + drop(rnorm(length(opt0$par)) %*% C0f)
+                if(!onlyRE){
+                    p0 <- opt0$par + drop(rnorm(length(opt0$par)) %*% C0f)
+                    obj0$fn(p0)
+                    p1 <- obj0$env$last.par #.best
+                }else{
+                    p1 <- obj0$env$last.par.best
+                }
                 ## ## Respect bounds
                 ## lower2 <- attr(retroMS,"m_low")
                 ## upper2 <- attr(retroMS,"m_high")
@@ -416,10 +429,10 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
                 ## }else{
                 ##     p0 <- opt0$par
                 ## }
-                obj0$fn(p0)
+                
                 ##p1 <- obj0$env$last.par.best + drop(rnorm(length(obj0$env$last.par.best))) %*% C0
-                p1 <- obj0$env$last.par #.best
-                if(resampleRE)
+                
+                if(resampleRE | onlyRE)
                     p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% C0u)
             }else{
                 p1 <- obj0$env$last.par.best
@@ -428,32 +441,43 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
             ##     p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% Cuu)
             ## }
             rp0 <- obj0$report(p1)
-            if(modified){
-                v <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
-                       SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
-                       Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
-            }else{
-                v <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
-                       SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
-                       Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
-            }
-            v
+            vMod <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
+                      SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
+                      Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
+            vOld <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
+                      SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
+                      Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
+            list(Modified = vMod, Original = vOld)
         }
         estRho <- doOne0(FALSE)
-        simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) c(Fbar=NA,SSB=NA,R=NA)))
-        bginfo <- list(est = estRho, sim = simRho)
+        estRho_Orig <- estRho$Original
+        estRho_Mod <- estRgo$Modified
+        simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) list(Modified = c(Fbar=NA,SSB=NA,R=NA), Original = c(Fbar=NA,SSB=NA,R=NA))), simplify = FALSE)
+        simRho_Orig <- do.call("cbind",lapply(simRho, function(x) x$Original))
+        simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
+        bginfo_Orig <- list(est = estRho_Orig, sim = simRho_Orig)
+        bginfo_Mod <- list(est = estRho_Mod, sim = simRho_Mod)
         if(quantile_CI){
-            cil <- apply(simRho,1,quantile,prob=0.025, na.rm=TRUE)
-            cih <- apply(simRho,1,quantile,prob=0.975, na.rm=TRUE)
+            cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
+            cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
+            cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
+            cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
         }else{
-            sdv <- apply(simRho,1,sd,na.rm=TRUE)
-            cil <- estRho - 2 * sdv
-            cih <- estRho + 2 * sdv
+            sdv_Orig <- apply(simRho_Orig,1,sd,na.rm=TRUE)
+            cil_Orig <- estRho_Orig - 2 * sdv_Orig
+            cih_Orig <- estRho_Orig + 2 * sdv_Orig
+            sdv_Mod <- apply(simRho_Mod,1,sd,na.rm=TRUE)
+            cil_Mod <- estRho_Mod - 2 * sdv_Mod
+            cih_Mod <- estRho_Mod + 2 * sdv_Mod
         }
-        tab <- cbind(Estimate = estRho,
-                     CI_low = cil,
-                     CI_high = cih)
-        
+        tab <- list(Original = cbind(Estimate = estRho_Orig,
+                                     CI_low = cil_Orig,
+                                     CI_high = cih_Orig),
+                    Modified = cbind(Estimate = estRho_Mod,
+                                     CI_low = cil_Mod,
+                                     CI_high = cih_Mod))
+        bginfo <- list(Original = bginfo_Orig,
+                       Modified = bginfo_Mod)
     }else{
         if(!resampleRE){
             if(addCorrelation){
@@ -488,7 +512,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
             obj$env$f(par, order = 0, type = "ADGrad")
             ADGradForward0Initialized <<- TRUE
         }
-        chunk <- unlist(obj$env$ADreportIndex()[c("mohnRho_rec","mohnRho_ssb","mohnRho_fbar")])
+        chunk <- unlist(obj$env$ADreportIndex()[c("mohnRho_rec","mohnRho_ssb","mohnRho_fbar","mohnRhoMod_rec","mohnRhoMod_ssb","mohnRhoMod_fbar")])
         w <- rep(0, length(phi))
         phiDeriv <- function(i){
             w[i] <- 1
@@ -514,9 +538,12 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         cov <- term1 + term2
         ## End of modified from TMB
         sdv <- sqrt(Matrix::diag(cov))
-        tab <- cbind("Estimate" = phi,
-                     "CI_low" = phi - 2 * sdv,
-                     "CI_high" = phi + 2 * sdv)        
+        tab <- list(Original = cbind("Estimate" = phi[1:3],
+                                     "CI_low" = phi[1:3] - 2 * sdv[1:3],
+                                     "CI_high" = phi[1:3] + 2 * sdv[1:3]),
+                    Modified = cbind("Estimate" = phi[4:6],
+                                     "CI_low" = phi[4:6] - 2 * sdv[4:6],
+                                     "CI_high" = phi[4:6] + 2 * sdv[4:6]))
         bginfo <- list(phi = phi, cov = cov)
         ## sdr <- TMB::sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
         ## ssdr <- summary(sdr)
@@ -527,7 +554,8 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         ## bginfo <- ssdr
     }
 
-    rownames(tab) <- nms
+    rownames(tab$Original) <- nms
+    rownames(tab$Modified) <- nms
 
     res <- list(table = tab,
                 #tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
@@ -606,7 +634,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
     RETRO <- fit
     def <- mohn_2(RETRO)
     def[] <- NA
-    def <- list(Normal = def, Modified = def)
+    def <- list(Original = def, Modified = def)
     if(type == "Tail"){
         doOne <- function(){
             simfit <- try({stockassessment:::addSimulatedYears(RETRO[[length(RETRO)]],rep(NA,length(RETRO)), resampleFirst = TRUE, refit = TRUE, resampleParameters = resampleParameters)})
@@ -615,7 +643,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)            
-            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
+            list(Original = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
         }
     }else{
         fit <- attr(RETRO,"fit")
@@ -679,7 +707,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             re_retro <- try({stockassessment::retro(simfit, length(RETRO), ncores=ncores)},silent=TRUE)
             if(is(re_retro,"try-error"))
                 return(def)
-            list(Normal = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
+            list(Original = mohn_2(re_retro), Modified = mohn_2(re_retro, modified = TRUE))
         }        
     }
     replicate(nsim, doOne())
