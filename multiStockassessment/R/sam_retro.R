@@ -451,7 +451,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
         }
         estRho <- doOne0(FALSE)
         estRho_Orig <- estRho$Original
-        estRho_Mod <- estRgo$Modified
+        estRho_Mod <- estRho$Modified
         simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) list(Modified = c(Fbar=NA,SSB=NA,R=NA), Original = c(Fbar=NA,SSB=NA,R=NA))), simplify = FALSE)
         simRho_Orig <- do.call("cbind",lapply(simRho, function(x) x$Original))
         simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
