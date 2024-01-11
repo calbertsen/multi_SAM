@@ -182,6 +182,9 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logSdLogFsta);
   PARAMETER_CMOE_VECTOR(muF);
   PARAMETER_CMOE_VECTOR(trans_rho_F);
+  PARAMETER_CMOE_VECTOR(boundF_kappa);
+  PARAMETER_CMOE_VECTOR(boundF_alpha);
+  PARAMETER_CMOE_VECTOR(boundF_tau);
   PARAMETER_CMOE_VECTOR(logSdLogN);
   PARAMETER_CMOE_VECTOR(logSdLogP);
   PARAMETER_CMOE_VECTOR(logSdLogObs);
@@ -294,6 +297,9 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logSdLogFsta = logSdLogFsta.col(s);
     paraSets(s).muF = muF.col(s);
     paraSets(s).trans_rho_F = trans_rho_F.col(s);
+    paraSets(s).boundF_kappa = boundF_kappa.col(s);
+    paraSets(s).boundF_alpha = boundF_alpha.col(s);
+    paraSets(s).boundF_tau = boundF_tau.col(s);
     paraSets(s).logSdLogN = logSdLogN.col(s);
     paraSets(s).logSdLogP = logSdLogP.col(s);
     paraSets(s).logSdLogObs = logSdLogObs.col(s);

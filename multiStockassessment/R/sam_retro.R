@@ -316,6 +316,7 @@ mohn_CI <- function(fit, ...){
 ##' @export
 mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, onlyRE = FALSE, ...){
     ## Already fitted with retro
+    call <- match.call()
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
     if(simDelta == 0 & onlyRE)
@@ -333,7 +334,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     
     if(addCorrelation){
         if(!onlyRE){
-            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE)
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = TRUE)
             Sig0 <- Matrix::symmpart(Sig0_tmp)
             Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
             Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
@@ -558,9 +559,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     rownames(tab$Modified) <- nms
 
     res <- list(table = tab,
-                #tableMod = ssdr[grepl("mohnRhoMod_",rownames(ssdr)),],
-                addCorrelation = addCorrelation,
-                simDelta = simDelta,
+                call = call,
                 bginfo = bginfo,
                 mfit = retroMS)
     class(res) <- "sam_mohn"
