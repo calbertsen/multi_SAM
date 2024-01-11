@@ -37,7 +37,15 @@ sparse_block <- function(...){
     Matrix::sparseMatrix(i=yv$i, j=yv$j, x=yv$x, dims = c(sum(n),sum(n)))
 }
 
+makeSymPosDef <- function(x){
+    ## Sym
+    v <- x + t(x)
+    ee <- eigen(Sig1, symmetric = TRUE)
+        ee$values <- pmax(ee$values,1e-6 / max(ee$values))
+        Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
+        Sig1 <- 0.5 * (Sig1 + t(Sig1))
 
+}
 
 retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forcePosDef = TRUE, returnSigma = FALSE){
 ##### Calculate hessian with correlation #####
