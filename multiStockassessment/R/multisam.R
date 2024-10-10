@@ -9,7 +9,7 @@
 ##' @param lower As for stockassessment::sam.fit
 ##' @param upper As for stockassessment::sam.fit
 ##' @param ... Additional arguments passed to TMB::MakeADFun
-##' @return A list of class msam and samset
+##' @return A list of class msam and samset, which is the input x with additional information attached.
 ##' @author Christoffer Moesgaard Albertsen
 ##' @examples
 ##' \donttest{
@@ -71,6 +71,8 @@ multisam.fit <- function(x,
                          symbolicAnalysis = FALSE,
                          fullDerived = FALSE,
                          mohn = FALSE,
+                         doSdreport = TRUE,
+                         skip.hessian = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     envir <- parent.frame(1L)
@@ -130,6 +132,16 @@ multisam.fit <- function(x,
             formula <- ~factor(Index)
         }
     }
+
+    if(mohn > 0){
+        ## Check input
+    }
+    if(mohn == 3){
+        mohn_fake_obs <- dat0[[1]]$logobs
+        mohn_fake_obs[is.na(mohn_fake_obs)] <- 0
+    }else{
+        mohn_fake_obs <- numeric(0)
+    }
     
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
@@ -154,7 +166,8 @@ multisam.fit <- function(x,
                 fake_stock = integer(0),
                 fake_indx = integer(0),
                 fake_includeOthers = 1L,
-                doResiduals = as.integer(FALSE)
+                doResiduals = as.integer(FALSE),
+                useFakeObs = as.integer(FALSE)
                 )
     ## If there are 0s for commercial fleets in shared_data$key, turn off F in conf$keyLogFsta
     ## if(any(shared_data$keyFleetStock[shared_data$fleetTypes == 0,]==0)){
@@ -231,6 +244,8 @@ multisam.fit <- function(x,
     }
     ##pars$initLogN <- combineVectors(lapply(attr(pars$logN,"rdim") * ifelse(initN,1,0),numeric))
     pars$initLogF <- combineVectors(lapply(initFdim,numeric))
+
+    pars$mohn_fake_obs <- mohn_fake_obs
 
     if(!is.null(parlist)){
         ## Message about wrong names in parlist
@@ -435,7 +450,7 @@ multisam.fit <- function(x,
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
         map0$logitFseason <- factor(unlist(lfm0))
     }
-    if(skip_stock_observations){
+    if(skip_stock_observations){## || mohn == 3){
         lfm0 <- lapply(splitParameter(pars$missing),seq_along)
         lfm0 <- lapply(lfm0,function(x) x*NA)
         map0$missing <- factor(unlist(lfm0))
@@ -454,7 +469,7 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip","mohn_fake_obs")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
     prf <- NULL
@@ -535,43 +550,65 @@ multisam.fit <- function(x,
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
         h <- stats::optimHess(opt$par, obj$fn, obj$gr)
-        ss <- try({solve(h[!atBound,!atBound], g[!atBound])})
+        ##h <- stockassessment:::hessian(obj$fn, opt$par)
+        ss <- try({svd_solve(h[!atBound,!atBound]) %*% g[!atBound]})
         if(!is(ss,"try-error")){
             opt$par[!atBound] <- opt$par[!atBound]- ss
             opt$par[atBound] <- (atLBound * lower2 + atUBound * upper2)[atBound]
             opt$objective <- obj$fn(opt$par)
         }else{
+            message("Hessian could not be inverted for newton steps.");
             break;
         }
     }
-    opt$he <- stats::optimHess(opt$par, obj$fn, obj$gr)
-    ##opt$he <- numDeriv::hessian(opt$par, obj$fn, obj$gr)
+    ##opt$he <- stockassessment:::hessian(obj$fn, opt$par)
+    if(!skip.hessian)
+        opt$he <- optimHess(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
-    sdrep <- TMB::sdreport(obj,opt$par, opt$he)
-    ssdrep <- summary(sdrep)
+    if(doSdreport){
+        sdrep <- TMB::sdreport(obj,opt$par, opt$he)
+        ssdrep <- summary(sdrep)
+    }else{
+        sdrep <- NA
+        ssdrep <- NA
+    }
 
     ## Do as in stockassessment package
-    # Last two states
-    idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
-    sdrep$estY <- sdrep$value[idx]
-    sdrep$covY <- sdrep$cov[idx,idx]
+                                        # Last two states
+    if(doSdreport){
+        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)),
+                 grep("_lastLogSW$",names(sdrep$value)),grep("_lastLogCW$",names(sdrep$value)),
+                 grep("_lastLogitMO$",names(sdrep$value)),grep("_lastLogNM$",names(sdrep$value)))
+        sdrep$estY <- sdrep$value[idxL]
+        sdrep$covY <- sdrep$cov[idxL,idxL]
 
-    idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
-    sdrep$estYm1 <- sdrep$value[idx]
-    sdrep$covYm1 <- sdrep$cov[idx,idx]
+        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)),
+                 grep("_beforeLastLogSW$",names(sdrep$value)),grep("_beforeLastLogCW$",names(sdrep$value)),
+                 grep("_beforeLastLogitMO$",names(sdrep$value)),grep("_beforeLastLogNM$",names(sdrep$value)))
+        sdrep$estYm1 <- sdrep$value[idxBL]
+        sdrep$covYm1 <- sdrep$cov[idxBL,idxBL]
 
-    ## covRecPars
-    idx <- grep("_rec_pars$",names(sdrep$value))
-    sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
-    colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+        sdrep$estYYm1 <- sdrep$value[c(idxL,idxBL)]
+        sdrep$covYYm1 <- sdrep$cov[c(idxL,idxBL),c(idxL,idxBL)]
 
-    ## parList    
-    pl <- as.list(sdrep,"Est")
-    plsd <- as.list(sdrep,"Std")
-    
-    sdrep$cov<-NULL # save memory
-    
+        ## covRecPars
+        idx <- grep("_rec_pars$",names(sdrep$value))
+        sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
+        colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+    }
+    ## parList
+    if(doSdreport){
+        pl <- as.list(sdrep,"Est")
+        plsd <- as.list(sdrep,"Std")
+    }else{
+        pl <- obj$env$parList(par = obj$env$last.par.best)
+        plsd <- NA
+    }
+
+    if(doSdreport){
+        sdrep$cov<-NULL # save memory
+    }
 
     ## Prepare result
     res <- x
@@ -603,12 +640,16 @@ multisam.fit <- function(x,
     attr(res,"dotargs") <- list(...)
     attr(res,"m_call") <- mc
     attr(res,"m_envir") <- envir
-    corpars <- ssdrep[rownames(ssdrep)=="RE",]
-    if(!is.null(obj$env$map$RE)){
-        corpars <- corpars[obj$env$map$RE,]
-        ##corpars[is.na(corpars)] <- 0
+    if(doSdreport){
+        corpars <- ssdrep[rownames(ssdrep)=="RE",]
+        if(!is.null(obj$env$map$RE)){
+            corpars <- corpars[obj$env$map$RE,]
+            ##corpars[is.na(corpars)] <- 0
+        }
+        rownames(corpars) <- colnames(dat$X)
+    }else{
+        corpars <- NA
     }
-    rownames(corpars) <- colnames(dat$X)
     attr(res,"corParameters") <- corpars
     class(res) <- c("msam","samset")
     return(res)

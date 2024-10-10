@@ -431,7 +431,7 @@ Type sharedObservation(shared_obs<Type>& obs,
 		  }
 		}
 	      }else{
-		if(confA(0).fixVarToWeight==1){
+		if(confA(0).fixVarToWeight(f)==1){
 		  sqrtW(idxV)=sqrt(obs.weight(idxfrom+idxV)/currentVar(idxV));
 		}else{
 		  sqrtW(idxV)=sqrt(Type(1)/obs.weight(idxfrom+idxV));

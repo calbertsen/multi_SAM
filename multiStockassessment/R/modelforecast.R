@@ -57,7 +57,6 @@ modelforecast.msam <- function(fit,
                           nosim = 1000,
                           year.base = unlist(min(sapply(fit,function(x)max(x$data$years)))),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
-                          overwriteBioModel = FALSE,
                           rec.years = lapply(fit,function(x)numeric(0)),
                           label = NULL,
                           overwriteSelYears = NULL,
@@ -294,7 +293,7 @@ modelforecast.msam <- function(fit,
     
     
     ## Convert average years to indices
-    useModelBio <- !overwriteBioModel  ##sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
+    useModelBio <- TRUE  ##sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
     ave.yearsIn <- ave.years
     ## ave.years[useModelBio] <- lapply(fit[useModelBio],function(x) max(x$data$years)+(-4:0))
     ave.years <- lapply(as.list(1:nStocks),function(i)match(ave.years[[i]], fit[[i]]$data$years) - 1)
@@ -341,7 +340,7 @@ modelforecast.msam <- function(fit,
             nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
             lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
         }
-        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x)],postYears,ncol(x)))
+        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x),],postYears,ncol(x), byrow=TRUE))
         makeBio <- function(x, isArray = FALSE){
             if(isArray){
                 biox <- split3DArrays(x)
@@ -374,10 +373,11 @@ modelforecast.msam <- function(fit,
     
     args$parameters <- pl
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
-
+    for(i in seq_along(args$data$sam))
+        args$data$sam[[i]]$simFlag <- c(1,1,1,1)
+    
     if(useFHessian){
-        if(all(sapply(fit, function(x) max(x$data$years) == year.base)) ||
-           (all(sapply(fit, function(x) max(x$data$years)-1 == year.base)) && useModelLastN)){
+        if(all(sapply(fit, function(x) max(x$data$years) == year.base))){
             est <- attr(fit,"m_sdrep")$estY
             cov <- attr(fit,"m_sdrep")$covY
         }else if(all(sapply(fit, function(x) max(x$data$years)-1 == year.base))){
@@ -385,6 +385,7 @@ modelforecast.msam <- function(fit,
             cov <- attr(fit,"m_sdrep")$covYm1
         }else{
             warning("Using last year correlation for useFHessian")
+            ## TODO: Update to use correct combination
             est <- attr(fit,"m_sdrep")$estY
             cov <- attr(fit,"m_sdrep")$covY
         }
@@ -393,7 +394,7 @@ modelforecast.msam <- function(fit,
         ##     est <- attr(fit,"m_sdrep")$estYm1
         ##     cov <- attr(fit,"m_sdrep")$covYm1
         ## }
-        nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
+        nfSplit <- gsub("(^.*[lL]ast)(.$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
         FEstCov <- vector("list",nStocks)
         for(i in 1:nStocks){
@@ -421,7 +422,7 @@ modelforecast.msam <- function(fit,
                                             logRecruitmentMedian = as.numeric(recList[[i]]$logRecruitmentMedian),
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
-                                            simFlag = c(0,0),
+                                            simFlag = c(0,0,0,0),
                                             hcrConf = hcrConf[[i]],
                                             hcrCurrentSSB = hcrCurrentSSB,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
@@ -464,54 +465,149 @@ modelforecast.msam <- function(fit,
          return(obj)
 
     if(!is.null(nosim) && nosim > 0){
+        ## Order in est is logN, logF, logSW, logCW, logitMO, logNM
         est <- attr(fit,"m_sdrep")$estY
         cov <- attr(fit,"m_sdrep")$covY
         D <- cov2cor(cov)
         Sd <- sqrt(diag(cov))
-        yearInsert <- sapply(fit, function(x) max(x$data$years))
+        yearInsertBio <- yearInsertF <- sapply(fit, function(x) max(x$data$years))
+        sdrep <- attr(fit,"m_sdrep")
         if(diff(range(sapply(fit,function(x)max(x$data$years)))) == 0 &&
-           (year.base==max(sapply(fit, function(x) max(x$data$years))) ||
-            (year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN))){
-            ## All have same last year and it is equal to year.base
-            est <- attr(fit,"m_sdrep")$estY
-            cov <- attr(fit,"m_sdrep")$covY
+           ((year.base==(max(sapply(fit, function(x) max(x$data$years)))-1) && useModelLastN))){
+            ## All have same last year and it is equal to year.base-1 and useModelLastN is TRUE
+            
+            idx <- setdiff(grep("(^.+_last)|(^.+_beforeLastLogF$)",names(sdrep$estYYm1)),grep("^.+_lastLogF",names(sdrep$estYYm1)))
+            est <- attr(fit,"m_sdrep")$estYYm1[idx]
+            cov <- attr(fit,"m_sdrep")$covYYm1[idx,idx]
             D <- cov2cor(cov)
             Sd <- sqrt(diag(cov))
-            yearInsert <- sapply(fit, function(x) max(x$data$years))
+            yearInsertBio <- sapply(fit, function(x) max(x$data$years))
+            yearInsertF <- sapply(fit, function(x) max(x$data$years)-1)
+        }else if(diff(range(sapply(fit,function(x)max(x$data$years)))) == 0 &&
+                 (year.base==max(sapply(fit, function(x) max(x$data$years))))){
+            ## All have same last year and it is equal to year.base
+            idx <- grep("^.+_last",names(sdrep$estYYm1))
+            est <- attr(fit,"m_sdrep")$estYYm1[idx]
+            cov <- attr(fit,"m_sdrep")$covYYm1[idx,idx]
+            D <- cov2cor(cov)
+            Sd <- sqrt(diag(cov))          
+            yearInsertBio <- yearInsertF <- sapply(fit, function(x) max(x$data$years))
         }else if(diff(range(sapply(fit,function(x)max(x$data$years)))) == 0 &&
                  year.base==(max(sapply(fit, function(x) max(x$data$years)))-1)){
             ## All have sam last year and year.base is year before
-            est <- attr(fit,"m_sdrep")$estYm1
-            cov <- attr(fit,"m_sdrep")$covYm1
+            idx <- grep("^.+_beforeLast",names(sdrep$estYYm1))
+            est <- attr(fit,"m_sdrep")$estYYm1[idx]
+            cov <- attr(fit,"m_sdrep")$covYYm1[idx,idx]
             D <- cov2cor(cov)
-            Sd <- sqrt(diag(cov))
-            yearInsert <- sapply(fit, function(x) max(x$data$years)-1)
+            Sd <- sqrt(diag(cov))          
+            yearInsertBio <- yearInsertF <- sapply(fit, function(x) max(x$data$years))
         }else{
             ## Any other scenario
-            plsdx <- attr(fitMulti,"m_plsd")
-            plx <- attr(fitMulti,"m_pl")
+            warning("This combination of maximum years and year.base is not fully implemented")
+            plsdx <- attr(fit,"m_plsd")
+            plx <- attr(fit,"m_pl")
             sdLogN <- splitParameter(plsdx$logN)
             eLogN <- splitParameter(plx$logN)
-            sdLogF <- splitParameter(plsdx$logF)
-            eLogF <- splitParameter(plx$logF)
             Ngrab <- lapply(seq_len(nStocks), function(s){
                 i0 <- match(year.base, fit[[s]]$data$years)
                 eLogN[[s]][,i0]
-            })
-            Fgrab <- lapply(seq_len(nStocks), function(s){
-                i0 <- match(year.base, fit[[s]]$data$years)
-                eLogF[[s]][,i0]
             })
             sdNgrab <- lapply(seq_len(nStocks), function(s){
                 i0 <- match(year.base, fit[[s]]$data$years)
                 sdLogN[[s]][,i0]
             })
+            sdLogF <- splitParameter(plsdx$logF)
+            eLogF <- splitParameter(plx$logF)
+            Fgrab <- lapply(seq_len(nStocks), function(s){
+                i0 <- match(year.base, fit[[s]]$data$years)
+                eLogF[[s]][,i0]
+            })
             sdFgrab <- lapply(seq_len(nStocks), function(s){
                 i0 <- match(year.base, fit[[s]]$data$years)
                 sdLogF[[s]][,i0]
             })
-            est[] <- unname(c(unlist(Ngrab),unlist(Fgrab)))
-            Sd[]  <- unname(c(unlist(sdNgrab),unlist(sdFgrab)))
+            if(length(plx$logSW) > 0){
+                sdLogSW <- splitParameter(plsdx$logSW)
+                eLogSW <- splitParameter(plx$logSW)
+                SWgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    eLogSW[[s]][,i0]
+                })
+                sdSWgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    sdLogSW[[s]][,i0]
+                })
+            }else{
+                SWgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+                sdSWgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+            }
+            if(length(plx$logCW) > 0){
+                sdLogCW <- splitParameter(plsdx$logCW)
+                eLogCW <- splitParameter(plx$logCW)
+                CWgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    eLogCW[[s]][,i0]
+                })
+                sdCWgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    sdLogCW[[s]][,i0]
+                })
+            }else{
+                CWgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+                sdCWgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+            }
+            if(length(plx$logitMO) > 0){
+                sdLogitMO <- splitParameter(plsdx$logitMO)
+                eLogitMO <- splitParameter(plx$logitMO)
+                CWgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    eLogitMO[[s]][,i0]
+                })
+                sdMOgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    sdLogitMO[[s]][,i0]
+                })
+            }else{
+                MOgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+                sdMOgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+            }
+            if(length(plx$logNM) > 0){
+                sdLogNM <- splitParameter(plsdx$logNM)
+                eLogNM <- splitParameter(plx$logNM)
+                NMgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    eLogNM[[s]][,i0]
+                })
+                sdNMgrab <- lapply(seq_len(nStocks), function(s){
+                    i0 <- match(year.base, fit[[s]]$data$years)
+                    sdLogNM[[s]][,i0]
+                })
+            }else{
+                NMgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+                sdNMgrab <- lapply(seq_len(nStocks), function(s){
+                    numeric(0)
+                })
+            }
+            est[] <- unname(c(unlist(Ngrab),unlist(Fgrab),
+                              unlist(SWgrab), unlist(CWgrab),
+                              unlist(MOgrab), unlist(NMgrab)))
+            Sd[]  <- unname(c(unlist(sdNgrab),unlist(sdFgrab),
+                              unlist(sdSWgrab), unlist(sdCWgrab),
+                              unlist(sdMOgrab), unlist(sdNMgrab)))
             cov <- diag(Sd^2,length(Sd), length(Sd)) ## Does not use correlation
             yearInsert <- rep(year.base, nStocks)
         }
@@ -532,9 +628,10 @@ modelforecast.msam <- function(fit,
         ##     est <- attr(fit,"m_sdrep")$estYm1
         ##     cov <- attr(fit,"m_sdrep")$covYm1
         ## }
-        nfSplit <- gsub("(^.*[lL]ast)(Log[NF]$)","\\2",names(est))
+        nfSplit <- gsub("(^.*[lL]ast)(.+$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
-        i0 <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsert[i]))
+        i0Bio <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsertBio[i]))
+        i0F <- sapply(seq_len(nStocks), function(i) which(fit[[i]]$data$year == yearInsertF[i]))
         useMapOnPl <- function(plMap, map){
             with.map <- intersect(names(plMap), names(map))
             applyMap <- function(par.name) {
@@ -563,7 +660,7 @@ modelforecast.msam <- function(fit,
             sim0 <- 0*est
             if(resampleFirst)
                 sim0 <- rmvnorm(1, mu=0*est, Sigma=cov + diag(1e-6,length(est)))
-             ## update N & F before forecast
+            ## update N & F before forecast
             dList0 <- split(as.vector(sim0), nfSplit)
             ##estList0 <- split(as.vector(sim0+est), nfSplit)          
             if(!is.null(re_pl)){
@@ -606,8 +703,9 @@ modelforecast.msam <- function(fit,
                 attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
                 attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
                 indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0Bio[i]]))
             })
+            p[indxN] <- p[indxN] + dList0$LogN
             indxF <- local({
                 ii <- which(names(p) %in% "logF")
                 ## if(any(names(map) %in% "logF")){
@@ -621,10 +719,58 @@ modelforecast.msam <- function(fit,
                 attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
                 indxS <- splitMatrices(ii)                    
                 ## }
-                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0[i]]))
+                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0F[i]]))
             })
-            p[indxN] <- p[indxN] + dList0$LogN
-            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]
+            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]            
+            indxSW <- local({
+                ii <- which(names(p) %in% "logSW")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logSW,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logSW,"rdim")
+                indxS <- splitMatrices(ii)
+                unlist(sapply(seq_len(nStocks), function(i){
+                    if(nrow(indxS[[i]]) == 0)
+                        return(numeric(0))
+                    indxS[[i]][i0Bio[i],]
+                }))
+            })
+            p[indxSW] <- p[indxSW] + dList0$LogSW
+            indxCW <- local({
+                ii <- which(names(p) %in% "logCW")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logCW,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logCW,"rdim")
+                indxS <- splitMatrices(ii)
+                unlist(sapply(seq_len(nStocks), function(i){
+                    if(nrow(indxS[[i]]) == 0)
+                        return(numeric(0))
+                    indxS[[i]][i0Bio[i],]
+                }))
+            })
+            p[indxCW] <- p[indxCW] + dList0$LogCW
+            indxMO <- local({
+                ii <- which(names(p) %in% "logitMO")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logitMO,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logitMO,"rdim")
+                indxS <- splitMatrices(ii)
+                unlist(sapply(seq_len(nStocks), function(i){
+                    if(nrow(indxS[[i]]) == 0)
+                        return(numeric(0))
+                    indxS[[i]][i0Bio[i],]
+                }))
+            })
+            p[indxMO] <- p[indxMO] + dList0$LogitMO
+            indxNM <- local({
+                ii <- which(names(p) %in% "logNM")
+                attr(ii,"cdim") <- attr(obj$env$parameters$logNM,"cdim")
+                attr(ii,"rdim") <- attr(obj$env$parameters$logNM,"rdim")
+                indxS <- splitMatrices(ii)
+                unlist(sapply(seq_len(nStocks), function(i){
+                    if(nrow(indxS[[i]]) == 0)
+                        return(numeric(0))
+                    indxS[[i]][i0Bio[i],]
+                }))
+            })
+            p[indxNM] <- p[indxNM] + dList0$LogNM
+            
             fdvAll <- dList0$LogF ## - mean(dList0$LogF)
             for(i in 1:nStocks){
                 fdv <- fdvAll[as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)]
@@ -672,6 +818,10 @@ modelforecast.msam <- function(fit,
                                        logEmpiricalYPR  = sapply(simvals,function(x) (x$logEmpiricalYPR[[ss]][ii])),
                                        logEmpiricalYPR_L  = sapply(simvals,function(x) (x$logEmpiricalYPR_L[[ss]][ii])),
                                        logEmpiricalYPR_D  = sapply(simvals,function(x) (x$logEmpiricalYPR_D[[ss]][ii])),
+                                       bio_stockMeanWeight  = sapply(simvals,function(x) (x$bio_stockMeanWeight[[ss]][ii,])),
+                                       bio_catchMeanWeight  = sapply(simvals,function(x) (x$bio_catchMeanWeight[[ss]][ii,])),
+                                       bio_natMor  = sapply(simvals,function(x) (x$bio_natMor[[ss]][ii,])),
+                                       bio_propMat  = sapply(simvals,function(x) (x$bio_propMat[[ss]][ii,])),
                                        year=y)
                 rownames(simlist[[i+1]]$catchatage) <- seq(fit[[ss]]$conf$minAge,fit[[ss]]$conf$maxAge,1)
                 
@@ -775,7 +925,9 @@ modelforecast.msam <- function(fit,
             for(i in 0:(length(FModel[[ss]]))){
                 y<-year.base+i            
                 simlist[[i+1]] <- list(sim=NA, fbar=NA, catch=NA, ssb=NA, rec=NA,
-                                       cwF=NA, catchatage=NA, land=NA, fbarL=NA, tsb=NA, year=y)
+                                       cwF=NA, catchatage=NA, land=NA, fbarL=NA, tsb=NA,
+                                       logEmpiricalSPR=NA, logEmpiricalYPR=NA,
+                                       bio_stockMeanWeight=NA,  bio_catchMeanWeight=NA, bio_natMor = NA, bio_propMat = NA,year=y)
             }
             attr(simlist, "fit")<-fit[[ss]]    
 

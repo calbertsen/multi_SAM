@@ -7,7 +7,7 @@
 \method{deterministicReferencepoints}{msam}(
   fit,
   referencepoints,
-  catchType = "landing",
+  catchType = "catch",
   nYears = 300,
   Fsequence = seq(0, 2, len = 50),
   aveYears = lapply(fit, function(x) max(x$data$years) + (-9:0)),
