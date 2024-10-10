@@ -205,6 +205,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(sepFlogitRho);
   PARAMETER_CMOE_VECTOR(sepFlogSd);
   PARAMETER_CMOE_VECTOR(predVarObs);
+  PARAMETER_VECTOR(logFecundityScaling);
 
   PARAMETER_CMOE_VECTOR(logPhiSW);
   PARAMETER_CMOE_VECTOR(logSdProcLogSW);
@@ -320,6 +321,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).sepFlogitRho = sepFlogitRho.col(s);
     paraSets(s).sepFlogSd = sepFlogSd.col(s);
     paraSets(s).predVarObs = predVarObs.col(s);
+    paraSets(s).logFecundityScaling = logFecundityScaling(s);
     // Forecast FMSY
     paraSets(s).logFScaleMSY = logFScaleMSY(s);
     paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
@@ -1391,7 +1393,7 @@ Type objective_function<Type>::operator() ()
     dataSet<Type> ds = sam.dataSets(s);
     confSet cs = sam.confSets(s);
     paraSet<Type> ps = paraSets(s);
-    reportDeterministicReferencePoints(ds, cs, ps, logNa, logFa, recruits(s), sam.referencepointLists(s), &of);
+    reportReferencePoints(ds, cs, ps, logNa, logFa, recruits(s), sam.referencepointLists(s), &of);
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }

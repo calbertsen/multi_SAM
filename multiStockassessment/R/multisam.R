@@ -9,7 +9,7 @@
 ##' @param lower As for stockassessment::sam.fit
 ##' @param upper As for stockassessment::sam.fit
 ##' @param ... Additional arguments passed to TMB::MakeADFun
-##' @return A list of class msam and samset
+##' @return A list of class msam and samset, which is the input x with additional information attached.
 ##' @author Christoffer Moesgaard Albertsen
 ##' @examples
 ##' \donttest{
@@ -577,13 +577,20 @@ multisam.fit <- function(x,
     ## Do as in stockassessment package
                                         # Last two states
     if(doSdreport){
-        idx <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)))
-        sdrep$estY <- sdrep$value[idx]
-        sdrep$covY <- sdrep$cov[idx,idx]
+        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)),
+                 grep("_lastLogSW$",names(sdrep$value)),grep("_lastLogCW$",names(sdrep$value)),
+                 grep("_lastLogitMO$",names(sdrep$value)),grep("_lastLogNM$",names(sdrep$value)))
+        sdrep$estY <- sdrep$value[idxL]
+        sdrep$covY <- sdrep$cov[idxL,idxL]
 
-        idx <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)))
-        sdrep$estYm1 <- sdrep$value[idx]
-        sdrep$covYm1 <- sdrep$cov[idx,idx]
+        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)),
+                 grep("_beforeLastLogSW$",names(sdrep$value)),grep("_beforeLastLogCW$",names(sdrep$value)),
+                 grep("_beforeLastLogitMO$",names(sdrep$value)),grep("_beforeLastLogNM$",names(sdrep$value)))
+        sdrep$estYm1 <- sdrep$value[idxBL]
+        sdrep$covYm1 <- sdrep$cov[idxBL,idxBL]
+
+        sdrep$estYYm1 <- sdrep$value[c(idxL,idxBL)]
+        sdrep$covYYm1 <- sdrep$cov[c(idxL,idxBL),c(idxL,idxBL)]
 
         ## covRecPars
         idx <- grep("_rec_pars$",names(sdrep$value))
