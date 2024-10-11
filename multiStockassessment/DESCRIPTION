@@ -12,7 +12,7 @@ License: GPL-2
 Copyright: Technical University of Denmark
 Depends: stockassessment (>= 0.12.2)
 Imports: TMB (>= 1.9.1), stockassessment (>= 0.12.2), grDevices, graphics, methods, stats, Matrix (>= 1.6-3)
-LinkingTo: TMB (>= 1.9.1), RcppEigen, stockassessment (>= 0.12.2)
+LinkingTo: TMB (>= 1.9.1), RcppEigen, stockassessment (>= 0.12.4)
 Suggests: parallel
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE
