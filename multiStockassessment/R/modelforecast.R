@@ -375,7 +375,8 @@ modelforecast.msam <- function(fit,
     args$random <- unique(names(obj0$env$par[obj0$env$random]))
     for(i in seq_along(args$data$sam))
         args$data$sam[[i]]$simFlag <- c(1,1,1,1)
-    
+
+    baseIsLast <- sapply(fit, function(x) max(x$data$years) == year.base)
     if(useFHessian){
         if(all(sapply(fit, function(x) max(x$data$years) == year.base))){
             est <- attr(fit,"m_sdrep")$estY
@@ -428,7 +429,7 @@ modelforecast.msam <- function(fit,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
                                             FdeviationCov = diag(1,nrow(splitMatrices(pl$logF)[[i]]),nrow(splitMatrices(pl$logF)[[i]])),
                                             FEstCov = FEstCov[[i]],
-                                            useModelLastN = useModelLastN
+                                            useModelLastN = (useModelLastN && !baseIsLast[i]) 
                                             )
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
