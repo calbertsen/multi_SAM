@@ -310,9 +310,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
         Hes1 <- Matrix::solve(Matrix::Cholesky(as(Sig1,"sparseMatrix")))
         return(Hes1)
     }
-    Sig1
-    
-    
+    Sig1      
 }
 
 
@@ -322,7 +320,195 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, onlyRE = FALSE, ...){
+mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ...){
+
+    call <- match.call()
+    if(is.null(attr(fit,"fit")))
+        stop("The samset should have a fit as attribute")
+    
+    fitFinal <- attr(fit,"fit")
+    framework <- .Call("getFramework", PACKAGE=fitFinal$obj$env$DLL)
+    if (framework != "TMBad")
+        stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
+    fitList <- do.call("c",c(list(fitFinal), fit))
+    retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
+
+    ## Does not allow for lag in R
+    add <- 0
+    nms <- c(paste("R(age ", fitFinal$conf$minAge + add, ")", sep = ""),
+             "SSB",
+             paste("Fbar(", fitFinal$conf$fbarRange[1], "-", fitFinal$conf$fbarRange[2], ")", sep = ""))
+
+    ## Corrected Hessian of fixed effects
+    if(!ignore.parameter.uncertainty){
+        if(addCorFix){
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = TRUE)
+            Sig0 <- Matrix::symmpart(Sig0_tmp)
+            ## Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
+            ## Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
+        }else{
+            Hes <- attr(retroMS,"m_opt")$he
+            Sig0 <- Matrix::symmpart(solve(Hes))
+        }
+    }else{
+        Sig0 <- 0 * attr(retroMS,"m_opt")$he
+    }
+    
+    ## Corrected Hessian of random effects
+    if(addCorRE){
+        Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
+        Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
+        ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+        ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+    }else{
+        obj0 <- attr(retroMS,"m_obj")
+        Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
+        Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
+    }
+         
+    if(nosim == 0){ ## Delta method (calculated)
+        obj2 <- TMB::MakeADFun(obj$env$data,
+                               obj$env$parameters,
+                               type = "ADFun",
+                               ADreport = TRUE,
+                               DLL = obj$env$DLL,
+                               silent = obj$env$silent)
+        ## Vtheta <- Sig0
+        ## hessian.random <- Hes_uu
+        phi <- obj2$fn(par)
+        ADGradForward0Initialized <- FALSE
+        ADGradForward0Initialize <- function() { ## NOTE_2: ADGrad forward sweep now initialized !
+            obj$env$f(par, order = 0, type = "ADGrad")
+            ADGradForward0Initialized <<- TRUE
+        }
+        chunk <- unlist(obj$env$ADreportIndex()[c("mohnRho_rec","mohnRho_ssb","mohnRho_fbar","mohnRhoMod_rec","mohnRhoMod_ssb","mohnRhoMod_fbar")])
+        w <- rep(0, length(phi))
+        phiDeriv <- function(i){
+            w[i] <- 1
+            obj2$env$f(par, order=1, rangeweight=w, doforward=0) ## See NOTE_1
+        }
+        Dphi <- t( sapply(chunk, phiDeriv) )
+        phi <- phi[chunk]
+        Dphi.random <- as(Dphi[,r,drop=FALSE],"sparseMatrix")
+        Dphi.fixed <- as(Dphi[,-r,drop=FALSE],"sparseMatrix")        
+        ##tmp <- Matrix::solve(Hes_uu,Matrix::t(Dphi.random))
+        tmp <- Sig_uu %*% Matrix::t(Dphi.random)
+        ##tmp <- as.matrix(tmp)
+        term1 <- Dphi.random%*%tmp ## first term.
+        if(ignore.parameter.uncertainty){
+            term2 <- 0
+        }else{
+            w <- rep(0, length(par))
+            if(!ADGradForward0Initialized) ADGradForward0Initialize()
+            reverse.sweep <- function(i){
+                w[r] <- tmp[,i]
+                -obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
+            }
+            A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
+            term2 <- A %*% (Sig0 %*% Matrix::t(A)) ## second term
+        }
+        cov <- term1 + term2
+        ## End of modified from TMB
+        sdv <- sqrt(Matrix::diag(cov))
+        tab <- list(Original = cbind("Estimate" = phi[1:3],
+                                     "CI_low" = phi[1:3] - 2 * sdv[1:3],
+                                     "CI_high" = phi[1:3] + 2 * sdv[1:3]),
+                    Modified = cbind("Estimate" = phi[4:6],
+                                     "CI_low" = phi[4:6] - 2 * sdv[4:6],
+                                     "CI_high" = phi[4:6] + 2 * sdv[4:6]))
+        bginfo <- list(phi = phi, cov = cov)
+    }else{ ## Delta method (simulated)
+        ## Calculate full precision (modified from TMB::sdreport)
+        obj <- attr(retroMS,"m_obj")
+        par <- obj$env$last.par.best
+        r <- obj$env$random
+        nonr <- setdiff(seq_along(par), r)
+        ## NOTE: TMB usually works with the Hessians, but the correlation is added on the Covariances, so it is easier to work on those
+        ## tmp <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r) 
+        ## A <- solve(Hes_uu, tmp)
+        ## G <- Hes_uu %*% A
+        ## G <- as.matrix(G) ## Avoid Matrix::cbind2('dsCMatrix','dgeMatrix')
+        ## M1 <- cbind2(Hes_uu,G)
+        ## M2 <- cbind2(t(G), as.matrix(t(A)%*%G)+Hes)
+        ## M <- rbind2(M1,M2)
+        ## M <- forceSymmetric(M,uplo="L")
+        ## dn <- c(names(par)[r],names(par[-r]))
+        ## dimnames(M) <- list(dn,dn)
+        ## p <- invPerm(c(r,(1:length(par))[-r]))
+        ## jointPrecision <- M[p,p]
+        if(ignore.parameter.uncertainty){
+            Ch <- Matrix::Cholesky(Sig_uu)
+            C0 <- Matrix::expand2(Ch, LDL = FALSE)$`L`
+        }else{
+            J <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=seq_along(par))
+            J[cbind(nonr,nonr)] <- 1
+            V2 <- J %*% Sig0 %*% t(J)
+            Vfull <- as(V2,"sparseMatrix")
+            iuu <- r[Sig_uu@i+1]
+            puu <- Sig_uu@p
+            dp <- diff(puu)
+            juu <- r[rep(seq_along(dp),dp)]
+            xuu <- Sig_uu@x
+            Vx <- Matrix::sparseMatrix(i=iuu,j=juu,x=xuu,dims=c(length(par),length(par)))
+            Vfull <- Vfull + Vx
+            ## Cholesky
+            ChVF <- Matrix::Cholesky(Vfull)
+            ## Lower triangular
+            C0 <- Matrix::expand2(ChVF, LDL = FALSE)$`L`
+        }
+        ## Simulation procedure
+        doOne0 <- function(sim=TRUE){
+            p1 <- obj$env$last.par.best
+            if(sim){
+                if(ignore.parameter.uncertainty){
+                    p1[r] <- p1[r] + drop(C0 %*% rnorm(length(r)))
+                }else{
+                    p1 <- p1 + drop(C0 %*% rnorm(length(p1)))
+                }
+            }
+            rp0 <- obj$report(p1)
+            vMod <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
+                      SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
+                      Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
+            vOld <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
+                      SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
+                      Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
+            list(Modified = vMod, Original = vOld)
+        }
+        estRho <- doOne0(FALSE)
+        estRho_Orig <- estRho$Original
+        estRho_Mod <- estRho$Modified
+        simRho <- replicate(nosim,tryCatch(doOne0(TRUE), error = function(e) list(Modified = c(Fbar=NA,SSB=NA,R=NA), Original = c(Fbar=NA,SSB=NA,R=NA))), simplify = FALSE)
+        simRho_Orig <- do.call("cbind",lapply(simRho, function(x) x$Original))
+        simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
+        bginfo_Orig <- list(est = estRho_Orig, sim = simRho_Orig)
+        bginfo_Mod <- list(est = estRho_Mod, sim = simRho_Mod)
+        if(quantile_CI){
+            cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
+            cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
+            cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
+            cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
+        }else{
+            sdv_Orig <- apply(simRho_Orig,1,sd,na.rm=TRUE)
+            cil_Orig <- estRho_Orig - 2 * sdv_Orig
+            cih_Orig <- estRho_Orig + 2 * sdv_Orig
+            sdv_Mod <- apply(simRho_Mod,1,sd,na.rm=TRUE)
+            cil_Mod <- estRho_Mod - 2 * sdv_Mod
+            cih_Mod <- estRho_Mod + 2 * sdv_Mod
+        }
+        tab <- list(Original = cbind(Estimate = estRho_Orig,
+                                     CI_low = cil_Orig,
+                                     CI_high = cih_Orig),
+                    Modified = cbind(Estimate = estRho_Mod,
+                                     CI_low = cil_Mod,
+                                     CI_high = cih_Mod))
+        bginfo <- list(Original = bginfo_Orig,
+                       Modified = bginfo_Mod)              
+    }
+}
+
+
+mohn_CI_Old <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, onlyRE = FALSE, ...){
     ## Already fitted with retro
     call <- match.call()
     if(is.null(attr(fit,"fit")))
