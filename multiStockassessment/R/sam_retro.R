@@ -496,6 +496,16 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         bginfo <- list(Original = bginfo_Orig,
                        Modified = bginfo_Mod)              
     }
+
+    rownames(tab$Original) <- nms
+    rownames(tab$Modified) <- nms
+
+    res <- list(table = tab,
+                call = call,
+                bginfo = bginfo,
+                mfit = retroMS)
+    class(res) <- "sam_mohn"
+    res    
 }
 
 
