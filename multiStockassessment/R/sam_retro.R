@@ -365,7 +365,11 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
         Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
     }
-         
+
+    obj <- attr(retroMS,"m_obj")
+    par <- obj$env$last.par.best
+    r <- obj$env$random
+    nonr <- setdiff(seq_along(par), r)     
     if(nosim == 0){ ## Delta method (calculated)
         obj2 <- TMB::MakeADFun(obj$env$data,
                                obj$env$parameters,
@@ -419,11 +423,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         bginfo <- list(phi = phi, cov = cov)
     }else{ ## Delta method (simulated)
         ## Calculate full precision (modified from TMB::sdreport)
-        obj <- attr(retroMS,"m_obj")
-        par <- obj$env$last.par.best
-        r <- obj$env$random
-        nonr <- setdiff(seq_along(par), r)
-        ## NOTE: TMB usually works with the Hessians, but the correlation is added on the Covariances, so it is easier to work on those
+         ## NOTE: TMB usually works with the Hessians, but the correlation is added on the Covariances, so it is easier to work on those
         ## tmp <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r) 
         ## A <- solve(Hes_uu, tmp)
         ## G <- Hes_uu %*% A
