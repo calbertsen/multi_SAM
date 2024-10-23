@@ -483,19 +483,10 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
         bginfo_Orig <- list(est = estRho_Orig, sim = simRho_Orig)
         bginfo_Mod <- list(est = estRho_Mod, sim = simRho_Mod)
-        if(quantile_CI){
-            cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
-            cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
-            cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
-            cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
-        }else{
-            sdv_Orig <- apply(simRho_Orig,1,sd,na.rm=TRUE)
-            cil_Orig <- estRho_Orig - 2 * sdv_Orig
-            cih_Orig <- estRho_Orig + 2 * sdv_Orig
-            sdv_Mod <- apply(simRho_Mod,1,sd,na.rm=TRUE)
-            cil_Mod <- estRho_Mod - 2 * sdv_Mod
-            cih_Mod <- estRho_Mod + 2 * sdv_Mod
-        }
+        cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
+        cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
+        cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
+        cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
         tab <- list(Original = cbind(Estimate = estRho_Orig,
                                      CI_low = cil_Orig,
                                      CI_high = cih_Orig),
