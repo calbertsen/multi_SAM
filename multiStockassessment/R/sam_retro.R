@@ -457,7 +457,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             Vfull <- as(V2,"sparseMatrix")
             u2r <- match(intersect(inUse,r),r)
             ru <- which(inUse %in% intersect(inUse,r))
-            Sig_uuUse <- Sig_uu[u2r,u2r,drop=FALSE]
+            Sig_uuUse <- as(Sig_uu[u2r,u2r,drop=FALSE],"generalMatrix")
             iuu <- ru[Sig_uuUse@i+1]
             puu <- Sig_uuUse@p
             dp <- diff(puu)
