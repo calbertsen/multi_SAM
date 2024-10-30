@@ -440,8 +440,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         ## jointPrecision <- M[p,p]
         ## Find parameters/RE with influence
         if(ignore.parameter.uncertainty){
-            inUse <- intersect(inUse,r)
-            Ch <- Matrix::Cholesky(Sig_uu[match(inUse,r),match(inUse,r),drop=FALSE])
+            Ch <- Matrix::Cholesky(Sig_uu) ## Already reduced
             C0 <- Matrix::expand2(Ch, LDL = FALSE)$`L`
         }else{
             J <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=inUse)
