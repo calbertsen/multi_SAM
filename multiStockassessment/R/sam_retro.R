@@ -441,7 +441,12 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         ## Find parameters/RE with influence
         if(ignore.parameter.uncertainty){
             Ch <- Matrix::Cholesky(Sig_uu) ## Already reduced
-            C0 <- Matrix::expand2(Ch, LDL = FALSE)$`L`
+            ee <- Matrix::expand2(Ch, LDL = FALSE)
+            if(!is.null(ee$P1)){
+                C0 <- ee$`P1.` %*% ee$L
+            }else{
+                C0 <- ee$L
+            }
         }else{
             J <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=inUse)
             if(length(intersect(inUse,nonr)) > 0){
@@ -464,7 +469,12 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             ## Cholesky
             ChVF <- Matrix::Cholesky(Vfull)
             ## Lower triangular
-            C0 <- Matrix::expand2(ChVF, LDL = FALSE)$`L`
+            ee <- Matrix::expand2(ChVF, LDL = FALSE)
+             if(!is.null(ee$P1)){
+                C0 <- ee$`P1.` %*% ee$L
+            }else{
+                C0 <- ee$L
+            }
         }
         ## Simulation procedure
         doOne0 <- function(sim=TRUE){
