@@ -407,7 +407,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             w <- rep(0, length(par))
             if(!ADGradForward0Initialized) ADGradForward0Initialize()
             reverse.sweep <- function(i){
-                w[r] <- tmp[,i]
+                w[intersect(inUse,r)] <- tmp[,i]
                 -obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
             }
             A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
@@ -464,7 +464,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             dp <- diff(puu)
             juu <- ru[rep(seq_along(dp),dp)]
             xuu <- Sig_uuUse@x
-            Vx <- Matrix::sparseMatrix(i=iuu,j=juu,x=xuu,dims=c(length(inUse),length(inUse)))
+            Vx <- Matrix::sparseMatrix(i=iuu,j=juu,x=xuu,dims=c(length(inUse),length(inUse)), symmetric=TRUE)
             Vfull <- Vfull + Vx
             ## Cholesky
             ChVF <- Matrix::Cholesky(Vfull)
