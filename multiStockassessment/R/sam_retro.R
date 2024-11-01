@@ -458,7 +458,9 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             ## }else{
             ##     C0 <- ee$L
             ## }
-            C0 <- Matrix::t(Matrix::chol(Sig_uu))
+            ##C0 <- Matrix::t(Matrix::chol(Sig_uu,pivot=FALSE))
+            a <- svd(Sig_uu)
+            C0 <- a$u %*% diag(sqrt(pmax(a$d,0)),length(a$d))
         }else{
             J <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=inUse)
             if(length(intersect(inUse,nonr)) > 0){
@@ -490,7 +492,9 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             ## }else{
             ##     C0 <- ee$L
             ## }
-            C0 <- Matrix::t(Matrix::chol(Vfull))
+            ## C0 <- Matrix::t(Matrix::chol(Vfull,pivot=FALSE))
+            a <- svd(Vfull)
+            C0 <- a$u %*% diag(sqrt(pmax(a$d,0)),length(a$d))
         }
         ## Simulation procedure
         doOne0 <- function(sim=TRUE){
