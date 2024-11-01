@@ -25,7 +25,7 @@ get_triplet <- function(x){
 sparse_sym_block <- function(...){
     x <- list(...)
     ii <- sapply(x, is, class2 = "sparseMatrix")
-    x[!ii] <- lapply(x[!ii],function(y)Matrix::sparseMatrix(i=seq_along(y),j=seq_along(y),x=as.numeric(y)))
+    x[!ii] <- lapply(x[!ii],function(y) as(y,"sparseMatrix")) #Matrix::sparseMatrix(i=seq_along(y),j=seq_along(y),x=as.numeric(y)))
     y <- lapply(x, get_triplet)
     n <- sapply(x,nrow)
     nc <- cumsum(n)
@@ -34,16 +34,17 @@ sparse_sym_block <- function(...){
         y[[i]]$j <- y[[i]]$j + nc[i-1]
     }
     yv <- do.call("rbind",y)
-    Matrix::sparseMatrix(i=yv$i, j=yv$j, x=yv$x, dims = c(sum(n),sum(n)), symmetric = TRUE)
+    isU <- yv$i >= yv$j
+    Matrix::sparseMatrix(i=yv$i[isU], j=yv$j[isU], x=yv$x[isU], dims = c(sum(n),sum(n)), symmetric = TRUE)
 }
 
 makeSymPosDef <- function(x){
     ## Sym
-    v <- x + t(x)
-    ee <- eigen(Sig1, symmetric = TRUE)
-        ee$values <- pmax(ee$values,1e-6 / max(ee$values))
-        Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
-        Sig1 <- 0.5 * (Sig1 + t(Sig1))
+    v <- 0.5 * (x + t(x))
+    ee <- eigen(v, symmetric = TRUE)
+    ee$values <- pmax(ee$values,1e-8 / max(ee$values))
+    Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
+    Sig1 <- 0.5 * (Sig1 + t(Sig1))
 
 }
 
@@ -145,16 +146,22 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     Sig1 <- Gx %*% block(stockassessment:::svd_solve(oFit$opt$he),Vy) %*% t(Gx)
     ## Symmetrize for safety
     Sig1 <- 0.5 * (Sig1 + t(Sig1))    
-    if(forcePosDef){
-       Sig1 <- Matrix::nearPD(Sig1)$mat
-    }
     if(keep.diagonal){
-        D <- diag(sqrt(diag(svd_solve(m_opt$he))))
-        CC <- cov2cor(Sig1)
+        noCorSig <- svd_solve(m_opt$he)
+        D <- diag(sqrt(diag(noCorSig)))
+        CC <- Matrix::cov2cor(Sig1)
+        ##CCOld <- cov2cor(noCorSig)
+        ## Insert
+        ##CC[abs(CCOld) > 1e-5] <- CCOld[abs(CCOld) > 1e-5]
         Sig1 <- D %*% CC %*% D
         Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
-    
+    if(forcePosDef){
+        Sig1 <- Matrix::nearPD(Sig1)$mat
+    }
+  
+    dimnames(Sig1) <- list(names(attr(mFit,"m_opt")$par),names(attr(mFit,"m_opt")$par))
+ 
     if(!returnSigma){
         Hes1 <- solve(Sig1)
         return(Hes1)
@@ -317,7 +324,7 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ...){
+mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ignore.re.uncertainty = FALSE, ...){
 
     call <- match.call()
     if(is.null(attr(fit,"fit")))
@@ -339,7 +346,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     ## Corrected Hessian of fixed effects
     if(!ignore.parameter.uncertainty){
         if(addCorFix){
-            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = FALSE, forcePosDef = FALSE)
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = FALSE)
             Sig0 <- Matrix::symmpart(Sig0_tmp)
             ## Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
             ## Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
@@ -381,17 +388,21 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     inUseR <- match(intersect(inUse,r),r)
 
     ## Corrected Hessian of random effects
-    if(addCorRE){
-        Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE, subset = inUseR)
-        Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
-        ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-        ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+    if(!ignore.re.uncertainty){
+        if(addCorRE){
+            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = FALSE, subset = inUseR)
+            Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
+            ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+            ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+        }else{
+            Hes_uu <- Matrix::symmpart(obj$env$spHess(obj$env$last.par.best, random = TRUE))
+            Sig_uu <- Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu)))[inUseR,inUseR, drop = FALSE]
+        }
     }else{
-        obj0 <- attr(retroMS,"m_obj")
-        Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
-        Sig_uu <- Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu)))[inUseR,inUseR, drop = FALSE]
+        Sig_uu <- obj$env$spHess(obj$env$last.par.best, random = TRUE)[inUseR,inUseR, drop = FALSE] * 0
     }
-
+    dimnames(Sig_uu) <- list(names(attr(retroMS,"m_obj")$env$last.par.best[r][inUseR]),
+                             names(attr(retroMS,"m_obj")$env$last.par.best[r][inUseR]))
     
     if(nosim == 0){ ## Delta method (calculated)
         phi <- phi[chunk]
@@ -440,13 +451,14 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         ## jointPrecision <- M[p,p]
         ## Find parameters/RE with influence
         if(ignore.parameter.uncertainty){
-            Ch <- Matrix::Cholesky(Sig_uu) ## Already reduced
-            ee <- Matrix::expand2(Ch, LDL = FALSE)
-            if(!is.null(ee$P1)){
-                C0 <- ee$`P1.` %*% ee$L
-            }else{
-                C0 <- ee$L
-            }
+            ## Ch <- Matrix::Cholesky(Sig_uu) ## Already reduced
+            ## ee <- Matrix::expand2(Ch, LDL = FALSE)
+            ## if(!is.null(ee$P1)){
+            ##     C0 <- ee$`P1.` %*% ee$L
+            ## }else{
+            ##     C0 <- ee$L
+            ## }
+            C0 <- Matrix::t(Matrix::chol(Sig_uu))
         }else{
             J <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=inUse)
             if(length(intersect(inUse,nonr)) > 0){
@@ -456,25 +468,29 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             }
             V2 <- J %*% Sig0 %*% t(J)
             Vfull <- as(V2,"sparseMatrix")
-            u2r <- match(intersect(inUse,r),r)
-            ru <- which(inUse %in% intersect(inUse,r))
-            Sig_uuUse <- as(Sig_uu,"generalMatrix") ## Already reduced
-            iuu <- ru[Sig_uuUse@i+1]
-            puu <- Sig_uuUse@p
-            dp <- diff(puu)
-            juu <- ru[rep(seq_along(dp),dp)]
-            xuu <- Sig_uuUse@x
-            Vx <- Matrix::sparseMatrix(i=iuu,j=juu,x=xuu,dims=c(length(inUse),length(inUse)), symmetric=TRUE)
-            Vfull <- Vfull + Vx
-            ## Cholesky
-            ChVF <- Matrix::Cholesky(Vfull)
-            ## Lower triangular
-            ee <- Matrix::expand2(ChVF, LDL = FALSE)
-             if(!is.null(ee$P1)){
-                C0 <- ee$`P1.` %*% ee$L
-            }else{
-                C0 <- ee$L
+            if(!ignore.re.uncertainty){
+                u2r <- match(intersect(inUse,r),r)
+                ru <- which(inUse %in% intersect(inUse,r))
+                Sig_uuUse <- as(Sig_uu,"generalMatrix") ## Already reduced
+                iuu <- ru[Sig_uuUse@i+1]
+                puu <- Sig_uuUse@p
+                dp <- diff(puu)
+                juu <- ru[rep(seq_along(dp),dp)]
+                xuu <- Sig_uuUse@x
+                isU <- iuu <= juu
+                Vx <- Matrix::sparseMatrix(i=iuu[isU],j=juu[isU],x=xuu[isU],dims=c(length(inUse),length(inUse)), symmetric=TRUE)
+                Vfull <- Vfull + Vx
             }
+            ## Cholesky
+            ## ChVF <- Matrix::Cholesky(Vfull)
+            ## ## Lower triangular
+            ## ee <- Matrix::expand2(ChVF, LDL = FALSE)
+            ##  if(!is.null(ee$P1)){
+            ##     C0 <- ee$`P1.` %*% ee$L
+            ## }else{
+            ##     C0 <- ee$L
+            ## }
+            C0 <- Matrix::t(Matrix::chol(Vfull))
         }
         ## Simulation procedure
         doOne0 <- function(sim=TRUE){
@@ -491,9 +507,9 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             vMod <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
                       SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
                       Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
-            vOld <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
-                      SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
-                      Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
+            vOld <- c(R = mean(apply(rp0$mohnRhoVec_rec,1,function(x)exp(x[1]-x[2])-1)),
+                      SSB = mean(apply(rp0$mohnRhoVec_ssb,1,function(x)exp(x[1]-x[2])-1)),
+                      Fbar = mean(apply(rp0$mohnRhoVec_fbar,1,function(x)exp(x[1]-x[2])-1)))
             list(Modified = vMod, Original = vOld)
         }
         estRho <- doOne0(FALSE)
