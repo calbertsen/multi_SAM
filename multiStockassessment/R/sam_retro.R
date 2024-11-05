@@ -423,7 +423,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         tmp <- Sig_uu %*% Matrix::t(Dphi.random)
         ##tmp <- as.matrix(tmp)
         if(ignore.re.uncertainty){
-            term1 <- Sig_uu * 0
+            term1 <- matrix(0,nrow(Dphi.random),nrow(Dphi.random))
         }else{
             term1 <- Dphi.random%*%tmp ## first term.
         }
