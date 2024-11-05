@@ -128,7 +128,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Vy <- stockassessment:::svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A)
+    Vy <- svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A)
     ## Symmetrize for safety
     Vy <- 0.5 * (Vy + t(Vy))
     ## J1_2 is ordered by parameter then year
@@ -142,7 +142,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     info_H_par <- c(info_Hx_par[j11or],unlist(lapply(tail(years,1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) })))
     info_H_num <- c(info_Hx_num[j11or],unlist(lapply(tail(years,1), function(y){ seq_along(m_opt$par[parYear==y]) })))
     ## Full gradient for Delta Method
-    G <- -stockassessment:::svd_solve_posdef(J2) %*% (cbind(J1_1,J1_2) )
+    G <- -svd_solve_posdef(J2) %*% (cbind(J1_1,J1_2) )
     G2 <- matrix(0,sum(isFirstYear),ncol(G))
     diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
     Gx <- rbind(G,G2)
@@ -422,7 +422,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         ##tmp <- Matrix::solve(Hes_uu,Matrix::t(Dphi.random))
         tmp <- Sig_uu %*% Matrix::t(Dphi.random)
         ##tmp <- as.matrix(tmp)
-        if(ignore.re.uncertaint){
+        if(ignore.re.uncertainty){
             term1 <- Sig_uu * 0
         }else{
             term1 <- Dphi.random%*%tmp ## first term.
