@@ -610,13 +610,13 @@ mohn_CI_Old <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FA
     
     if(addCorrelation){
         if(!onlyRE){
-            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = TRUE)
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = FALSE, forcePosDef = FALSE)
             Sig0 <- Matrix::symmpart(Sig0_tmp)
             Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
             Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
         }
         if(resampleRE | onlyRE){
-            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
+            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = FALSE)
             Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
             Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
