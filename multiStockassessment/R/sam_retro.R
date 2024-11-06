@@ -152,6 +152,9 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     Sig1 <- Gx %*% block(svd_solve_posdef(oFit$opt$he),Vy) %*% t(Gx)
     ## Symmetrize for safety
     Sig1 <- 0.5 * (Sig1 + t(Sig1))    
+    if(forcePosDef){
+        Sig1 <- Matrix::nearPD(Sig1)$mat
+    }
     if(keep.diagonal){
         noCorSig <- svd_solve_posdef(m_opt$he)
         D <- diag(sqrt(diag(noCorSig)))
@@ -162,10 +165,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
         Sig1 <- D %*% CC %*% D
         Sig1 <- 0.5 * (Sig1 + t(Sig1))
     }
-    if(forcePosDef){
-        Sig1 <- Matrix::nearPD(Sig1)$mat
-    }
-  
+   
     dimnames(Sig1) <- list(names(attr(mFit,"m_opt")$par),names(attr(mFit,"m_opt")$par))
  
     if(!returnSigma){
@@ -353,7 +353,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     ## Corrected Hessian of fixed effects
     if(!ignore.parameter.uncertainty){
         if(addCorFix){
-            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = FALSE)
+            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = FALSE, forcePosDef = TRUE)
             Sig0 <- Matrix::symmpart(Sig0_tmp)
             ## Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
             ## Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
@@ -402,7 +402,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     ## Corrected Hessian of random effects
     if(!ignore.re.uncertainty){
         if(addCorRE){
-            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = FALSE)#, subset = inUseR)
+            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = FALSE, forcePosDef = TRUE)#, subset = inUseR)
             Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
             ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
