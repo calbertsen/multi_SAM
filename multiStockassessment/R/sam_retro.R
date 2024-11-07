@@ -462,8 +462,8 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }else{
-            Hes_uu <- makeSymPosDef((obj$env$spHess(obj$env$last.par.best, random = TRUE))
-            Sig_uu <- makeSymPosDef((Matrix::solve(Matrix::Cholesky(Hes_uu)))#[inUseR,inUseR, drop = FALSE]
+            Hes_uu <- makeSymPosDef(obj$env$spHess(obj$env$last.par.best, random = TRUE))
+            Sig_uu <- makeSymPosDef(Matrix::solve(Matrix::Cholesky(Hes_uu)))#[inUseR,inUseR, drop = FALSE]
         }
     }else{
         Sig_uu <- makeSymPosDef(obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
