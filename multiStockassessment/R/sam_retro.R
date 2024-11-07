@@ -394,7 +394,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
     
-    ## fitFinal <- attr(fit,"fit")
+    fitFinal <- attr(fit,"fit")
     framework <- .Call("getFramework", PACKAGE=fitFinal$obj$env$DLL)
     if (framework != "TMBad")
         stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
