@@ -2,11 +2,13 @@
 block <- function(...){
     x <- list(...)
     ii <- sapply(x, is.matrix)
-    x[!ii] <- lapply(x[!ii],function(y)diag(y,length(y),length(y)))
+    x[ii] <- lapply(x[ii],as,Class="generalMatrix")
+    jj <- sapply(x, is.numeric)
+    x[jj & !ii] <- lapply(x[jj & !ii],function(y)Matrix::Diagonal(length(y),y))
     n <- sapply(x,nrow)
     rn <- do.call(c,lapply(x, rownames))
     cn <- do.call(c,lapply(x, colnames))
-    M <- matrix(0,sum(n),sum(n), dimnames = list(rn,cn))
+    M <- Matrix::Matrix(0,sum(n),sum(n), dimnames = list(rn,cn))
     nc <- cumsum(c(0,n))
     for(i in 1:length(x)){
         jj <- nc[i]+1:n[i]
