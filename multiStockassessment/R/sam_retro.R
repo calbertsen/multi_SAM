@@ -1,5 +1,6 @@
 
 block <- function(...){
+    requireNamespace("Matrix")
     x <- list(...)
     ii <- sapply(x, is.matrix)
     x[ii] <- lapply(x[ii],as,Class="generalMatrix")
@@ -18,6 +19,7 @@ block <- function(...){
 }
 
 get_triplet <- function(x){
+    requireNamespace("Matrix")
     y <- as(x,"TsparseMatrix")
     if(is.null(y@uplo)){
         isU <- yv$i <= yv$j
@@ -38,7 +40,8 @@ get_triplet <- function(x){
 }
 
 sparse_sym_block <- function(...){
-    x <- list(...)
+     requireNamespace("Matrix")
+   x <- list(...)
     ii <- sapply(x, is, class2 = "sparseMatrix")
     x[!ii] <- lapply(x[!ii],function(y) as(y,"sparseMatrix")) #Matrix::sparseMatrix(i=seq_along(y),j=seq_along(y),x=as.numeric(y)))
     y <- lapply(x, get_triplet)
@@ -54,6 +57,7 @@ sparse_sym_block <- function(...){
 }
 
 makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE){
+    requireNamespace("Matrix")
     ## Sym
     ##v <- 0.5 * (x + t(x))
     if(is.matrix(x))
@@ -76,11 +80,13 @@ makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE){
 }
 
 svd_solve_posdef <- function(x, eps = sqrt(.Machine$double.eps)){
+    requireNamespace("Matrix")
     ss <- svd(x)
     ss$v %*% diag(1/pmax(ss$d,eps), length(ss$d), length(ss$d)) %*% t(ss$u)
 }
 
 make_quick_multisam <- function(RETRO){
+    requireNamespace("Matrix")
     fitFinal <- attr(RETRO,"fit")
     framework <- .Call("getFramework", PACKAGE=fitFinal$obj$env$DLL)
     if (framework != "TMBad")
@@ -112,6 +118,7 @@ make_quick_multisam <- function(RETRO){
 
 retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
 ##### Calculate hessian with correlation #####
+    requireNamespace("Matrix")
     oFit <- mFit[[length(mFit)]]
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -236,6 +243,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
 }
 
 retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
+    requireNamespace("Matrix")
     oFit <- mFit[[length(mFit)]]
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -372,7 +380,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
         Dx <- D %*% Do
         ## CC <- Do %*% Sig1 %*% Do ##Matrix::cov2cor(Sig1)
         ## Sig1 <- D %*% CC %*% D
-        Sig1 <- Dx %*% Sig1 %*% Matrix::t(Dx)
+        Sig1 <- Dx %*% Sig1 %*% Dx ## Dx is diagonal, so Dx=t(Dx)
         ##Sig1 <- (Sig1) 
     }
    if(!returnSigma){
@@ -391,6 +399,7 @@ mohn_CI <- function(fit, ...){
 ##' @export
 ##' NOTE: Add option to work on subset with some loss of precision
 mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ignore.re.uncertainty = FALSE, ...){
+    requireNamespace("Matrix")
 
     call <- match.call()
     if(is.null(attr(fit,"fit")))
