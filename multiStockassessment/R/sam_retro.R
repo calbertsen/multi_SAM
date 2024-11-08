@@ -208,7 +208,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     Gx[cbind(ii,seq_along(ii))] <- 1
     ## Delta method to get correlation
     Vold <- svd_solve_posdef(oFit$opt$he)
-    Sig1 <- Gx %*% block(Vold,Vy) %*% t(Gx)
+    Sig1 <- Gx %*% block(Vold,Vy) %*% Matrix::t(Gx)
     ## Symmetrize for safety
     Sig1 <- makeSymPosDef(Sig1)
     ##Sig1 <- 0.5 * (Sig1 + t(Sig1))    
