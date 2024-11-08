@@ -67,14 +67,18 @@ makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE){
     #ee$values <- pmax(ee$values,1e-8 / max(ee$values))
     ##Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
     Sc <- Matrix::expand2(Matrix::Schur(x))
-    if(all(Matrix::diag(Sc$T) >= tol))
+    ii <- seq_len(nrow(Sc$T))
+    if(all(Sc$T[cbind(ii,ii)] >= tol))
         return(v)
     if(warn){
         warning("Matrix was modified to be positive definite")
     }
-    T2 <- Sc$T
-    Matrix::diag(T2) <- pmax(Matrix::diag(T2),tol)
-    Sig1 <- Sc$Q %*% T2 %*% Sc$`Q.`
+    T2 <- as(Sc$T,"sparseMatrix")
+    ii <- seq_len(nrow(T2))
+    T2[cbind(ii,ii)] <- pmax(T2[cbind(ii,ii)],tol)
+    Q <- as(Sc$Q,"sparseMatrix")
+    Qi <- as(Sc$`Q.`,"sparseMatrix")
+    Sig1 <- Q %*% T2 %*% Qi
     Sig1 <- Matrix::symmpart(Sig1) #0.5 * (Sig1 + Matrix::t(Sig1))
     Sig1
 }
@@ -473,11 +477,11 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
             ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
         }else{
-            Hes_uu <- makeSymPosDef(obj$env$spHess(obj$env$last.par.best, random = TRUE))
-            Sig_uu <- makeSymPosDef(Matrix::solve(Matrix::Cholesky(Hes_uu)))#[inUseR,inUseR, drop = FALSE]
+            Hes_uu <- obj$env$spHess(obj$env$last.par.best, random = TRUE)
+            Sig_uu <- as(Matrix::solve(Matrix::Cholesky(Hes_uu)),"sparseMatrix") #[inUseR,inUseR, drop = FALSE]
         }
     }else{
-        Sig_uu <- makeSymPosDef(obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
+        Sig_uu <- 0 * (obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
     }
     dimnames(Sig_uu) <- list(names(attr(retroMS,"m_obj")$env$last.par.best[r]),#[inUseR]),
                              names(attr(retroMS,"m_obj")$env$last.par.best[r]))#[inUseR]))
