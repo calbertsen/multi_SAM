@@ -195,7 +195,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- diag(sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Vy <- makeSymPosDef(svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A))
+    Vy <- svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A) #makeSymPosDef(svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A))
     ## Symmetrize for safety
     ## Vy <- 0.5 * (Vy + t(Vy))
     ## J1_2 is ordered by parameter then year
@@ -221,7 +221,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     Vold <- svd_solve_posdef(oFit$opt$he)
     Sig1 <- Gx %*% block(Vold,Vy) %*% Matrix::t(Gx)
     ## Symmetrize for safety
-    Sig1 <- makeSymPosDef(Sig1)
+    ## Sig1 <- makeSymPosDef(Sig1)
     ##Sig1 <- 0.5 * (Sig1 + t(Sig1))    
     ## if(forcePosDef){
     ##     Sig1 <- Matrix::nearPD(Sig1)$mat
@@ -234,7 +234,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
         ## Insert
         ##CC[abs(CCOld) > 1e-5] <- CCOld[abs(CCOld) > 1e-5]
         Sig1 <- D %*% CC %*% D
-        Sig1 <- makeSymPosDef(Sig1) #0.5 * (Sig1 + t(Sig1))
+        ## Sig1 <- makeSymPosDef(Sig1) #0.5 * (Sig1 + t(Sig1))
     }
    
     dimnames(Sig1) <- list(names(attr(mFit,"m_opt")$par),names(attr(mFit,"m_opt")$par))
@@ -335,8 +335,8 @@ retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- Matrix::Diagonal(x = sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Hy2 <- makeSymPosDef(as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
-    Vy <- makeSymPosDef(Matrix::solve(Matrix::Cholesky(Hy2)))
+    Hy2 <- (as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
+    Vy <- (Matrix::solve(Matrix::Cholesky(Hy2)))
     ## J1_2 is ordered by parameter then year
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(seq_along(Hx), function(i){
@@ -368,8 +368,8 @@ retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     ii <- which(info_H_peel[order(info_H_par,info_H_peel,info_H_num)] == max(info_H_peel))
     Gx[cbind(ii,seq_along(ii))] <- 1   
     ## Delta method to get correlation
-    Hold <- makeSymPosDef(oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
-    Vold <- makeSymPosDef(Matrix::solve(Matrix::Cholesky(Hold)))
+    Hold <- (oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
+    Vold <- (Matrix::solve(Matrix::Cholesky(Hold)))
     combiVar <- sparse_sym_block(Vold,as(Vy,"sparseMatrix"))
     ## if(missing(subset)){
     Sig1 <- (Gx %*% combiVar) %*% Matrix::t(Gx)
@@ -377,7 +377,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     ##     Sig1 <- (Gx[subset,,drop=FALSE] %*% combiVar) %*% Matrix::t(Gx)[,subset,drop=FALSE]
     ## }
     ## Symmetrize for safety
-    Sig1 <- makeSymPosDef(Sig1) 
+    #Sig1 <- makeSymPosDef(Sig1) 
     if(keep.diagonal){
         D <- Matrix::Diagonal(x = sqrt(Matrix::diag(Matrix::solve(Matrix::Cholesky(H)))))
         Do <- Matrix::Diagonal(x = 1.0 / sqrt(Matrix::diag(Sig1)))
@@ -427,9 +427,9 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     if(!ignore.parameter.uncertainty){
         if(addCorFix){
             Sig0 <- retro_hessian(retroMS)
-               }else{
+        }else{
             Hes <- makeSymPosDef(attr(retroMS,"m_opt")$he)
-            Sig0 <- makeSymPosDef(svd_solve(Hes))
+            Sig0 <- (svd_solve(Hes))
         }
     }else{
         Sig0 <- 0 * attr(retroMS,"m_opt")$he
@@ -508,7 +508,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
                 -obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
             }
             A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
-            term2 <- makeSymPosDef(A %*% (Sig0 %*% Matrix::t(A))) ## second term
+            term2 <- (A %*% (Sig0 %*% Matrix::t(A))) ## second term
         }
         cov <- term1 + term2
         ## End of modified from TMB
@@ -575,7 +575,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             g_u_th <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r)
             J <- -Sig_uu %*% g_u_th
             V2 <- (J %*% Sig0 %*% Matrix::t(J))[inUseR,inUseR]
-            V2 <- makeSymPosDef(V2)
+            ## V2 <- makeSymPosDef(V2)
             ## Vfull <- as(V2,"sparseMatrix")
             if(!ignore.re.uncertainty){
                 #u2r <- match(intersect(inUse,r),r)
