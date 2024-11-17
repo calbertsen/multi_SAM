@@ -61,7 +61,7 @@ makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE){
     ## Sym
     ##v <- 0.5 * (x + t(x))
     if(is.matrix(x))
-        x <- as(x,"generalMatrix")
+        x <- as(x,"sparseMatrix")
     v <- Matrix::symmpart(x)
     #ee <- eigen(v, symmetric = TRUE)
     #ee$values <- pmax(ee$values,1e-8 / max(ee$values))
@@ -227,14 +227,21 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     ##     Sig1 <- Matrix::nearPD(Sig1)$mat
     ## }
     if(keep.diagonal){
-        noCorSig <- svd_solve_posdef(m_opt$he)
-        D <- diag(sqrt(diag(noCorSig)), nrow(noCorSig))
-        CC <- Matrix::cov2cor(Sig1)
-        ##CCOld <- cov2cor(noCorSig)
-        ## Insert
-        ##CC[abs(CCOld) > 1e-5] <- CCOld[abs(CCOld) > 1e-5]
-        Sig1 <- D %*% CC %*% D
-        ## Sig1 <- makeSymPosDef(Sig1) #0.5 * (Sig1 + t(Sig1))
+        ## noCorSig <- svd_solve_posdef(m_opt$he)
+        ## D <- diag(sqrt(diag(noCorSig)), nrow(noCorSig))        
+        ## CC <- Matrix::cov2cor(Sig1)
+        ## ##CCOld <- cov2cor(noCorSig)
+        ## ## Insert
+        ## ##CC[abs(CCOld) > 1e-5] <- CCOld[abs(CCOld) > 1e-5]
+        ## Sig1 <- D %*% CC %*% D
+        Sig1 <- makeSymPosDef(Sig1) #0.5 * (Sig1 + t(Sig1))
+        D <- Matrix::Diagonal(x = sqrt(Matrix::diag(Matrix::solve(Matrix::Cholesky(m_opt$he)))))
+        Do <- Matrix::Diagonal(x = 1.0 / sqrt(Matrix::diag(Sig1)))
+        Dx <- D %*% Do
+        ## CC <- Do %*% Sig1 %*% Do ##Matrix::cov2cor(Sig1)
+        ## Sig1 <- D %*% CC %*% D
+        Sig1 <- Dx %*% Sig1 %*% Dx ## Dx is diagonal, so Dx=t(Dx)
+
     }
    
     dimnames(Sig1) <- list(names(attr(mFit,"m_opt")$par),names(attr(mFit,"m_opt")$par))
