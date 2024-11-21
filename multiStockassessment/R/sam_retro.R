@@ -120,6 +120,120 @@ make_quick_multisam <- function(RETRO){
     fitList
 }
 
+
+makeFitWithFullCov <- function(RETRO, addCorFixed = TRUE, addCorRandom = TRUE){
+
+    requireNamespace("Matrix")
+    fitFinal <- attr(RETRO, "fit")
+    framework <- .Call("getFramework", PACKAGE = fitFinal$obj$env$DLL)
+    if (framework != "TMBad") 
+        stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
+    fitList <- do.call("c", c(list(fitFinal), RETRO))
+    m_obj <- multisam.fit(fitList, mohn = 1, doSdreport = FALSE, 
+                          run = FALSE)
+    m_opt <- list(par = m_obj$par)
+    dataYears <- fitFinal$data$years
+    years <- rev(tail(dataYears, length(fitList)))
+    apOrig <- do.call("rbind", lapply(fitList, function(x) sapply(split(x$opt$par, 
+                                                                        names(x$opt$par)), length)))
+    ap <- split(m_opt$par, factor(names(m_opt$par), unique(names(m_opt$par))))
+    parYear <- lapply(names(ap), function(nm) rep(years, times = apOrig[, 
+                                                                        nm]))
+    names(parYear) <- names(ap)
+    parYear <- unlist(parYear)
+    info_Hx_peel <- unlist(lapply(years, function(y) {
+        rep(max(years) - y, sum(parYear == y))
+    }))
+    info_Hx_par <- unlist(lapply(years, function(y) {
+        factor(names(m_opt$par[parYear == y]), unique(names(m_opt$par)))
+    }))
+    info_Hx_num <- unlist(lapply(years, function(y) {
+        seq_along(m_opt$par[parYear == y])
+    }))
+    j11or <- order(info_Hx_par, info_Hx_peel, info_Hx_num)
+    all_he <- do.call(multiStockassessment:::block, lapply(fitList, function(x) multiStockassessment:::makeSymPosDef(x$opt$he, warn = TRUE)))[j11or, j11or]
+    all_var <- Matrix::solve(all_he)
+    if(addCorFixed){
+        yy <- info_Hx_peel[j11or]
+        pp <- info_Hx_par[j11or]
+        nn <- info_Hx_num[j11or]
+        for(y1 in sort(unique(yy))){
+            for(y2 in sort(unique(yy))){
+                if(y1 < y2){
+                    i1 <- which(yy == y1)
+                    i2 <- which(yy == y2)
+                    all_var[i1,i2] <- all_var[i2,i1] <- all_var[i1,i1]
+                }
+            }
+        }
+    }
+    ## RE Covariance
+    all_re_he <- m_obj$env$spHess(m_obj$env$last.par.best, random=TRUE)
+    Ch <- Matrix::Cholesky(all_re_he)
+    all_re_var <- as(Matrix::solve(Ch),"sparseMatrix")
+    if(addCorRandom){
+        useMapOnPl <- function(plMap, map = m_obj$env$map) {
+            with.map <- intersect(names(plMap), names(map))
+            applyMap <- function(par.name) {
+                tapply(plMap[[par.name]], map[[par.name]], mean)
+            }
+            plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+            plMap
+        }
+        pl <- useMapOnPl(m_obj$env$parList(par=m_obj$env$last.par.best))
+        info_RE_peel <- unlist(lapply(pl, function(x){
+            aa <- attributes(x)
+            aa2 <- aa[intersect(c("vdim","rdim","cdim","adim"),names(aa))]
+            if(length(aa2) == 0){
+                return(rep(NA,length(x)))
+            }
+            rep(seq_along(aa2[[1]]),times = Reduce(`*`,aa2,init=rep(1,length(aa2[[1]]))))
+        }))[m_obj$env$random]
+        info_RE_par <- unlist(lapply(seq_along(pl), function(i){
+            rep(names(pl)[i], length(pl[[i]]))
+        }))[m_obj$env$random]
+        info_RE_num <- unlist(lapply(pl, function(x){
+            aa <- attributes(x)
+            aa2 <- aa[intersect(c("vdim","rdim","cdim","adim"),names(aa))]
+            if(length(aa2) == 0){
+                return(rep(NA,length(x)))
+            }
+            ll <- multiStockassessment:::splitParameter(x)
+            unlist(lapply(ll,seq_along))
+        }))[m_obj$env$random]
+        re_names <- paste(info_RE_par,info_RE_num,sep="_")
+        Trip <- list(cbind(seq_len(nrow(all_re_var)),seq_len(nrow(all_re_var)),1))
+        for(y1 in sort(unique(info_RE_peel))){
+            for(y2 in sort(unique(info_RE_peel))){
+                if(y1 < y2){
+                    i1 <- which(info_RE_peel == y1)
+                    i2 <- which(info_RE_peel == y2)
+                    nms <- intersect(re_names[i1],re_names[i2])
+                    j1 <- i1[match(nms,re_names[i1])]
+                    j2 <- i2[match(nms,re_names[i2])]
+                    Trip <- c(Trip,list(cbind(j1,j2,1)),list(cbind(j2,j1,1)))
+                }
+            }
+        }
+        Trip <- Reduce(rbind,Trip)
+        Trip <- Trip[Trip[,1] <= Trip[,2],]
+        L <- Matrix::sparseMatrix(i = Trip[,1], j = Trip[,2], x = Trip[,3],dims=c(nrow(all_re_var),ncol(all_re_var)))
+        re_var <- L %*% all_re_var + all_re_var %*% Matrix::t(L) - all_re_var
+    }else{
+        re_var <- all_re_var
+    }
+    m_opt$he <- Matrix::solve(all_var)
+    attr(fitList, "m_obj") <- m_obj
+    attr(fitList, "m_opt") <- m_opt
+    attr(fitList, "m_pl") <- m_obj$env$parList(par = m_obj$env$last.par.best)
+    attr(fitList,"m_var_par") <- all_var
+    attr(fitList,"m_var_re") <- re_var
+    class(fitList) <- c("msam", "samset", "fake_msam")
+    fitList
+
+}
+
+
 retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
 ##### Calculate hessian with correlation #####
     requireNamespace("Matrix")
@@ -147,6 +261,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     info_Hx_num <- unlist(lapply(head(years,-1), function(y){ seq_along(m_opt$par[parYear==y]) }))
     ## Derivative of score function wrt new parameters (ordered by parameter then year)
     J2 <- H[!isFirstYear, !isFirstYear]
+    J2[abs(J2) < 1e-10] <- 0
     ## Get derivative and (Gaussian) variance for data
     oldObj <- attr(mFit,"m_obj")
     dat <- oldObj$env$data
@@ -154,6 +269,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     auxList <- lapply(dat$sam,function(x){
         cbind(x$aux,fleetType = x$fleetTypes[x$aux[,"fleet"]])
     })
+    auxMatch <- lapply(auxList, function(x) paste(x[,1],x[,2],x[,3],x[,4],sep="_"))
     auxDList <- lapply(dat$sam,function(x){
         x$auxData
     })
@@ -190,17 +306,24 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     Obj1 <- TMB::MakeADFun(dat,pl,map, random=ran, DLL="multiStockassessment",inner.control=list(maxit=100))
     isObs <- names(Obj1$par) == "fake_obs"
     Obj1$fn()
-    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = "central", symmetrize = TRUE)) ## Subsets on rows, so transform to organize by columns
+    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = "romberg", symmetrize = FALSE)) ## Subsets on rows, so transform to organize by columns
+    Hy[abs(Hy) < 1e-10] <- 0
 ### The data appears multiple times for some years, use average
-    diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
-    A <- diag(sqrt(1/diagA),length(diagA))
-    ## Approximate variance of data
-    Vy <- svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A) #makeSymPosDef(svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A))
-    ## Symmetrize for safety
-    ## Vy <- 0.5 * (Vy + t(Vy))
+    ## diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
+    ## A <- diag(sqrt(1/diagA),length(diagA))
+    ## ## Approximate variance of data
+    Hy0 <- makeSymPosDef(Hy[which(isObs),which(isObs)])
+###Vy <- svd_solve_posdef(A %*%Hy0%*%A) #makeSymPosDef(svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A))
+    Vy <- Matrix::solve(Hy[which(isObs),which(isObs)])
+    Vy[abs(Vy) < 1e-10] <- 0
+    Cy <- Matrix::cov2cor(Vy)
     ## J1_2 is ordered by parameter then year
+    qqM <- do.call(c,auxMatch)[kp][sortVals][which(!is.na(map$fake_obs))]
+    Cy[outer(qqM,qqM,`==`)] <- 1
+    DVy <- Matrix::Diagonal(nrow(Vy),Matrix::diag(Vy))
+    Vy <- DVy %*% Cy %*% DVy
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
-    J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))
+    J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))    
     ## Reorder to match J1_2
     j11or <- order(info_Hx_par,info_Hx_peel,info_Hx_num)
     J1_1 <- J1_1[j11or,]
@@ -211,12 +334,14 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
     ## Full gradient for Delta Method (ordered by parameter then year)
     G <- -svd_solve_posdef(J2) %*% (cbind(J1_1,J1_2) )
     G2 <- matrix(0,sum(isFirstYear),ncol(G))
-    #G2[cbind(1:sum(isFirstYear),1:sum(isFirstYear))] <- 1
+                                        #G2[cbind(1:sum(isFirstYear),1:sum(isFirstYear))] <- 1
     Gx <- rbind(G,G2)
     ## Need to reorder to match fit
     Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
     ii <- which(info_H_peel[order(info_H_par,info_H_peel,info_H_num)] == max(info_H_peel))
     Gx[cbind(ii,seq_along(ii))] <- 1
+    Gx[abs(Gx) < 1e-10] <- 0
+    rownames(Gx) <- names(attr(mFit,"m_opt")$par)
     ## Delta method to get correlation
     Vold <- svd_solve_posdef(oFit$opt$he)
     Sig1 <- Gx %*% block(Vold,Vy) %*% Matrix::t(Gx)
@@ -422,8 +547,12 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
         stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
     ## fitList <- do.call("c",c(list(fitFinal), fit))
     ## retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
-    retroMS <- make_quick_multisam(fit)
-
+    ##retroMS <- make_quick_multisam(fit)
+    ## NOTE: Can construct joint marginal covariance first, then add correlation!
+    retroMS <- makeFitWithFullCov(fit, addCorFix, addCorRE)
+    Sig0 <- multiStockassessment:::makeSymPosDef(attr(retroMS,"m_var_par"))
+    Sig_uu <- attr(retroMS,"m_var_re")
+   
     ## Does not allow for lag in R
     add <- 0
     nms <- c(paste("R(age ", fitFinal$conf$minAge + add, ")", sep = ""),
@@ -431,17 +560,19 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
              paste("Fbar(", fitFinal$conf$fbarRange[1], "-", fitFinal$conf$fbarRange[2], ")", sep = ""))
 
     ## Corrected Hessian of fixed effects
-    if(!ignore.parameter.uncertainty){
-        if(addCorFix){
-            Sig0 <- retro_hessian(retroMS)
-        }else{
-            Hes <- makeSymPosDef(attr(retroMS,"m_opt")$he)
-            Sig0 <- (svd_solve(Hes))
-        }
-    }else{
-        Sig0 <- 0 * attr(retroMS,"m_opt")$he
-    }
-    
+    ## if(!ignore.parameter.uncertainty){
+    ##     if(addCorFix){
+    ##         ##Sig0 <- retro_hessian(retroMS)
+    ##         Sig0 <- attr(retroMS,"m_var_par")
+    ##     }else{
+    ##         Hes <- makeSymPosDef(attr(retroMS,"m_opt")$he)
+    ##         Sig0 <- (svd_solve(Hes))
+    ##     }
+    ## }else{
+    ##     Sig0 <- 0 * attr(retroMS,"m_opt")$he
+    ## }
+    ## Sig0 <- attr(retroMS,"m_var_par")
+    ## Sig_uu <- attr(retroMS,"m_var_re")
 
     obj <- attr(retroMS,"m_obj")
     par <- obj$env$last.par.best
@@ -477,19 +608,20 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     inUseR <- match(intersect(inUse,r),r)
 
     ## Corrected Hessian of random effects
-    if(!ignore.re.uncertainty){
-        if(addCorRE){
-            Sig_uu_tmp <- retro_hessian_RE(retroMS)#, subset = inUseR)
-            Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
-            ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-            ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
-        }else{
-            Hes_uu <- obj$env$spHess(obj$env$last.par.best, random = TRUE)
-            Sig_uu <- as(Matrix::solve(Matrix::Cholesky(Hes_uu)),"sparseMatrix") #[inUseR,inUseR, drop = FALSE]
-        }
-    }else{
-        Sig_uu <- 0 * (obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
-    }
+    ## if(!ignore.re.uncertainty){
+    ##     if(addCorRE){
+    ##         ## Sig_uu_tmp <- retro_hessian_RE(retroMS)#, subset = inUseR)
+    ##         ## Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
+    ##         Sig_uu <- attr(retroMS,"m_var_re")
+    ##         ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+    ##         ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+    ##     }else{
+    ##         Hes_uu <- obj$env$spHess(obj$env$last.par.best, random = TRUE)
+    ##         Sig_uu <- as(Matrix::solve(Matrix::Cholesky(Hes_uu)),"sparseMatrix") #[inUseR,inUseR, drop = FALSE]
+    ##     }
+    ## }else{
+    ##     Sig_uu <- 0 * (obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
+    ## }
     dimnames(Sig_uu) <- list(names(attr(retroMS,"m_obj")$env$last.par.best[r]),#[inUseR]),
                              names(attr(retroMS,"m_obj")$env$last.par.best[r]))#[inUseR]))
     
