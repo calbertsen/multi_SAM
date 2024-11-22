@@ -56,31 +56,41 @@ sparse_sym_block <- function(...){
     Matrix::sparseMatrix(i=yv$i, j=yv$j, x=yv$x, dims = c(sum(n),sum(n)), symmetric = TRUE)
 }
 
-makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE){
+makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE, quick = FALSE){
     requireNamespace("Matrix")
     ## Sym
     ##v <- 0.5 * (x + t(x))
     if(is.matrix(x))
         x <- as(x,"sparseMatrix")
-    v <- Matrix::symmpart(x)
-    #ee <- eigen(v, symmetric = TRUE)
-    #ee$values <- pmax(ee$values,1e-8 / max(ee$values))
-    ##Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
-    Sc <- Matrix::expand2(Matrix::Schur(x))
-    ii <- seq_len(nrow(Sc$T))
-    if(all(Sc$T[cbind(ii,ii)] >= tol))
-        return(v)
-    if(warn){
-        warning("Matrix was modified to be positive definite")
+    ## v <- Matrix::symmpart(x)
+    ## #ee <- eigen(v, symmetric = TRUE)
+    ## #ee$values <- pmax(ee$values,1e-8 / max(ee$values))
+    ## ##Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
+    x <- Matrix::symmpart(x)
+    if(!quick){
+        Sc <- Matrix::expand2(Matrix::Schur(x))
+        ii <- seq_len(nrow(Sc$T))
+        if(all(Sc$T[cbind(ii,ii)] >= tol))
+            return(x)
+        if(warn){
+            warning("Matrix was modified to be positive definite")
+        }
+        T2 <- as(Sc$T,"sparseMatrix")
+        ii <- seq_len(nrow(T2))
+        T2[cbind(ii,ii)] <- pmax(T2[cbind(ii,ii)],tol)
+        Q <- as(Sc$Q,"sparseMatrix")
+        Qi <- as(Sc$`Q.`,"sparseMatrix")
+        Sig1 <- Q %*% T2 %*% Qi
+    }else{
+        ee <- eigen(x,TRUE,TRUE)
+        if(min(ee$val) > 0)
+            return(x)
+        Sig1 <- x + Matrix::Diagonal(nrow(x), 1e-8 - min(ee$val))
     }
-    T2 <- as(Sc$T,"sparseMatrix")
-    ii <- seq_len(nrow(T2))
-    T2[cbind(ii,ii)] <- pmax(T2[cbind(ii,ii)],tol)
-    Q <- as(Sc$Q,"sparseMatrix")
-    Qi <- as(Sc$`Q.`,"sparseMatrix")
-    Sig1 <- Q %*% T2 %*% Qi
-    Sig1 <- Matrix::symmpart(Sig1) #0.5 * (Sig1 + Matrix::t(Sig1))
-    Sig1
+    ## Sig1 <- Matrix::symmpart(Sig1) #0.5 * (Sig1 + Matrix::t(Sig1))
+    D1 <- Matrix::Diagonal(nrow(x),sqrt(Matrix::diag(x)))
+    D2 <- Matrix::Diagonal(nrow(x),1 / sqrt(Matrix::diag(Sig1)))
+    D1 %*% D2 %*% Sig1 %*% D2 %*% D1
 }
 
 svd_solve_posdef <- function(x, eps = sqrt(.Machine$double.eps)){
@@ -141,6 +151,7 @@ makeFitWithFullCov <- function(RETRO, addCorFixed = TRUE, addCorRandom = TRUE){
                                                                         nm]))
     names(parYear) <- names(ap)
     parYear <- unlist(parYear)
+    ## NOTE: Does not work for catch scaling or other parameters by year!
     info_Hx_peel <- unlist(lapply(years, function(y) {
         rep(max(years) - y, sum(parYear == y))
     }))
@@ -192,14 +203,33 @@ makeFitWithFullCov <- function(RETRO, addCorFixed = TRUE, addCorRandom = TRUE){
         info_RE_par <- unlist(lapply(seq_along(pl), function(i){
             rep(names(pl)[i], length(pl[[i]]))
         }))[m_obj$env$random]
-        info_RE_num <- unlist(lapply(pl, function(x){
+        info_RE_num <- unlist(lapply(seq_along(pl), function(i){
+            x <- pl[[i]]
+            nm <- names(pl)[[i]]
             aa <- attributes(x)
             aa2 <- aa[intersect(c("vdim","rdim","cdim","adim"),names(aa))]
             if(length(aa2) == 0){
                 return(rep(NA,length(x)))
             }
             ll <- multiStockassessment:::splitParameter(x)
-            unlist(lapply(ll,seq_along))
+            if(nm == "missing"){
+                datList <- m_obj$env$data$sam
+                nms_mis <-lapply(seq_along(ll), function(s){
+                    aa <- datList[[s]]$aux[which(is.na(datList[[s]]$logobs)),]
+                    
+                })
+                return(unlist(nms_mis))
+            }
+            seq_name <- function(x){
+                if(length(x) == 0)
+                    return(character(0))
+                if(is.null(dim(x)))
+                    return(seq_along(x))
+                do.call(paste,c(lapply(seq_along(dim(x)),function(i){
+                    paste0(LETTERS[i],sprintf(sprintf("%%0%dd",floor(log10(max(dim(x))))+1L),slice.index(x,i)))
+                    }),list(sep="_")))
+            }
+            unlist(lapply(ll,seq_name))
         }))[m_obj$env$random]
         re_names <- paste(info_RE_par,info_RE_num,sep="_")
         Trip <- list(cbind(seq_len(nrow(all_re_var)),seq_len(nrow(all_re_var)),1))
@@ -551,7 +581,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
     ## NOTE: Can construct joint marginal covariance first, then add correlation!
     retroMS <- makeFitWithFullCov(fit, addCorFix, addCorRE)
     Sig0 <- multiStockassessment:::makeSymPosDef(attr(retroMS,"m_var_par"))
-    Sig_uu <- attr(retroMS,"m_var_re")
+    Sig_uu <- multiStockassessment:::makeSymPosDef(attr(retroMS,"m_var_re"), quick=TRUE)
    
     ## Does not allow for lag in R
     add <- 0
@@ -649,7 +679,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
             term2 <- (A %*% (Sig0 %*% Matrix::t(A))) ## second term
         }
-        cov <- term1 + term2
+        cov <- makeSymPosDef(term1 + term2)
         ## End of modified from TMB
         sdv <- sqrt(Matrix::diag(cov))
         tab <- list(Original = cbind("Estimate" = phi[1:3],
@@ -731,6 +761,7 @@ mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ig
             }else{
                 Vfull <- V2
             }
+            Vfull <- makeSymPosDef(Vfull)
             ## Cholesky
             ## ChVF <- Matrix::Cholesky(Vfull)
             ## Lower triangular
