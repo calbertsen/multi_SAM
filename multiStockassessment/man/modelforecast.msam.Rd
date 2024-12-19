@@ -15,7 +15,6 @@
   nosim = 1000,
   year.base = unlist(min(sapply(fit, function(x) max(x$data$years)))),
   ave.years = lapply(fit, function(x) max(x$data$years) + (-9:0)),
-  overwriteBioModel = FALSE,
   rec.years = lapply(fit, function(x) numeric(0)),
   label = NULL,
   overwriteSelYears = NULL,
@@ -41,6 +40,7 @@
   custom_pl = NULL,
   useNonLinearityCorrection = (nosim > 0 && !deterministicF),
   ncores = 1,
+  overwriteBioProcessModel = FALSE,
   ...
 )
 }
