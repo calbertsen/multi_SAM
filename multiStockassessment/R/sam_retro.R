@@ -1,10 +1,15 @@
 
 block <- function(...){
+    requireNamespace("Matrix")
     x <- list(...)
     ii <- sapply(x, is.matrix)
-    x[!ii] <- lapply(x[!ii],function(y)diag(y,length(y),length(y)))
+    x[ii] <- lapply(x[ii],as,Class="generalMatrix")
+    jj <- sapply(x, is.numeric)
+    x[jj & !ii] <- lapply(x[jj & !ii],function(y)Matrix::Diagonal(length(y),y))
     n <- sapply(x,nrow)
-    M <- matrix(0,sum(n),sum(n))
+    rn <- do.call(c,lapply(x, rownames))
+    cn <- do.call(c,lapply(x, colnames))
+    M <- Matrix::Matrix(0,sum(n),sum(n), dimnames = list(rn,cn))
     nc <- cumsum(c(0,n))
     for(i in 1:length(x)){
         jj <- nc[i]+1:n[i]
@@ -14,18 +19,31 @@ block <- function(...){
 }
 
 get_triplet <- function(x){
+    requireNamespace("Matrix")
     y <- as(x,"TsparseMatrix")
-    r <- data.frame(i = y@i+1,
-                    j = y@j+1,
-                    x = y@x)
+    if(is.null(y@uplo)){
+        isU <- yv$i <= yv$j
+        r <- data.frame(i = y@i[isU]+1,
+                        j = y@j[isU]+1,
+                        x = y@x[isU])
+    }else if(y@uplo == "L"){
+        r <- data.frame(i = y@j+1,
+                        j = y@i+1,
+                        x = y@x)
+    }else{
+        r <- data.frame(i = y@i+1,
+                        j = y@j+1,
+                        x = y@x)
+    }
     attr(r,"Dims") <- y@Dim
     r
 }
 
-sparse_block <- function(...){
-    x <- list(...)
+sparse_sym_block <- function(...){
+     requireNamespace("Matrix")
+   x <- list(...)
     ii <- sapply(x, is, class2 = "sparseMatrix")
-    x[!ii] <- lapply(x[!ii],function(y)Matrix::sparseMatrix(i=seq_along(y),j=seq_along(y),x=as.numeric(y)))
+    x[!ii] <- lapply(x[!ii],function(y) as(y,"sparseMatrix")) #Matrix::sparseMatrix(i=seq_along(y),j=seq_along(y),x=as.numeric(y)))
     y <- lapply(x, get_triplet)
     n <- sapply(x,nrow)
     nc <- cumsum(n)
@@ -34,21 +52,221 @@ sparse_block <- function(...){
         y[[i]]$j <- y[[i]]$j + nc[i-1]
     }
     yv <- do.call("rbind",y)
-    Matrix::sparseMatrix(i=yv$i, j=yv$j, x=yv$x, dims = c(sum(n),sum(n)))
+    #isU <- yv$i =< yv$j
+    Matrix::sparseMatrix(i=yv$i, j=yv$j, x=yv$x, dims = c(sum(n),sum(n)), symmetric = TRUE)
 }
 
-makeSymPosDef <- function(x){
+makeSymPosDef <- function(x, tol = sqrt(.Machine$double.eps), warn = FALSE, quick = FALSE){
+    requireNamespace("Matrix")
     ## Sym
-    v <- x + t(x)
-    ee <- eigen(Sig1, symmetric = TRUE)
-        ee$values <- pmax(ee$values,1e-6 / max(ee$values))
-        Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
-        Sig1 <- 0.5 * (Sig1 + t(Sig1))
+    ##v <- 0.5 * (x + t(x))
+    if(is.matrix(x))
+        x <- as(x,"sparseMatrix")
+    ## v <- Matrix::symmpart(x)
+    ## #ee <- eigen(v, symmetric = TRUE)
+    ## #ee$values <- pmax(ee$values,1e-8 / max(ee$values))
+    ## ##Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
+    x <- Matrix::symmpart(x)
+    if(!quick){
+        Sc <- Matrix::expand2(Matrix::Schur(x))
+        ii <- seq_len(nrow(Sc$T))
+        if(all(Sc$T[cbind(ii,ii)] >= tol))
+            return(x)
+        if(warn){
+            warning("Matrix was modified to be positive definite")
+        }
+        T2 <- as(Sc$T,"sparseMatrix")
+        ii <- seq_len(nrow(T2))
+        T2[cbind(ii,ii)] <- pmax(T2[cbind(ii,ii)],tol)
+        Q <- as(Sc$Q,"sparseMatrix")
+        Qi <- as(Sc$`Q.`,"sparseMatrix")
+        Sig1 <- Q %*% T2 %*% Qi
+    }else{
+        ee <- eigen(x,TRUE,TRUE)
+        if(min(ee$val) > 0)
+            return(x)
+        Sig1 <- x + Matrix::Diagonal(nrow(x), 1e-8 - min(ee$val))
+    }
+    ## Sig1 <- Matrix::symmpart(Sig1) #0.5 * (Sig1 + Matrix::t(Sig1))
+    D1 <- Matrix::Diagonal(nrow(x),sqrt(Matrix::diag(x)))
+    D2 <- Matrix::Diagonal(nrow(x),1 / sqrt(Matrix::diag(Sig1)))
+    D1 %*% D2 %*% Sig1 %*% D2 %*% D1
+}
+
+svd_solve_posdef <- function(x, eps = sqrt(.Machine$double.eps)){
+    requireNamespace("Matrix")
+    ss <- svd(x)
+    ss$v %*% diag(1/pmax(ss$d,eps), length(ss$d), length(ss$d)) %*% t(ss$u)
+}
+
+make_quick_multisam <- function(RETRO){
+    requireNamespace("Matrix")
+    fitFinal <- attr(RETRO,"fit")
+    framework <- .Call("getFramework", PACKAGE=fitFinal$obj$env$DLL)
+    if (framework != "TMBad")
+        stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
+    fitList <- do.call("c",c(list(fitFinal), RETRO))
+    m_obj <- multisam.fit(fitList, mohn=1, doSdreport = FALSE, run=FALSE)
+    m_opt <- list(par = m_obj$par)
+    ## match parameters to years
+    dataYears <- fitFinal$data$years
+    years <- rev(tail(dataYears,length(fitList)))
+    apOrig <- do.call("rbind",lapply(fitList, function(x) sapply(split(x$opt$par,names(x$opt$par)),length)))
+    ap <- split(m_opt$par,factor(names(m_opt$par),unique(names(m_opt$par))))
+    parYear <- lapply(names(ap), function(nm) rep(years,times = apOrig[,nm]))
+    names(parYear) <- names(ap)
+    parYear <- unlist(parYear)
+    info_Hx_peel <- unlist(lapply(years, function(y){ rep(max(years)-y, sum(parYear==y)) }))
+    info_Hx_par <- unlist(lapply(years, function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) }))
+    info_Hx_num <- unlist(lapply(years, function(y){ seq_along(m_opt$par[parYear==y]) }))
+    j11or <- order(info_Hx_par,info_Hx_peel,info_Hx_num)
+ 
+    all_he <- do.call(block,lapply(fitList,function(x) makeSymPosDef(x$opt$he,warn=TRUE)))[j11or,j11or]
+    m_opt$he <- all_he
+    attr(fitList,"m_obj") <- m_obj
+    attr(fitList,"m_opt") <- m_opt
+    attr(fitList,"m_pl") <- m_obj$env$parList(par=m_obj$env$last.par.best)
+    class(fitList) <- c("msam", "samset","fake_msam")
+    fitList
+}
+
+
+makeFitWithFullCov <- function(RETRO, addCorFixed = TRUE, addCorRandom = TRUE){
+
+    requireNamespace("Matrix")
+    fitFinal <- attr(RETRO, "fit")
+    framework <- .Call("getFramework", PACKAGE = fitFinal$obj$env$DLL)
+    if (framework != "TMBad") 
+        stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
+    fitList <- do.call("c", c(list(fitFinal), RETRO))
+    m_obj <- multisam.fit(fitList, mohn = 1, doSdreport = FALSE, 
+                          run = FALSE)
+    m_opt <- list(par = m_obj$par)
+    dataYears <- fitFinal$data$years
+    years <- rev(tail(dataYears, length(fitList)))
+    apOrig <- do.call("rbind", lapply(fitList, function(x) sapply(split(x$opt$par, 
+                                                                        names(x$opt$par)), length)))
+    ap <- split(m_opt$par, factor(names(m_opt$par), unique(names(m_opt$par))))
+    parYear <- lapply(names(ap), function(nm) rep(years, times = apOrig[, 
+                                                                        nm]))
+    names(parYear) <- names(ap)
+    parYear <- unlist(parYear)
+    ## NOTE: Does not work for catch scaling or other parameters by year!
+    info_Hx_peel <- unlist(lapply(years, function(y) {
+        rep(max(years) - y, sum(parYear == y))
+    }))
+    info_Hx_par <- unlist(lapply(years, function(y) {
+        factor(names(m_opt$par[parYear == y]), unique(names(m_opt$par)))
+    }))
+    info_Hx_num <- unlist(lapply(years, function(y) {
+        seq_along(m_opt$par[parYear == y])
+    }))
+    j11or <- order(info_Hx_par, info_Hx_peel, info_Hx_num)
+    all_he <- do.call(multiStockassessment:::block, lapply(fitList, function(x) multiStockassessment:::makeSymPosDef(x$opt$he, warn = TRUE)))[j11or, j11or]
+    all_var <- Matrix::solve(all_he)
+    if(addCorFixed){
+        yy <- info_Hx_peel[j11or]
+        pp <- info_Hx_par[j11or]
+        nn <- info_Hx_num[j11or]
+        for(y1 in sort(unique(yy))){
+            for(y2 in sort(unique(yy))){
+                if(y1 < y2){
+                    i1 <- which(yy == y1)
+                    i2 <- which(yy == y2)
+                    all_var[i1,i2] <- all_var[i2,i1] <- all_var[i1,i1]
+                }
+            }
+        }
+    }
+    ## RE Covariance
+    all_re_he <- m_obj$env$spHess(m_obj$env$last.par.best, random=TRUE)
+    Ch <- Matrix::Cholesky(all_re_he)
+    all_re_var <- as(Matrix::solve(Ch),"sparseMatrix")
+    if(addCorRandom){
+        useMapOnPl <- function(plMap, map = m_obj$env$map) {
+            with.map <- intersect(names(plMap), names(map))
+            applyMap <- function(par.name) {
+                tapply(plMap[[par.name]], map[[par.name]], mean)
+            }
+            plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
+            plMap
+        }
+        pl <- useMapOnPl(m_obj$env$parList(par=m_obj$env$last.par.best))
+        info_RE_peel <- unlist(lapply(pl, function(x){
+            aa <- attributes(x)
+            aa2 <- aa[intersect(c("vdim","rdim","cdim","adim"),names(aa))]
+            if(length(aa2) == 0){
+                return(rep(NA,length(x)))
+            }
+            rep(seq_along(aa2[[1]]),times = Reduce(`*`,aa2,init=rep(1,length(aa2[[1]]))))
+        }))[m_obj$env$random]
+        info_RE_par <- unlist(lapply(seq_along(pl), function(i){
+            rep(names(pl)[i], length(pl[[i]]))
+        }))[m_obj$env$random]
+        info_RE_num <- unlist(lapply(seq_along(pl), function(i){
+            x <- pl[[i]]
+            nm <- names(pl)[[i]]
+            aa <- attributes(x)
+            aa2 <- aa[intersect(c("vdim","rdim","cdim","adim"),names(aa))]
+            if(length(aa2) == 0){
+                return(rep(NA,length(x)))
+            }
+            ll <- multiStockassessment:::splitParameter(x)
+            if(nm == "missing"){
+                datList <- m_obj$env$data$sam
+                nms_mis <-lapply(seq_along(ll), function(s){
+                    aa <- datList[[s]]$aux[which(is.na(datList[[s]]$logobs)),]
+                    
+                })
+                return(unlist(nms_mis))
+            }
+            seq_name <- function(x){
+                if(length(x) == 0)
+                    return(character(0))
+                if(is.null(dim(x)))
+                    return(seq_along(x))
+                do.call(paste,c(lapply(seq_along(dim(x)),function(i){
+                    paste0(LETTERS[i],sprintf(sprintf("%%0%dd",floor(log10(max(dim(x))))+1L),slice.index(x,i)))
+                    }),list(sep="_")))
+            }
+            unlist(lapply(ll,seq_name))
+        }))[m_obj$env$random]
+        re_names <- paste(info_RE_par,info_RE_num,sep="_")
+        Trip <- list(cbind(seq_len(nrow(all_re_var)),seq_len(nrow(all_re_var)),1))
+        for(y1 in sort(unique(info_RE_peel))){
+            for(y2 in sort(unique(info_RE_peel))){
+                if(y1 < y2){
+                    i1 <- which(info_RE_peel == y1)
+                    i2 <- which(info_RE_peel == y2)
+                    nms <- intersect(re_names[i1],re_names[i2])
+                    j1 <- i1[match(nms,re_names[i1])]
+                    j2 <- i2[match(nms,re_names[i2])]
+                    Trip <- c(Trip,list(cbind(j1,j2,1)),list(cbind(j2,j1,1)))
+                }
+            }
+        }
+        Trip <- Reduce(rbind,Trip)
+        Trip <- Trip[Trip[,1] <= Trip[,2],]
+        L <- Matrix::sparseMatrix(i = Trip[,1], j = Trip[,2], x = Trip[,3],dims=c(nrow(all_re_var),ncol(all_re_var)))
+        re_var <- L %*% all_re_var + all_re_var %*% Matrix::t(L) - all_re_var
+    }else{
+        re_var <- all_re_var
+    }
+    m_opt$he <- Matrix::solve(all_var)
+    attr(fitList, "m_obj") <- m_obj
+    attr(fitList, "m_opt") <- m_opt
+    attr(fitList, "m_pl") <- m_obj$env$parList(par = m_obj$env$last.par.best)
+    attr(fitList,"m_var_par") <- all_var
+    attr(fitList,"m_var_re") <- re_var
+    class(fitList) <- c("msam", "samset", "fake_msam")
+    fitList
 
 }
 
-retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forcePosDef = TRUE, returnSigma = FALSE){
+
+retro_hessian <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
 ##### Calculate hessian with correlation #####
+    requireNamespace("Matrix")
     oFit <- mFit[[length(mFit)]]
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -67,11 +285,13 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     Hx <- lapply(head(years,-1), function(y){
         hessian_gr(oFit$obj$gr, m_opt$par[parYear==y], method = "central", symmetrize=TRUE)
     })
+    Hx <- lapply(Hx, makeSymPosDef, warn = TRUE)
     info_Hx_peel <- unlist(lapply(head(years,-1), function(y){ rep(max(years)-y, sum(parYear==y)) }))
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) }))
     info_Hx_num <- unlist(lapply(head(years,-1), function(y){ seq_along(m_opt$par[parYear==y]) }))
     ## Derivative of score function wrt new parameters (ordered by parameter then year)
     J2 <- H[!isFirstYear, !isFirstYear]
+    J2[abs(J2) < 1e-10] <- 0
     ## Get derivative and (Gaussian) variance for data
     oldObj <- attr(mFit,"m_obj")
     dat <- oldObj$env$data
@@ -79,6 +299,7 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     auxList <- lapply(dat$sam,function(x){
         cbind(x$aux,fleetType = x$fleetTypes[x$aux[,"fleet"]])
     })
+    auxMatch <- lapply(auxList, function(x) paste(x[,1],x[,2],x[,3],x[,4],sep="_"))
     auxDList <- lapply(dat$sam,function(x){
         x$auxData
     })
@@ -115,15 +336,24 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     Obj1 <- TMB::MakeADFun(dat,pl,map, random=ran, DLL="multiStockassessment",inner.control=list(maxit=100))
     isObs <- names(Obj1$par) == "fake_obs"
     Obj1$fn()
-    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = HyMethod, symmetrize = TRUE)) ## Subsets on rows, so transform to organize by columns
+    Hy <- t(hessian_gr(Obj1$gr, Obj1$par, subset = which(isObs), method = "romberg", symmetrize = FALSE)) ## Subsets on rows, so transform to organize by columns
+    Hy[abs(Hy) < 1e-10] <- 0
 ### The data appears multiple times for some years, use average
-    diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
-    A <- diag(sqrt(1/diagA),length(diagA))
-    ## Approximate variance of data
-    Vy <- stockassessment:::svd_solve(A %*%Hy[which(isObs),which(isObs)]%*%A)
+    ## diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
+    ## A <- diag(sqrt(1/diagA),length(diagA))
+    ## ## Approximate variance of data
+    Hy0 <- makeSymPosDef(Hy[which(isObs),which(isObs)])
+###Vy <- svd_solve_posdef(A %*%Hy0%*%A) #makeSymPosDef(svd_solve_posdef(A %*%Hy[which(isObs),which(isObs)]%*%A))
+    Vy <- Matrix::solve(Hy[which(isObs),which(isObs)])
+    Vy[abs(Vy) < 1e-10] <- 0
+    Cy <- Matrix::cov2cor(Vy)
     ## J1_2 is ordered by parameter then year
+    qqM <- do.call(c,auxMatch)[kp][sortVals][which(!is.na(map$fake_obs))]
+    Cy[outer(qqM,qqM,`==`)] <- 1
+    DVy <- Matrix::Diagonal(nrow(Vy),Matrix::diag(Vy))
+    Vy <- DVy %*% Cy %*% DVy
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
-    J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))
+    J1_1 <- do.call("rbind",lapply(Hx, function(x) x-2*H[isFirstYear,isFirstYear]))    
     ## Reorder to match J1_2
     j11or <- order(info_Hx_par,info_Hx_peel,info_Hx_num)
     J1_1 <- J1_1[j11or,]
@@ -131,33 +361,46 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     info_H_peel <- c(info_Hx_peel[j11or],unlist(lapply(tail(years,1), function(y){ rep(max(years)-y, sum(parYear==y)) })))
     info_H_par <- c(info_Hx_par[j11or],unlist(lapply(tail(years,1), function(y){ factor(names(m_opt$par[parYear==y]),unique(names(m_opt$par))) })))
     info_H_num <- c(info_Hx_num[j11or],unlist(lapply(tail(years,1), function(y){ seq_along(m_opt$par[parYear==y]) })))
-    ## Full gradient for Delta Method
-    G <- -stockassessment:::svd_solve(J2) %*% (cbind(J1_1,J1_2) )
+    ## Full gradient for Delta Method (ordered by parameter then year)
+    G <- -svd_solve_posdef(J2) %*% (cbind(J1_1,J1_2) )
     G2 <- matrix(0,sum(isFirstYear),ncol(G))
-    diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
+                                        #G2[cbind(1:sum(isFirstYear),1:sum(isFirstYear))] <- 1
     Gx <- rbind(G,G2)
     ## Need to reorder to match fit
     Gx <- Gx[order(info_H_par,info_H_peel,info_H_num),]
+    ii <- which(info_H_peel[order(info_H_par,info_H_peel,info_H_num)] == max(info_H_peel))
+    Gx[cbind(ii,seq_along(ii))] <- 1
+    Gx[abs(Gx) < 1e-10] <- 0
+    rownames(Gx) <- names(attr(mFit,"m_opt")$par)
     ## Delta method to get correlation
-    Sig1 <- Gx %*% block(stockassessment:::svd_solve(oFit$opt$he),Vy) %*% t(Gx)
+    Vold <- svd_solve_posdef(oFit$opt$he)
+    Sig1 <- Gx %*% block(Vold,Vy) %*% Matrix::t(Gx)
     ## Symmetrize for safety
-    Sig1 <- 0.5 * (Sig1 + t(Sig1))    
+    ## Sig1 <- makeSymPosDef(Sig1)
+    ##Sig1 <- 0.5 * (Sig1 + t(Sig1))    
+    ## if(forcePosDef){
+    ##     Sig1 <- Matrix::nearPD(Sig1)$mat
+    ## }
     if(keep.diagonal){
-        D <- diag(sqrt(diag(svd_solve(m_opt$he))))
-        CC <- cov2cor(Sig1)
-        Sig1 <- D %*% CC %*% D
-        Sig1 <- 0.5 * (Sig1 + t(Sig1))
+        ## noCorSig <- svd_solve_posdef(m_opt$he)
+        ## D <- diag(sqrt(diag(noCorSig)), nrow(noCorSig))        
+        ## CC <- Matrix::cov2cor(Sig1)
+        ## ##CCOld <- cov2cor(noCorSig)
+        ## ## Insert
+        ## ##CC[abs(CCOld) > 1e-5] <- CCOld[abs(CCOld) > 1e-5]
+        ## Sig1 <- D %*% CC %*% D
+        Sig1 <- makeSymPosDef(Sig1) #0.5 * (Sig1 + t(Sig1))
+        D <- Matrix::Diagonal(x = sqrt(Matrix::diag(Matrix::solve(Matrix::Cholesky(m_opt$he)))))
+        Do <- Matrix::Diagonal(x = 1.0 / sqrt(Matrix::diag(Sig1)))
+        Dx <- D %*% Do
+        ## CC <- Do %*% Sig1 %*% Do ##Matrix::cov2cor(Sig1)
+        ## Sig1 <- D %*% CC %*% D
+        Sig1 <- Dx %*% Sig1 %*% Dx ## Dx is diagonal, so Dx=t(Dx)
+
     }
-    if(forcePosDef){
-        ## ss <- Matrix::Schur(Sig1)
-        ## ss@EValues <- pmax(ss@EValues,1e-6 / max(ss@EValues))
-        ## Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
-        ## Sig1 <- Matrix::symmpart(Sig1)
-        ee <- eigen(Sig1, symmetric = TRUE)
-        ee$values <- pmax(ee$values,1e-6 / max(ee$values))
-        Sig1 <- ee$vectors %*% diag(x=ee$values) %*% solve(ee$vectors)
-        Sig1 <- 0.5 * (Sig1 + t(Sig1))
-    }
+   
+    dimnames(Sig1) <- list(names(attr(mFit,"m_opt")$par),names(attr(mFit,"m_opt")$par))
+ 
     if(!returnSigma){
         Hes1 <- solve(Sig1)
         return(Hes1)
@@ -165,7 +408,8 @@ retro_hessian <- function(mFit, keep.diagonal = TRUE, HyMethod = "forward", forc
     return(Sig1)
 }
 
-retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, returnSigma = TRUE){
+retro_hessian_RE <- function(mFit, keep.diagonal = TRUE, returnSigma = TRUE){
+    requireNamespace("Matrix")
     oFit <- mFit[[length(mFit)]]
     dataYears <- mFit[[1]]$data$years
     years <- rev(tail(dataYears,length(mFit)))
@@ -181,7 +425,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
     isFirstYear <- parYear == min(parYear)
     ## Derivative of score function
     ## H <- m_opt$he
-    H <- m_obj$env$spHess(m_obj$env$last.par.best, random=TRUE)    
+    H <- m_obj$env$spHess(m_obj$env$last.par.best, random=TRUE)
     ## Derivative wrt each of the old parameter sets
     Hx <- lapply(head(years,-1), function(y){
         ##hessian_gr(oFit$obj$gr, m_opt$par[parYear==y], method = "central", symmetrize=TRUE)
@@ -197,7 +441,7 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
         p0[oFit$obj$env$lfixed()] <- p1f
         p0[!oFit$obj$env$lfixed()] <- m_obj$env$last.par.best[m_obj$env$random][parYear==y][ii]
         H0[ii,ii] <- oFit$obj$env$spHess(p0, random = TRUE)
-        H0
+        makeSymPosDef(H0)
     })
     info_Hx_peel <- unlist(lapply(head(years,-1), function(y){ rep(max(years)-y, sum(parYear==y)) }))
     info_Hx_par <- unlist(lapply(head(years,-1), function(y){ factor(names(m_obj$env$last.par.best[m_obj$env$random][parYear==y]),unique(names(m_obj$env$last.par.best[m_obj$env$random]))) }))
@@ -253,8 +497,8 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
     diagA <- max(years) - fake_year[!is.na(map$fake_obs)] + 1
     A <- Matrix::Diagonal(x = sqrt(1/diagA),length(diagA))
     ## Approximate variance of data
-    Hy2 <- Matrix::symmpart(as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
-    Vy <- Matrix::solve(Matrix::Cholesky(Hy2))
+    Hy2 <- (as(A %*%Hy[which(isObs),which(isObs)]%*%A,"sparseMatrix"))
+    Vy <- (Matrix::solve(Matrix::Cholesky(Hy2)))
     ## J1_2 is ordered by parameter then year
     J1_2 <- Hy[max(which(isObs)) + which(!isFirstYear),which(isObs)] # Derivative wrt new parameter then y
     J1_1 <- do.call("rbind",lapply(seq_along(Hx), function(i){
@@ -278,41 +522,38 @@ retro_hessian_RE <- function(mFit, keep.diagonal = FALSE, forcePosDef = TRUE, re
     ## diag(G2[1:sum(isFirstYear),1:sum(isFirstYear)]) <- 1
     G2 <- Matrix::sparseMatrix(i=1:sum(isFirstYear),
                                j=1:sum(isFirstYear),
-                               x=rep(1,sum(isFirstYear)),
+                               x=0,
                                dims = c(sum(isFirstYear),ncol(G)))
     Gx <- rbind(G,G2)
     ## Need to reorder to match fit
     Gx <- as(Gx[order(info_H_par,info_H_peel,info_H_num),],"sparseMatrix")
+    ii <- which(info_H_peel[order(info_H_par,info_H_peel,info_H_num)] == max(info_H_peel))
+    Gx[cbind(ii,seq_along(ii))] <- 1   
     ## Delta method to get correlation
-    Hold <- Matrix::symmpart(oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
-    Vold <- Matrix::solve(Matrix::Cholesky(Hold))
-    combiVar <- sparse_block(Vold,as(Vy,"sparseMatrix"))
+    Hold <- (oFit$obj$env$spHess(oFit$obj$env$last.par.best,random=TRUE))
+    Vold <- (Matrix::solve(Matrix::Cholesky(Hold)))
+    combiVar <- sparse_sym_block(Vold,as(Vy,"sparseMatrix"))
+    ## if(missing(subset)){
     Sig1 <- (Gx %*% combiVar) %*% Matrix::t(Gx)
+    ## }else{
+    ##     Sig1 <- (Gx[subset,,drop=FALSE] %*% combiVar) %*% Matrix::t(Gx)[,subset,drop=FALSE]
+    ## }
     ## Symmetrize for safety
-    Sig1 <- Matrix::symmpart(Sig1) 
+    #Sig1 <- makeSymPosDef(Sig1) 
     if(keep.diagonal){
         D <- Matrix::Diagonal(x = sqrt(Matrix::diag(Matrix::solve(Matrix::Cholesky(H)))))
         Do <- Matrix::Diagonal(x = 1.0 / sqrt(Matrix::diag(Sig1)))
         Dx <- D %*% Do
         ## CC <- Do %*% Sig1 %*% Do ##Matrix::cov2cor(Sig1)
         ## Sig1 <- D %*% CC %*% D
-        Sig1 <- Dx %*% Sig1 %*% Dx
-        Sig1 <- Matrix::symmpart(Sig1) 
+        Sig1 <- Dx %*% Sig1 %*% Dx ## Dx is diagonal, so Dx=t(Dx)
+        ##Sig1 <- (Sig1) 
     }
-    if(forcePosDef){
-        ##ee <- eigen(Sig1, symmetric = TRUE)
-        ss <- Matrix::Schur(Sig1)
-        ss@T@x[] <- ss@EValues[] <- pmax(ss@T@x,1e-6 / max(ss@T@x))
-        Sig1 <- as(Reduce(`%*%`, Matrix::expand2(ss)), "sparseMatrix")
-        ##Sig1 <- Matrix::symmpart(Sig1)
-    }
-    if(!returnSigma){
+   if(!returnSigma){
         Hes1 <- Matrix::solve(Matrix::Cholesky(as(Sig1,"sparseMatrix")))
         return(Hes1)
     }
-    Sig1
-    
-    
+    Sig1      
 }
 
 
@@ -322,229 +563,123 @@ mohn_CI <- function(fit, ...){
 }
 
 ##' @export
-mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI=FALSE, resampleRE = FALSE, onlyRE = FALSE, ...){
-    ## Already fitted with retro
+##' NOTE: Add option to work on subset with some loss of precision
+mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ignore.re.uncertainty = FALSE, ...){
+    requireNamespace("Matrix")
+
     call <- match.call()
     if(is.null(attr(fit,"fit")))
         stop("The samset should have a fit as attribute")
-    if(simDelta == 0 & onlyRE)
-        stop("onlyRE is only for simulation")
+    
     fitFinal <- attr(fit,"fit")
-    fitList <- do.call("c",c(list(fitFinal), fit))
-    retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
-
+    framework <- .Call("getFramework", PACKAGE=fitFinal$obj$env$DLL)
+    if (framework != "TMBad")
+        stop("Please re-install the stockassessment and multiStockassessment packages with TMBad")
+    ## fitList <- do.call("c",c(list(fitFinal), fit))
+    ## retroMS <- multisam.fit(fitList, mohn=1, doSdreport = FALSE)
+    ##retroMS <- make_quick_multisam(fit)
+    ## NOTE: Can construct joint marginal covariance first, then add correlation!
+    retroMS <- makeFitWithFullCov(fit, addCorFix, addCorRE)
+    Sig0 <- multiStockassessment:::makeSymPosDef(attr(retroMS,"m_var_par"))
+    Sig_uu <- multiStockassessment:::makeSymPosDef(attr(retroMS,"m_var_re"), quick=TRUE)
+   
     ## Does not allow for lag in R
     add <- 0
     nms <- c(paste("R(age ", fitFinal$conf$minAge + add, ")", sep = ""),
              "SSB",
              paste("Fbar(", fitFinal$conf$fbarRange[1], "-", fitFinal$conf$fbarRange[2], ")", sep = ""))
 
-    
-    if(addCorrelation){
-        if(!onlyRE){
-            Sig0_tmp <- retro_hessian(retroMS, returnSigma = TRUE,  keep.diagonal = TRUE, forcePosDef = TRUE)
-            Sig0 <- Matrix::symmpart(Sig0_tmp)
-            Sig0_Chol <- Matrix::Cholesky(as(Sig0,"sparseMatrix"))
-            Hes <- Matrix::symmpart(Matrix::solve(Sig0_Chol))
-        }
-        if(resampleRE | onlyRE){
-            Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
-            Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
-            Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-            Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
-        }
-    }else{
-        if(!onlyRE){
-            Hes <- attr(retroMS,"m_opt")$he
-            Sig0 <- Matrix::symmpart(solve(Hes))
-        }
-        if(resampleRE | onlyRE){
-            obj0 <- attr(retroMS,"m_obj")
-            Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
-            Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
-            Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-        }
+    ## Corrected Hessian of fixed effects
+    ## if(!ignore.parameter.uncertainty){
+    ##     if(addCorFix){
+    ##         ##Sig0 <- retro_hessian(retroMS)
+    ##         Sig0 <- attr(retroMS,"m_var_par")
+    ##     }else{
+    ##         Hes <- makeSymPosDef(attr(retroMS,"m_opt")$he)
+    ##         Sig0 <- (svd_solve(Hes))
+    ##     }
+    ## }else{
+    ##     Sig0 <- 0 * attr(retroMS,"m_opt")$he
+    ## }
+    ## Sig0 <- attr(retroMS,"m_var_par")
+    ## Sig_uu <- attr(retroMS,"m_var_re")
+
+    obj <- attr(retroMS,"m_obj")
+    par <- obj$env$last.par.best
+    r <- obj$env$random
+    nonr <- setdiff(seq_along(par), r)
+    obj2 <- TMB::MakeADFun(obj$env$data,
+                           obj$env$parameters,
+                           type = "ADFun",
+                           ADreport = TRUE,
+                           DLL = obj$env$DLL,
+                           silent = obj$env$silent)
+    ## Vtheta <- Sig0
+    ## hessian.random <- Hes_uu
+    phi <- try(obj2$fn(par), silent=TRUE)    ## NOTE_1: obj2 forward sweep now initialized !
+    if(is.character(phi) | length(phi)==0){
+        stop("Error in phi")
+        phi <- rep(NA,6)
     }
+    ADGradForward0Initialized <- FALSE
+    ADGradForward0Initialize <- function() { ## NOTE_2: ADGrad forward sweep now initialized !
+        obj$env$f(par, order = 0, type = "ADGrad")
+        ADGradForward0Initialized <<- TRUE
+    }
+    chunk <- unlist(obj$env$ADreportIndex()[c("mohnRho_rec","mohnRho_ssb","mohnRho_fbar","mohnRhoMod_rec","mohnRhoMod_ssb","mohnRhoMod_fbar")])
+    w <- rep(0, length(phi))
+    phiDeriv <- function(i){
+        w[i] <- 1
+        obj2$env$f(par, order=1, rangeweight=w, doforward=0) ## See NOTE_1
+    }
+    Dphi <- t( sapply(chunk, phiDeriv) )
+    phi <- phi[chunk]      
+    inUse <- which(apply(Dphi!=0,2,any))
+    inUseR <- match(intersect(inUse,r),r)
+
+    ## Corrected Hessian of random effects
+    ## if(!ignore.re.uncertainty){
+    ##     if(addCorRE){
+    ##         ## Sig_uu_tmp <- retro_hessian_RE(retroMS)#, subset = inUseR)
+    ##         ## Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
+    ##         Sig_uu <- attr(retroMS,"m_var_re")
+    ##         ## Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
+    ##         ## Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
+    ##     }else{
+    ##         Hes_uu <- obj$env$spHess(obj$env$last.par.best, random = TRUE)
+    ##         Sig_uu <- as(Matrix::solve(Matrix::Cholesky(Hes_uu)),"sparseMatrix") #[inUseR,inUseR, drop = FALSE]
+    ##     }
+    ## }else{
+    ##     Sig_uu <- 0 * (obj$env$spHess(obj$env$last.par.best, random = TRUE))#[inUseR,inUseR, drop = FALSE] * 0
+    ## }
+    dimnames(Sig_uu) <- list(names(attr(retroMS,"m_obj")$env$last.par.best[r]),#[inUseR]),
+                             names(attr(retroMS,"m_obj")$env$last.par.best[r]))#[inUseR]))
     
-    if(simDelta > 0){
-        opt0 <- attr(retroMS,"m_opt")
-        obj0 <- attr(retroMS,"m_obj")
-        
-        ## check rank
-        ## rnk <- qr(Sig0,LAPACK=TRUE)$rank
-        ## if(rnk < nrow(Sig0)){
-        ##     ee <- eigen(Sig0, symmetric = TRUE)
-        ##     Sig0 <- ee$vectors %*% diag(pmax(ee$values,1e-6 / max(ee$values))) %*% solve(ee$vectors)
-        ##     Sig0 <- 0.5 * (Sig1 + t(Sig1))
-        ## }
-        ## Get error now if it won't make chol
-        ## C0 <- chol(Sig0)
-        isFixed <- obj0$env$lfixed()
-
-        ## Huu <- retro_hessian_RE(retroMS)
-        
-        ## if(resampleRE){
-
-        ## tmp <- obj0$env$f(obj0$env$last.par.best, order = 1, type = "ADGrad", 
-        ##                   keepx = which(isFixed), keepy = which(!isFixed))
-        ## A <- Matrix::solve(Hes_uu, tmp) # Sig_uu %*% tmp #
-        ## G <- Hes_uu %*% A
-        ## G <- Matrix::as.matrix(G)
-        ## M1 <- Matrix::cbind2(Hes_uu, G)
-        ## M2 <- Matrix::cbind2(Matrix::t(G), Matrix::as.matrix(Matrix::t(A) %*% G) + Hes)
-        ## M <- Matrix::rbind2(M1, M2)
-        ## M <- Matrix::forceSymmetric(M, uplo = "L")
-        ## dn <- c(names(obj0$env$last.par.best)[!isFixed], names(obj0$env$last.par.best)[isFixed])
-        ## dimnames(M) <- list(dn, dn)
-        ## p <- Matrix::invPerm(c(which(!isFixed), (1:length(obj0$env$last.par.best))[which(isFixed)]))
-        ## jointPrecision <- as(M[p, p],"sparseMatrix")
-        ## jp_Chol <- Matrix::Cholesky(jointPrecision)
-        ## jointCov <- Matrix::solve(jp_Chol)
-        ## C0 <- Matrix::chol(jointCov)
-        if(!onlyRE)
-            C0f <- Matrix::chol(Sig0)
-        if(resampleRE | onlyRE){
-            C0u <- Matrix::expand2(Sig_Chol_uu, LDL = FALSE)$`L.`
-            ##C0u <- Matrix::chol(Sig_uu)
-        }
-        #C0 <- Matrix::solve(pC0)
-        ##jointCov <- Matrix::solve(jointPrecision)
-        ## Siguu <- jointCov[!isFixed,!isFixed] - jointCov[!isFixed,isFixed] %*% Matrix::solve(jointCov[isFixed,isFixed]) %*% jointCov[isFixed,!isFixed]
-        ## Cuu <- Matrix::chol(Siguu)
-        ## }
-        #C0 <- as(C0,"sparseMatrix")
-        doOne0 <- function(sim=TRUE){
-            ## if(sim & resampleRE){
-            ##     cat("HELLO\n")
-            ##     p1 <- obj0$env$last.par.best
-            ##     p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% Cuu)
-            ## }else{
-            if(sim){
-                ## p0 <- stockassessment:::rmvnorm(1, opt0$par, Sig0)
-                if(!onlyRE){
-                    p0 <- opt0$par + drop(rnorm(length(opt0$par)) %*% C0f)
-                    obj0$fn(p0)
-                    p1 <- obj0$env$last.par #.best
-                }else{
-                    p1 <- obj0$env$last.par.best
-                }
-                ## ## Respect bounds
-                ## lower2 <- attr(retroMS,"m_low")
-                ## upper2 <- attr(retroMS,"m_high")
-                ## p0 <- pmax(pmin(upper2, p0), lower2)
-                ## ## bound transfIRARdist further
-                ## p0[names(opt0$par)=="transfIRARdist"] <- pmin(pmax(p0[names(opt0$par)=="transfIRARdist"],-5),5)
-                
-                ## }else{
-                ##     p0 <- opt0$par
-                ## }
-                
-                ##p1 <- obj0$env$last.par.best + drop(rnorm(length(obj0$env$last.par.best))) %*% C0
-                
-                if(resampleRE | onlyRE)
-                    p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% C0u)
-            }else{
-                p1 <- obj0$env$last.par.best
-            }
-            ## if(sim & resampleRE){
-            ##     p1[!isFixed] <- p1[!isFixed] + drop(rnorm(sum(!isFixed)) %*% Cuu)
-            ## }
-            rp0 <- obj0$report(p1)
-            vMod <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
-                      SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
-                      Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
-            vOld <- c(R = mean(apply(exp(rp0$mohnRhoVec_rec),1,function(x)x[1]/x[2]-1)),
-                      SSB = mean(apply(exp(rp0$mohnRhoVec_ssb),1,function(x)x[1]/x[2]-1)),
-                      Fbar = mean(apply(exp(rp0$mohnRhoVec_fbar),1,function(x)x[1]/x[2]-1)))
-            list(Modified = vMod, Original = vOld)
-        }
-        estRho <- doOne0(FALSE)
-        estRho_Orig <- estRho$Original
-        estRho_Mod <- estRho$Modified
-        simRho <- replicate(simDelta,tryCatch(doOne0(TRUE), error = function(e) list(Modified = c(Fbar=NA,SSB=NA,R=NA), Original = c(Fbar=NA,SSB=NA,R=NA))), simplify = FALSE)
-        simRho_Orig <- do.call("cbind",lapply(simRho, function(x) x$Original))
-        simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
-        bginfo_Orig <- list(est = estRho_Orig, sim = simRho_Orig)
-        bginfo_Mod <- list(est = estRho_Mod, sim = simRho_Mod)
-        if(quantile_CI){
-            cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
-            cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
-            cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
-            cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
-        }else{
-            sdv_Orig <- apply(simRho_Orig,1,sd,na.rm=TRUE)
-            cil_Orig <- estRho_Orig - 2 * sdv_Orig
-            cih_Orig <- estRho_Orig + 2 * sdv_Orig
-            sdv_Mod <- apply(simRho_Mod,1,sd,na.rm=TRUE)
-            cil_Mod <- estRho_Mod - 2 * sdv_Mod
-            cih_Mod <- estRho_Mod + 2 * sdv_Mod
-        }
-        tab <- list(Original = cbind(Estimate = estRho_Orig,
-                                     CI_low = cil_Orig,
-                                     CI_high = cih_Orig),
-                    Modified = cbind(Estimate = estRho_Mod,
-                                     CI_low = cil_Mod,
-                                     CI_high = cih_Mod))
-        bginfo <- list(Original = bginfo_Orig,
-                       Modified = bginfo_Mod)
-    }else{
-        if(!resampleRE){
-            if(addCorrelation){
-                Sig_uu_tmp <- retro_hessian_RE(retroMS, returnSigma = TRUE, keep.diagonal = TRUE, forcePosDef = TRUE)
-                Sig_uu <- as(Sig_uu_tmp,"sparseMatrix") ## Matrix::symmpart(Sig_uu_tmp)
-                Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-                Hes_uu <- Matrix::symmpart(Matrix::solve(Sig_Chol_uu))
-            }else{
-                obj0 <- attr(retroMS,"m_obj")
-                Hes_uu <- Matrix::symmpart(obj0$env$spHess(obj0$env$last.par.best, random = TRUE))
-                Sig_uu <- as(Matrix::symmpart(Matrix::solve(Matrix::Cholesky(Hes_uu))),"sparseMatrix")
-                ##Sig_Chol_uu <- Matrix::Cholesky(Sig_uu)
-            }
-        }## Otherwise calculated above
-        
-        ## Manual version of sdreport
-        ## Modified from TMB
-        obj <- attr(retroMS,"m_obj")
-        obj2 <- TMB::MakeADFun(obj$env$data,
-                          obj$env$parameters,
-                          type = "ADFun",
-                          ADreport = TRUE,
-                          DLL = obj$env$DLL,
-                          silent = obj$env$silent)
-        r <- obj$env$random
-        par <- obj$env$last.par.best
-        ## Vtheta <- Sig0
-        ## hessian.random <- Hes_uu
-        phi <- obj2$fn(par)
-        ADGradForward0Initialized <- FALSE
-        ADGradForward0Initialize <- function() { ## NOTE_2: ADGrad forward sweep now initialized !
-            obj$env$f(par, order = 0, type = "ADGrad")
-            ADGradForward0Initialized <<- TRUE
-        }
-        chunk <- unlist(obj$env$ADreportIndex()[c("mohnRho_rec","mohnRho_ssb","mohnRho_fbar","mohnRhoMod_rec","mohnRhoMod_ssb","mohnRhoMod_fbar")])
-        w <- rep(0, length(phi))
-        phiDeriv <- function(i){
-            w[i] <- 1
-            obj2$env$f(par, order=1, rangeweight=w, doforward=0) ## See NOTE_1
-        }
-        Dphi <- t( sapply(chunk, phiDeriv) )
-        phi <- phi[chunk]
-        Dphi.random <- as(Dphi[,r,drop=FALSE],"sparseMatrix")
+    if(nosim == 0){ ## Delta method (calculated)
+        Dphi.random <- as(Dphi[,r,drop=FALSE],"sparseMatrix")#[,intersect(inUse,r),drop=FALSE],"sparseMatrix")
         Dphi.fixed <- as(Dphi[,-r,drop=FALSE],"sparseMatrix")        
         ##tmp <- Matrix::solve(Hes_uu,Matrix::t(Dphi.random))
         tmp <- Sig_uu %*% Matrix::t(Dphi.random)
         ##tmp <- as.matrix(tmp)
-        term1 <- Dphi.random%*%tmp ## first term.
-
-        w <- rep(0, length(par))
-        if(!ADGradForward0Initialized) ADGradForward0Initialize()
-        reverse.sweep <- function(i){
-            w[r] <- tmp[,i]
-            -obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
+        if(ignore.re.uncertainty){
+            term1 <- matrix(0,nrow(Dphi.random),nrow(Dphi.random))
+        }else{
+            term1 <- Dphi.random%*%tmp ## first term.
         }
-        A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
-        term2 <- A %*% (Sig0 %*% Matrix::t(A)) ## second term
-        cov <- term1 + term2
+        if(ignore.parameter.uncertainty){
+            term2 <- 0
+        }else{
+            w <- rep(0, length(par))
+            if(!ADGradForward0Initialized) ADGradForward0Initialize()
+            reverse.sweep <- function(i){
+                ##w[intersect(inUse,r)] <- tmp[,i]
+                w[r] <- tmp[,i]
+                -obj$env$f(par, order = 1, type = "ADGrad", rangeweight = w, doforward=0)[-r]
+            }
+            A <- t(do.call("cbind",lapply(seq_along(phi), reverse.sweep))) + Dphi.fixed
+            term2 <- (A %*% (Sig0 %*% Matrix::t(A))) ## second term
+        }
+        cov <- makeSymPosDef(term1 + term2)
         ## End of modified from TMB
         sdv <- sqrt(Matrix::diag(cov))
         tab <- list(Original = cbind("Estimate" = phi[1:3],
@@ -554,13 +689,134 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
                                      "CI_low" = phi[4:6] - 2 * sdv[4:6],
                                      "CI_high" = phi[4:6] + 2 * sdv[4:6]))
         bginfo <- list(phi = phi, cov = cov)
-        ## sdr <- TMB::sdreport(attr(retroMS,"m_obj"), attr(retroMS,"m_opt")$par, Hes, ...)
-        ## ssdr <- summary(sdr)
-        ## ssb <- ssdr[grepl("mohnRho_ssb",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        ## fbar <- ssdr[grepl("mohnRho_fbar",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        ## rec <- ssdr[grepl("mohnRho_rec",rownames(ssdr)),] %*% cbind(Estimate = c(1,0), CI_low = c(1,-2), CI_high = c(1,2))
-        ## tab <- rbind(rec,ssb, fbar)
-        ## bginfo <- ssdr
+    }else{ ## Delta method (simulated)
+        ## Calculate full precision (modified from TMB::sdreport)
+         ## NOTE: TMB usually works with the Hessians, but the correlation is added on the Covariances, so it is easier to work on those
+        ## tmp <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r) 
+        ## A <- solve(Hes_uu, tmp)
+        ## G <- Hes_uu %*% A
+        ## G <- as.matrix(G) ## Avoid Matrix::cbind2('dsCMatrix','dgeMatrix')
+        ## M1 <- cbind2(Hes_uu,G)
+        ## M2 <- cbind2(t(G), as.matrix(t(A)%*%G)+Hes)
+        ## M <- rbind2(M1,M2)
+        ## M <- forceSymmetric(M,uplo="L")
+        ## dn <- c(names(par)[r],names(par[-r]))
+        ## dimnames(M) <- list(dn,dn)
+        ## p <- invPerm(c(r,(1:length(par))[-r]))
+        ## jointPrecision <- M[p,p]
+        ## Find parameters/RE with influence
+        if(ignore.parameter.uncertainty){
+            ## Ch <- Matrix::Cholesky(Sig_uu) ## Already reduced
+            ## ee <- Matrix::expand2(Ch, LDL = FALSE)
+            ## if(!is.null(ee$P1)){
+            ##     C0 <- ee$`P1.` %*% ee$L
+            ## }else{
+            ##     C0 <- ee$L
+            ## }
+            C0 <- try({Matrix::t(Matrix::chol(Sig_uu[inUseR,inUseR],pivot=FALSE))})
+            if(is(C0,"try-error")){
+                a <- svd(Sig_uu[inUseR,inUseR])
+                C0 <- a$u %*% diag(sqrt(pmax(a$d,0)),length(a$d))
+            }
+        }else{
+            ## f <- obj$env$f
+            ## w <- rep(0, length(par))
+            ## if(!ADGradForward0Initialized) ADGradForward0Initialize()
+            ## tmp <- f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=intersect(inUse,r)) ## TMBad only !!!
+            ## if(!is.matrix(tmp)) ## Happens if length(r)==1
+            ##     tmp <- matrix(tmp, ncol=length(nonr) )
+            ## J <- -Sig_uu %*% tmp
+            ## A <- Sig_uu %*% tmp #solve(hessian.random, tmp)
+            ## diag.term2 <- rowSums((A %*% Sig0)*A)
+            ## hessian.random <- solve(Sig_uu)
+            ## hessian.fixed <- solve(Sig0)
+            ## G <- hessian.random %*% A
+            ## G <- as.matrix(G) ## Avoid Matrix::cbind2('dsCMatrix','dgeMatrix')
+            ## M1 <- cbind2(hessian.random,G)
+            ## M2 <- cbind2(t(G), as.matrix(t(A)%*%G)+hessian.fixed )
+            ## M <- rbind2(M1,M2)
+            ## M <- forceSymmetric(M,uplo="L")
+            ## dn <- c(names(par)[r],names(par[-r]))
+            ## dimnames(M) <- list(dn,dn)
+            ## p <- invPerm(c(r,(1:length(par))[-r]))
+            ## jointPrecision <- M[p,p]
+            ## Vfull <- svd_solve(jointPrecision)
+            g_u_th <- obj$env$f(par, order = 1, type = "ADGrad", keepx=nonr, keepy=r)
+            J <- -Sig_uu %*% g_u_th
+            V2 <- (J %*% Sig0 %*% Matrix::t(J))[inUseR,inUseR]
+            ## V2 <- makeSymPosDef(V2)
+            ## Vfull <- as(V2,"sparseMatrix")
+            if(!ignore.re.uncertainty){
+                #u2r <- match(intersect(inUse,r),r)
+                ## ru <- r #which(inUse %in% intersect(inUse,r))
+                ## Sig_uuUse <- as(Sig_uu,"generalMatrix") ## Already reduced
+                ## iuu <- ru[Sig_uuUse@i+1]
+                ## puu <- Sig_uuUse@p
+                ## dp <- diff(puu)
+                ## juu <- ru[rep(seq_along(dp),dp)]
+                ## xuu <- Sig_uuUse@x
+                ## isU <- iuu <= juu
+                ## Vx <- Matrix::sparseMatrix(i=iuu[isU],j=juu[isU],x=xuu[isU],dims=c(length(inUse),length(inUse)), symmetric=TRUE)
+                Vfull <- as(V2,"sparseMatrix") + Sig_uu[inUseR,inUseR]
+            }else{
+                Vfull <- V2
+            }
+            Vfull <- makeSymPosDef(Vfull)
+            ## Cholesky
+            ## ChVF <- Matrix::Cholesky(Vfull)
+            ## Lower triangular
+            ## ee <- Matrix::expand2(ChVF, LDL = FALSE)
+            ##  if(!is.null(ee$P1)){
+            ##     C0 <- ee$`P1.` %*% ee$L
+            ## }else{
+            ##     C0 <- ee$L
+            ## }
+            C0 <- try({Matrix::t(Matrix::chol(Vfull,pivot=FALSE))})
+            if(is(C0,"try-error")){
+                a <- svd(Vfull)
+                C0 <- a$u %*% diag(sqrt(pmax(a$d,0)),length(a$d))
+            }
+        }
+        ## Simulation procedure
+        doOne0 <- function(sim=TRUE){
+            p1 <- obj$env$last.par.best
+            if(sim){
+                ## if(ignore.parameter.uncertainty){
+                ##     p1[r] <- p1[r] + drop(C0 %*% rnorm(length(r)))
+                ## }else{
+                ##     p1 <- p1 + drop(C0 %*% rnorm(length(p1)))
+                ## }
+                p1[intersect(inUse,r)] <- p1[intersect(inUse,r)] + as.vector(C0 %*% rnorm(length(intersect(inUse,r))))
+            }
+            rp0 <- obj$report(p1)
+            vMod <- c(R = mean(apply((rp0$mohnRhoVec_rec),1,function(x)(x[1]-x[2])/log(10))),
+                      SSB = mean(apply((rp0$mohnRhoVec_ssb),1,function(x)(x[1]-x[2])/log(10))),
+                      Fbar = mean(apply((rp0$mohnRhoVec_fbar),1,function(x)(x[1]-x[2])/log(10))))
+            vOld <- c(R = mean(apply(rp0$mohnRhoVec_rec,1,function(x)exp(x[1]-x[2])-1)),
+                      SSB = mean(apply(rp0$mohnRhoVec_ssb,1,function(x)exp(x[1]-x[2])-1)),
+                      Fbar = mean(apply(rp0$mohnRhoVec_fbar,1,function(x)exp(x[1]-x[2])-1)))
+            list(Modified = vMod, Original = vOld)
+        }
+        estRho <- doOne0(FALSE)
+        estRho_Orig <- estRho$Original
+        estRho_Mod <- estRho$Modified
+        simRho <- replicate(nosim,tryCatch(doOne0(TRUE), error = function(e) list(Modified = c(Fbar=NA,SSB=NA,R=NA), Original = c(Fbar=NA,SSB=NA,R=NA))), simplify = FALSE)
+        simRho_Orig <- do.call("cbind",lapply(simRho, function(x) x$Original))
+        simRho_Mod <- do.call("cbind",lapply(simRho, function(x) x$Modified))
+        bginfo_Orig <- list(est = estRho_Orig, sim = simRho_Orig)
+        bginfo_Mod <- list(est = estRho_Mod, sim = simRho_Mod)
+        cil_Orig <- apply(simRho_Orig,1,quantile,prob=0.025, na.rm=TRUE)
+        cih_Orig <- apply(simRho_Orig,1,quantile,prob=0.975, na.rm=TRUE)
+        cil_Mod <- apply(simRho_Mod,1,quantile,prob=0.025, na.rm=TRUE)
+        cih_Mod <- apply(simRho_Mod,1,quantile,prob=0.975, na.rm=TRUE)
+        tab <- list(Original = cbind(Estimate = estRho_Orig,
+                                     CI_low = cil_Orig,
+                                     CI_high = cih_Orig),
+                    Modified = cbind(Estimate = estRho_Mod,
+                                     CI_low = cil_Mod,
+                                     CI_high = cih_Mod))
+        bginfo <- list(Original = bginfo_Orig,
+                       Modified = bginfo_Mod)              
     }
 
     rownames(tab$Original) <- nms
@@ -573,6 +829,7 @@ mohn_CI.samset <- function(fit, addCorrelation = TRUE, simDelta = 0, quantile_CI
     class(res) <- "sam_mohn"
     res    
 }
+
 
 ##' @export
 mohn_CI.sam <- function(fit, addCorrelation = TRUE, years = 5, ...){

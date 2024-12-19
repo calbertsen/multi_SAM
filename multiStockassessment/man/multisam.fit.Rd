@@ -40,6 +40,8 @@ multisam.fit(
   symbolicAnalysis = FALSE,
   fullDerived = FALSE,
   mohn = FALSE,
+  doSdreport = TRUE,
+  skip.hessian = FALSE,
   ...
 )
 }
@@ -61,7 +63,7 @@ multisam.fit(
 \item{...}{Additional arguments passed to TMB::MakeADFun}
 }
 \value{
-A list of class msam and samset
+A list of class msam and samset, which is the input x with additional information attached.
 }
 \description{
 Fit multiple SAM models with correlated survival processes.
