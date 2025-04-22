@@ -562,8 +562,8 @@ mohn_CI <- function(fit, ...){
     UseMethod("mohn_CI")
 }
 
+## NOTE: Add option to work on subset with some loss of precision
 ##' @export
-##' NOTE: Add option to work on subset with some loss of precision
 mohn_CI.samset <- function(fit, addCorFix = TRUE, addCorRE = TRUE, nosim = 0, ignore.parameter.uncertainty = FALSE, ignore.re.uncertainty = FALSE, ...){
     requireNamespace("Matrix")
 
