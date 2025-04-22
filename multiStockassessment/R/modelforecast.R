@@ -83,6 +83,7 @@ modelforecast.msam <- function(fit,
                           custom_pl = NULL,
                           useNonLinearityCorrection = (nosim > 0 && !deterministicF),
                           ncores = 1,
+                          overwriteBioProcessModel = FALSE,
                           ...){
    
     dots <- list(...)
@@ -335,32 +336,34 @@ modelforecast.msam <- function(fit,
                                                             matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),postYears[i]))
                                                   }))
  
-    if(any(useModelBio)){
-        splitArray <- function(a){
-            nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
-            lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
-        }
-        extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x),],postYears,ncol(x), byrow=TRUE))
-        makeBio <- function(x, isArray = FALSE){
-            if(isArray){
-                biox <- split3DArrays(x)
-            }else{                
-                biox <- splitMatrices(x)
-            }
-            nr <- sapply(biox,nrow)
-            fn <- extendBio
-            if(isArray)
-                fn <- function(y) simplify2array(lapply(splitArray(y), extendBio))
-            biox[nr > 0 & useModelBio] <- lapply(biox[nr > 0 & useModelBio], fn)
-            if(isArray)
-                return(combine3DArrays(biox))
-            return(combineMatrices(biox))
-        }
-        pl$logitMO <- makeBio(pl$logitMO)
-        pl$logNM <- makeBio(pl$logNM)
-        pl$logSW <- makeBio(pl$logSW)
-        pl$logCW <- makeBio(pl$logCW, TRUE)
+    ## if(any(useModelBio)){
+    ## Update biopar processes
+    splitArray <- function(a){
+        nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
+        lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
     }
+    extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x),],postYears,ncol(x), byrow=TRUE))
+    makeBio <- function(x, isArray = FALSE){
+        if(length(x) == 0) return(x)
+        if(isArray){
+            biox <- split3DArrays(x)
+        }else{                
+            biox <- splitMatrices(x)
+        }
+        nr <- sapply(biox,nrow)
+        fn <- extendBio
+        if(isArray)
+            fn <- function(y) simplify2array(lapply(splitArray(y), extendBio))
+        biox[nr > 0 & useModelBio] <- lapply(biox[nr > 0 & useModelBio], fn)
+        if(isArray)
+            return(combine3DArrays(biox))
+        return(combineMatrices(biox))
+    }
+    pl$logitMO <- makeBio(pl$logitMO)
+    pl$logNM <- makeBio(pl$logNM)
+    pl$logSW <- makeBio(pl$logSW)
+    pl$logCW <- makeBio(pl$logCW, TRUE)
+    ##}
     logitFSTmp <- split3DArrays(pl$logitFseason)
     pl$logitFseason <- combine3DArrays(lapply(as.list(1:length(logitFSTmp)),
                                               function(i){
@@ -423,7 +426,8 @@ modelforecast.msam <- function(fit,
                                             logRecruitmentMedian = as.numeric(recList[[i]]$logRecruitmentMedian),
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
-                                            simFlag = c(0,0,0,0),
+                                            ## logF, logN, obs, biopar
+                                            simFlag = c(0,0,0,as.numeric(overwriteBioProcessModel)),
                                             hcrConf = hcrConf[[i]],
                                             hcrCurrentSSB = hcrCurrentSSB,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),

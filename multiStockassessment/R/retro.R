@@ -34,8 +34,15 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRU
     ## ## Reduced shared observation
     shObs <- attr(fit,"m_data")$sharedObs
     if(shObs$hasSharedObs){
-        shRed <- stockassessment::reduce(shObs, year = year, fleet = fleet)
-        args$shared_data <- shRed[names(shObs)]
+        shRed <- shObs
+        shRed_red <- stockassessment::reduce(shObs, year = year, fleet = fleet)
+        shRed[names(shObs)] <- shRed_red[names(shObs)]
+        if(!is.null(fleet)){
+            shRed$covCombine <- shRed$covCombine[-fleet]
+            shRed$fleetCovarianceSize <- shRed$fleetCovarianceSize[-fleet]
+            shRed$keyFleetStock <- shRed$keyFleetStock[-fleet,,drop=FALSE]
+        }
+        args$shared_data <- shRed
     }        
     ## ##
     ## if(!is.null(attr(fit,"newtonsteps")))

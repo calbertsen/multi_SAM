@@ -554,7 +554,77 @@ catchplot.msam_hcr <- function(fit, ...){
 ##' @method parplot msam
 ##' @export
 parplot.msam <- function(fit, cor.report.limit=0.95, ...){
-    stop("Not implemented")
+    parplot(c(fit),cor.report.limit,...)
+}
+
+##' Parameter plot
+##'
+##' @param fit msam object
+##' @param cor.report.limit Not used
+##' @param ... extra arguments for plotting
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment parplot
+##' @method parplot msamset
+##' @export
+parplot.msamset <- function(fit, cor.report.limit=0.95, ...){
+    if(!is.null(attr(fit,"fit"))){
+        fit <- c(list(attr(fit,"fit")), fit)
+    }
+    param <- lapply(fit, coef) 
+    nam <- names(param[[1]])
+    dup <- duplicated(nam)
+    namadd <- rep(0,length(nam))
+    for(i in 2:length(dup)){
+        if(dup[i])namadd[i] <- namadd[i-1]+1
+    }
+    nam <- paste(nam, namadd, sep="_")
+    corrs <- cov2cor(attr(param[[1]], "cov"))-diag(length(param[[1]]))
+    rownames(corrs)<-nam
+    colnames(corrs)<-nam
+    higcor <- lapply(1:nrow(corrs),function(i)corrs[i,][corrs[i,]>cor.report.limit]*100)
+    names(higcor) <- nam
+    lowcor<-lapply(1:nrow(corrs),function(i)corrs[i,][corrs[i,]<(-cor.report.limit)]*100)
+    names(lowcor) <- nam
+    for(i in 1:length(param)){
+        m <- param[[i]]+t(c(-2,0,2)%o%attr(param[[i]],"sd"))  
+        if(i==1){
+            mat <- cbind(m,0)
+            rownames(mat) <- nam
+        }else{
+            if(nrow(m)==length(nam)){
+                rownames(m) <- nam
+                mat<-rbind(mat,cbind(m,-i+1))
+            }
+        }
+    }
+    .plotapar<-function(name){
+        sub <- mat[rownames(mat)==name,,drop=FALSE]
+        xold <- sub[,4]
+        if(nrow(sub)==1)sub<-rbind(cbind(sub[,1:3,drop=FALSE],-.5), cbind(sub[,1:3,drop=FALSE],.5))
+        x <- sub[,4]
+        y <- sub[,2]
+        plot(x, y, xlim=c(min(x)-1,5), ylim=range(sub[,1:3]), ylab=name, xlab="", axes=FALSE, type="n",...)
+        box()
+        axis(2, las=1)
+        lines(x, y, lwd=3,...)
+        polygon(c(x,rev(x)), y = c(sub[,1],rev(sub[,3])), border = gray(.5,alpha=.5), col = gray(.5,alpha=.5))
+        d <- sapply(1:length(xold), function(i)lines(xold[c(i,i)],c(sub[i,1],sub[i,3]), lty="dotted", lwd=.5))
+        idx <- which(nam==name)
+
+        if(length(higcor[[name]])!=0){
+            legend("topright", legend=paste0(names(higcor[[name]]),": ",round(higcor[[name]]),"%"), bty="n", text.col="blue")
+        }
+        if(length(lowcor[[name]])!=0){
+            legend("bottomright", legend=paste0(names(lowcor[[name]]),": ",round(lowcor[[name]]),"%"), bty="n", text.col="red")
+        }
+    }
+    div <- rep(ceiling(sqrt(length(nam))),2)
+    if(div[1]*(div[2]-1)>=length(nam))div[2] <- div[2]-1
+    op <- par(mar=c(.2,par("mar")[2],.2,par("mar")[4]))
+    on.exit(par(op))
+    laym <- matrix(1:(div[1]*div[2]),nrow=div[1], ncol=div[2])
+    layout(laym)
+    d <- sapply(nam, .plotapar)
 }
 
 
@@ -604,35 +674,64 @@ srplot.msam <- function(fit,textcol="red",add=FALSE,
 fitplot.msam <- function(fit,
                          stock,
                          log=TRUE,
-                         fleets=lapply(attr(fit,"m_data")$sam,function(x)unique(x$aux[,"fleet"])),
+                         fleets,
                          ...){
     d <- attr(fit,"m_data")$sam
     rep <- attr(fit,"m_rep")
-    idx <- sapply(1:length(d),function(i)d[[i]]$aux[,"fleet"] %in% fleets[[i]],
-                  simplify = FALSE)
-    trans <- function(x)if(log){x}else{exp(x)}
-    p <- sapply(1:length(d),function(i)trans(rep$predObs[[i]][idx[[i]]]),
-                simplify=FALSE)
-    o <- sapply(1:length(d),function(i)trans(d[[i]]$logobs[idx[[i]]]),
-                simplify=FALSE)
-    fl <-  sapply(1:length(d),function(i)d[[i]]$aux[idx[[i]],"fleet"],
-                  simplify = FALSE)
-    yy <-  sapply(1:length(d),function(i)d[[i]]$aux[idx[[i]],"year"],
-                  simplify = FALSE)
-    aa <- sapply(1:length(d),function(i){
-        atmp <- d[[i]]$aux[idx[[i]],"age"]
-        atmp[atmp < -1.0e-6] <- NA
-        atmp
-    }, simplify=FALSE)
-    a <- paste0("a=",aa[[stock]]," ")
-    f <- paste0(" f=",strtrim(attr(fit[[stock]]$data,"fleetNames")[fl[[stock]]],50))
-    Year <- yy[[stock]]
-    if(length(fleets)==1){
-        myby <- paste(a, ":", f)
+    if(!missing(stock) && stock == "shared"){
+        d <- attr(fit,"m_data")$sharedObs
+        fleets <- unique(d$aux[,"fleet"])
+        if(any(d$fleetTypes[fleets] >= 80)){
+            warning("Fleets with fleetType >= 80 could not be plotted")
+            fleets <- setdiff(fleets, which(d$fleetTypes[fleets] >= 80))
+        }
+        idx <- d$aux[, "fleet"] %in% fleets
+        trans <- function(x)if(log){x}else{exp(x)}
+        p <- trans(apply(rep$predPerStock[idx,,drop=FALSE],1,function(x)log(sum(exp(x)))))
+        o <- trans(d$logobs[idx])
+        aa <- d$aux[idx, "age"]
+        neg.age <- (aa < -1e-06)
+        aa[neg.age] <- NA
+        a <- paste0("a=", aa, " ")
+        f <- paste0(" f=", strtrim(attr(d, "fleetNames")[d$aux[idx,"fleet"]], 50))
+        Year <- d$aux[idx, "year"]
+        if (length(fleets) == 1) {
+            myby <- paste(a, ":", f)
+        }else{
+            myby <- cbind(a, f)
+        }
+        plotby(Year, o, y.line = p, by = myby, y.common = FALSE, 
+               ylab = "", ...)
     }else{
-        myby <- cbind(a,f)
+        if(missing(fleets))
+            fleets <- lapply(attr(fit,"m_data")$sam,function(x)unique(x$aux[,"fleet"]))
+        
+        idx <- sapply(1:length(d),function(i)d[[i]]$aux[,"fleet"] %in% fleets[[i]],
+                      simplify = FALSE)
+        trans <- function(x)if(log){x}else{exp(x)}
+        p <- sapply(1:length(d),function(i)trans(rep$predObs[[i]][idx[[i]]]),
+                    simplify=FALSE)
+        o <- sapply(1:length(d),function(i)trans(d[[i]]$logobs[idx[[i]]]),
+                    simplify=FALSE)
+        fl <-  sapply(1:length(d),function(i)d[[i]]$aux[idx[[i]],"fleet"],
+                      simplify = FALSE)
+        yy <-  sapply(1:length(d),function(i)d[[i]]$aux[idx[[i]],"year"],
+                      simplify = FALSE)
+        aa <- sapply(1:length(d),function(i){
+            atmp <- d[[i]]$aux[idx[[i]],"age"]
+            atmp[atmp < -1.0e-6] <- NA
+            atmp
+        }, simplify=FALSE)
+        a <- paste0("a=",aa[[stock]]," ")
+        f <- paste0(" f=",strtrim(attr(fit[[stock]]$data,"fleetNames")[fl[[stock]]],50))
+        Year <- yy[[stock]]
+        if(length(fleets)==1){
+            myby <- paste(a, ":", f)
+        }else{
+            myby <- cbind(a,f)
+        }
+        stockassessment::plotby(Year, o[[stock]], y.line=p[[stock]], by=myby, y.common=FALSE, ylab="", ...)
     }
-    stockassessment::plotby(Year, o[[stock]], y.line=p[[stock]], by=myby, y.common=FALSE, ylab="", ...)
 }
 
 
@@ -880,3 +979,40 @@ plot.msamres <- function(x, ...){
 ## plotby(x$year, x$age, x$residual, by=attr(x,"fleetNames")[x$fleet], xlab="Year", ylab="Age", ...)
 
 ## }
+
+##' @rdname sdplot
+##' @method sdplot msam
+##' @export
+sdplot.msam <- function(fit, stock, barcol=NULL, marg=NULL, ylim=NULL, show.rel.w=FALSE, ...){
+    if(missing(stock))
+        stock <- seq_along(fit)
+    cf <- lapply(fit,function(x) x$conf$keyVarObs)
+    fn <- lapply(fit,function(x) attr(x$data, "fleetNames"))
+    ages <- lapply(fit,function(x) x$conf$minAge:x$conf$maxAge)
+    pl <- attr(fit,"m_pl")$logSdLogObs
+    sdl <- splitParameter(attr(fit,"m_plsd")$logSdLogObs)
+    sn <- getStockNames(fit)
+    op <- par("mfrow")
+    on.exit(par(mfrow=op))
+    nn <- n2mfrow(length(stock))
+    par(mfrow=sort(nn))
+    if("main" %in% ...names()){
+        main <- rep(...elt(which("main" %in% ...names())),length.out = length(fit))
+    }else{
+        main <- sn
+    }
+    for(i in stock){
+        v<-cf[[i]]
+        v[] <- c(NA,sdl[[i]])[cf[[i]]+2]
+        res<-data.frame(fleet=fn[[i]][as.vector(row(v))],name=paste0(fn[[i]][as.vector(row(v))]," age ",ages[[i]][as.vector(col(v))]), sd=as.vector(v))
+        res<-res[complete.cases(res),]
+        o<-order(res$sd)
+        res<-res[o,]
+        res$rel.w <- (1/res$sd^2)/max(1/res$sd^2)
+        if (missing(barcol)) barcol <- colors()[as.integer(as.factor(res$fleet))*10]
+        if (missing(marg)) marg <- c(max(nchar(fn[[i]]))*0.8,4,2,1)
+        par(mar=marg)
+        if(show.rel.w) barplot(res$rel.w, names.arg=res$name,las=2, col=barcol, ylab="Relative weight", ylim=ylim, main = main) else barplot(res$sd, names.arg=res$name,las=2, col=barcol, ylab="SD", ylim=ylim, main = main[i])
+        box()
+    }
+}
