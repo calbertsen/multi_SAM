@@ -982,6 +982,7 @@ plot.msamres <- function(x, ...){
 
 ##' @rdname sdplot
 ##' @method sdplot msam
+##' @importFrom stockassessment sdplot
 ##' @export
 sdplot.msam <- function(fit, stock, barcol=NULL, marg=NULL, ylim=NULL, show.rel.w=FALSE, ...){
     if(missing(stock))

@@ -268,6 +268,19 @@ void getTotals(vector<dataSet<Type> >& datA,
   ADREPORT_F(total_logfbarL,of);
   ADREPORT_F(total_logCatAge,of);
 
+  REPORT_F(total_logssb,of);
+  REPORT_F(total_logfsb,of);
+  REPORT_F(total_logCatch,of);
+  REPORT_F(total_logLand,of);
+  REPORT_F(total_logtsb,of);
+  REPORT_F(total_logR,of);
+  REPORT_F(total_logfbar_Effective,of);
+  REPORT_F(total_logmbar_Effective,of);
+  REPORT_F(total_logfbar,of);
+  REPORT_F(total_logfbarL,of);
+  REPORT_F(total_logCatAge,of);
+
+  
 
   if(mohn){
     // When used for mohn's rho, 

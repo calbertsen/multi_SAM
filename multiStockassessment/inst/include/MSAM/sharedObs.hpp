@@ -541,6 +541,9 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nSeasons-1) - log_P(nSeasons-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
+	    SIMULATE_F(of){	      
+		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	    }
 		
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
 	    Type log_alpha = R_NegInf;
@@ -600,7 +603,9 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nStocks-1) - log_P(nStocks-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
-		
+	    SIMULATE_F(of){	      
+	      obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	    }
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
 	    Type log_alpha = R_NegInf;
 	    for(int s = 0; s < nStocks; ++s)
@@ -663,6 +668,9 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nAreas-1) - log_P(nAreas-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
+	    SIMULATE_F(of){	      
+	      obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	    }
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
 	    Type log_alpha = R_NegInf;
 	    for(int s = 0; s < nStocks; ++s)
@@ -689,6 +697,8 @@ Type sharedObservation(shared_obs<Type>& obs,
       }
     }
   }
+  vector<Type> shared_logobs = obs.logobs;
+  REPORT_F(shared_logobs,of);
   return nll; //nll;
   
 			 });

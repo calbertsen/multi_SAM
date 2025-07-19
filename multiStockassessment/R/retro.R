@@ -41,6 +41,7 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRU
             shRed$covCombine <- shRed$covCombine[-fleet]
             shRed$fleetCovarianceSize <- shRed$fleetCovarianceSize[-fleet]
             shRed$keyFleetStock <- shRed$keyFleetStock[-fleet,,drop=FALSE]
+            attr(shRed,"fleetNames") <- attr(shObs,"fleetNames")[-fleet]
         }
         args$shared_data <- shRed
     }        

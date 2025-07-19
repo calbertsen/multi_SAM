@@ -403,7 +403,8 @@ multisam.fit <- function(x,
                  "sigmaObsParUS",
                  "rec_transphi",
                  "predVarObsLink",
-                 "keyXtraSd")
+                 "keyXtraSd",
+                 "keyLogFbound_tau","keyLogFbound_kappa","keyLogFbound_alpha")
     parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist",
                  "meanLogSW","logSdLogSW","logPhiSW","logSdProcLogSW",
                  "meanLogCW","logSdLogCW","logPhiCW","logSdProcLogCW",
@@ -413,7 +414,8 @@ multisam.fit <- function(x,
                  "sigmaObsParUS",
                  "rec_transphi",
                  "predVarObs",
-                 "logXtraSd")
+                 "logXtraSd",
+                 "boundF_tau","boundF_kappa","boundF_alpha")
     if(any(!(shared_keys %in% keyName)))
         stop(sprintf("shared keys not valid: %s",paste(shared_keys[!(shared_keys %in% keyName)],collapse=", ")))
     for(nm in shared_keys)

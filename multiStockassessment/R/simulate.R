@@ -24,6 +24,7 @@ simulate.msam <- function(object,
     }
     rngSeed <- .Random.seed
     obj <- attr(object,"m_obj")
+    shObs <- attr(object,"m_dat")$sharedObs
     par <- obj$env$last.par.best
     dots <- list(...)
     sn <- getStockNames(object)
@@ -34,6 +35,7 @@ simulate.msam <- function(object,
             for(i in 1:length(allDat)){
                 allDat[[i]]$logobs <- simObs$logobs[[i]]
             }
+            shObs$logobs <- simObs$shared_logobs
             if(ready.to.fit){
                 fa <- formalArgs(stockassessment::sam.fit)
                 fa <- fa[fa != "..."]
@@ -46,13 +48,25 @@ simulate.msam <- function(object,
                     if(length(indx) > 0)
                         res[[i]] <- c(res[[i]],dots[indx])
                 }
+                bionm <- names(simObs)[grepl("^(bio|total)_",names(simObs))]
+                for(nn in bionm)
+                    attr(res,nn) <- simObs[[nn]]
+                attr(res,"shared_data") <- shObs
                 attr(res,"sim_logN") <- simObs$logN
                 attr(res,"sim_logF") <- simObs$logF
+                attr(res,"sim_logfbar") <- simObs$logfbar
+                attr(res,"sim_logssb") <- simObs$logssb
                 names(res) <- sn
                 return(res)
             }else{
+                bionm <- names(simObs)[grepl("^(bio|total)_",names(simObs))]
+                for(nn in bionm)
+                    attr(allDat,nn) <- simObs[[nn]]
+                attr(allDat,"shared_data") <- shObs
                 attr(allDat,"sim_logN") <- simObs$logN
                 attr(allDat,"sim_logF") <- simObs$logF
+                attr(allDat,"sim_logfbar") <- simObs$logfbar
+                attr(allDat,"sim_logssb") <- simObs$logssb
                 names(allDat) <- sn
                 return(allDat)
             }
