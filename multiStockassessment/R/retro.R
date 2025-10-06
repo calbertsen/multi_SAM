@@ -35,7 +35,7 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRU
     shObs <- attr(fit,"m_data")$sharedObs
     if(shObs$hasSharedObs){
         shRed <- shObs
-        shRed_red <- stockassessment::reduce(shObs, year = year, fleet = fleet)
+        shRed_red <- stockassessment::reduce(shObs, year = year, fleet = fleet, onlyobs=TRUE)
         shRed[names(shObs)] <- shRed_red[names(shObs)]
         if(!is.null(fleet)){
             shRed$covCombine <- shRed$covCombine[-fleet]

@@ -182,6 +182,7 @@ HEADER(
 	 array<Type> alleleFreq;// (nAllele-1) x nLoci x nStockGenetic
 	 matrix<Type> dmScale;
 	 matrix<Type> muLogP;		// nAge x nStockGenetic
+	 vector<Type> avgProbPar;
        };
        )
 
@@ -208,13 +209,37 @@ Type nllGenetics(shared_obs<Type>& obs,
 		 matrix<int>& stockAreas,
 		 matrix<Type>& Parea,
 		 int maxAgeAll,
-		 int minAgeAll
+		 int minAgeAll,
+		 objective_function<Type>* of
 		 )SOURCE({
 
 		     if(gendat.samples.size() == 0)
 		       return 0.0;
 		     int nStockManagement = gendat.stock2gen.rows();
 		     int nStockGenetic = gendat.stock2gen.cols();
+		     matrix<Type> stock2gen(nStockManagement, nStockGenetic);
+		     int par_indx = 0;
+		     for(int i = 0; i < nStockManagement; ++i){ // Rows
+		       Type rs = 0;
+		       for(int j = 0; j < nStockGenetic; ++j){ // Cols
+			 if(gendat.stock2gen(i,j) < 0){ // Use a parameter
+			   stock2gen(i,j) = exp(genpar.avgProbPar(par_indx++));
+			 }else{ // Use preconfigured value
+			   stock2gen(i,j) = gendat.stock2gen(i,j);
+			 }
+			 rs += stock2gen(i,j);
+		       }
+		       // Normalize to have rowsums == 1
+		       for(int j = 0; j < nStockGenetic; ++j){
+			 stock2gen(i,j) /= rs;
+		       }
+		     }
+		     matrix<Type> logPosteriorProbabilityIndividual(nStockGenetic,gendat.samples.size());
+		     logPosteriorProbabilityIndividual.setZero();
+		     matrix<Type> logPosteriorProbabilityIndividual_flatPrior(nStockGenetic,gendat.samples.size());
+		     logPosteriorProbabilityIndividual_flatPrior.setZero();
+		     matrix<Type> logPropPopulations(nStockGenetic,gendat.samples.size());
+		     logPropPopulations.setZero();
 		     // int nre_Space = logGst.dim[0];
 		     // int nre_Time = logGst.dim[1];
 		     int nre_Age = logGst.dim[2];
@@ -304,18 +329,18 @@ Type nllGenetics(shared_obs<Type>& obs,
 							 (vector<Type>)obs.keyFleetStock.row(gs.fleet-1));
 			   }
 			   // Map modelled stocks to genetic stocks
-			   PCtmpG = PCtmpM.matrix().transpose() * gendat.stock2gen;
+			   PCtmpG = PCtmpM.matrix().transpose() * stock2gen;
 			   for(int s = 0; s < nStockGenetic; ++s){
 			     Type PCcorrected = PCtmpG(s) + genpar.muLogP(aa - minAgeAll,s);
 			     if(s < nStockGenetic-1){
 			       if(nre_Age == maxAgeAll - minAgeAll + 1){
-				 if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt)
+				 if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt && logGst.size() > 0)
 				   PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, aa - minAgeAll, s);
 			       }else{
-				 if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt)
+				 if(gs.keyGridSpace != R_NaInt && gs.keyGridTime != R_NaInt && logGst.size() > 0)
 				   PCcorrected += logGst(gs.keyGridSpace, gs.keyGridTime, 0, s);
 			       }
-			       if(gs.keyTrip != R_NaInt){
+			       if(gs.keyTrip != R_NaInt && logGtrip.size() > 0){
 				 PCcorrected += logGtrip(s, gs.keyTrip);
 			       }
 			     }
@@ -335,23 +360,41 @@ Type nllGenetics(shared_obs<Type>& obs,
 		       }
 		       Type logPZ = logspace_sum(logPnn);
 		       vector<Type> logP = logPnn - logPZ;
+		       logPropPopulations.col(i) = logP;
 
 		       // Data contribution
 		       Type llTmp = R_NegInf;
+		       Type v1 = R_NegInf;
+		       Type v2 = R_NegInf;
 		       for(int s = 0; s < nStockGenetic; ++s){
 			 Type n0 = dAlleleCount(gs.alleleCount,
 						genpar.alleleFreq.col(s).matrix(),
 						(vector<Type>)genpar.dmScale.col(s),
 						true);
-			 llTmp = logspace_add2(llTmp, n0 + logP(s));      
+			 Type v1_a = n0 + logP(s);
+			 v1 = logspace_add2(v1,v1_a);
+			 logPosteriorProbabilityIndividual(s,i) = v1_a;
+			 Type v2_a = n0;
+			 v2 = logspace_add2(v2,v2_a);
+			 logPosteriorProbabilityIndividual_flatPrior(s,i) = v2_a;
+			 llTmp = logspace_add2(llTmp, v1_a);      
+		       }
+		       for(int s = 0; s < nStockGenetic; ++s){
+			 logPosteriorProbabilityIndividual(s,i) -= v1;
+			 logPosteriorProbabilityIndividual_flatPrior(s,i) -= v2;
 		       }
 		       nll -= llTmp;
 		     }
+		     REPORT_F(logPosteriorProbabilityIndividual,of);
+		     REPORT_F(logPosteriorProbabilityIndividual_flatPrior,of);
+		     REPORT_F(logPropPopulations,of);
+		     REPORT_F(stock2gen,of);
+		     ADREPORT_F(stock2gen,of);
 		     return nll;
 		   }
 		   )
 
 
-MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<int>&, matrix<double>&, int, int));
-MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, int, int));
+MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<int>&, matrix<double>&, int, int, objective_function<double>*));
+MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, int, int, objective_function<TMBad::ad_aug>*));
 

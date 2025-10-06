@@ -378,6 +378,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_ARRAY(gen_alleleFreq); genParSet.alleleFreq = gen_alleleFreq;
   PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
  PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
+ PARAMETER_VECTOR(gen_avgProbPar); genParSet.avgProbPar = gen_avgProbPar;
 
   PARAMETER_ARRAY(logGst);
   PARAMETER_MATRIX(logGtrip);
@@ -404,8 +405,10 @@ Type objective_function<Type>::operator() ()
 	}
       }
     }
-    pparsOut /= ps;
-    Parea.col(s) = pparsOut;
+    if(pparsOut.size() > 0){
+      pparsOut /= ps;
+      Parea.col(s) = pparsOut;
+    }
   }
   REPORT(Parea);
   
@@ -478,7 +481,7 @@ Type objective_function<Type>::operator() ()
 	  }
 	  if(sam.dataSets(s).fleetTypes(f) == 0 && sharedObs.hasSharedObs && sharedObs.keyFleetStock(f,s) == 0)
 	    ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
-	}    
+	}
       }
  
     // patch missing vulnerability keys with parameters
@@ -487,7 +490,7 @@ Type objective_function<Type>::operator() ()
       for(int j = 0; j < sharedObs.keyFleetStock.cols(); ++j)
 	if(isNA(sharedObs.keyFleetStock(i,j))){
 	  sharedObs.keyFleetStock(i,j) = invlogit(shared_logitMissingVulnerability(idxmis++));
-	}    
+	}
   
     // patch missing shared observations with random effects 
     idxmis = 0;
@@ -496,7 +499,6 @@ Type objective_function<Type>::operator() ()
 	if(isNA(sharedObs.logobs(i))){
 	  sharedObs.logobs(i) = shared_missingObs(idxmis++);
 	}    
-
   
     // add wide prior for missing random effects, but _only_ when computing ooa residuals
     if(doResiduals){
@@ -508,7 +510,7 @@ Type objective_function<Type>::operator() ()
     } 
 
     //}
-  
+
   ////////////////////////////////////
   /////////// Recruitment ///////////
   //////////////////////////////////
@@ -532,8 +534,8 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
- 
-  
+
+
   /////////////////////////////////////
   ////////// Spline Penalty //////////
   ///////////////////////////////////
@@ -550,6 +552,7 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
+
 
   //////////////////////////////////
   ////////// Bio PROCESS //////////
@@ -582,8 +585,8 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
-  
-  
+
+
   //////////////////////////////////
   /////////// Components //////////
   ////////////////////////////////
@@ -600,7 +603,7 @@ Type objective_function<Type>::operator() ()
     data_indicator<vector<Type>,Type> keepTmp = keep(s);
     ans += nllP(cs, ps, logPa, keepTmp, &of);
   }
-     
+
 
   /////////////////////////////////////////
   ////////// F PRE-CALCULATIONS //////////
@@ -609,15 +612,25 @@ Type objective_function<Type>::operator() ()
   // Overwrite keyLogFsta for observations
   if(sharedObs.hasSharedObs){
     for(int s = 0; s < nStocks; ++s){
+      array<Type> logFa = getArray(logF, s);
       confSet cs = sam.confSets(s);
-      for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+      for(int f = 0; f < cs.keyLogFsta.dim(0); ++f){
 	if(sharedObs.keyFleetStock(f,s) == 0){
-	  for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
-	    sam.confSets(s).keyLogFsta(f,a) = -1;
+	  for(int a = 0; a < cs.keyLogFsta.dim(1); ++a){	    
+	    int fnum = sam.confSets(s).keyLogFsta(f,a);	    
+	    if(fnum >= 0){
+	      for(int y = 0; y < logFa.dim[1]; ++y)
+		ans -= dnorm(logFa(fnum,y),Type(0.0),Type(1.0/(2.0*M_PI)),true);
+	      sam.confSets(s).keyLogFsta(f,a) = -1;
+	    }
+	  }
 	}
+      }
     }
   }
-  
+
+
+
   vector<bool> hasPH(Xph.size());
   hasPH.setConstant(false);
   vector<matrix<Type> > phPred(Xph.size());
@@ -654,6 +667,7 @@ Type objective_function<Type>::operator() ()
 
     }
   }
+
   // bool overwriteF = false;
   for(int s = 1; s < nStocks; ++s){ // First F is always an RW process
     oftmp<Type> of(this->do_simulate);
@@ -665,7 +679,7 @@ Type objective_function<Type>::operator() ()
     confSet cs0 = sam.confSets(0);
     paraSet<Type> ps = paraSets(s);
     //if(shared_logFscale.col(s).size() == 0 && !hasPH(s)){ // Not using shared logF selectivity or proportional hazard
-    if(shared_F_type == -1){
+    if(shared_F_type == -1){ // Same F for all stocks
       matrix<Type> logFs = logF.col(s);
       matrix<Type> logF0 = logF.col(0);
       // Add fake likelihood contribution for unused random effects
@@ -692,6 +706,20 @@ Type objective_function<Type>::operator() ()
       // moveADREPORT(&of,this,s);
       // // If simulate -> move grab new logF values and move them to the right place!         
       // logF.col(s) = logFa.matrix();
+      // Overwrite unused F with -Inf
+      if(sharedObs.hasSharedObs){
+	// matrix<Type> logFs = logF.col(s);     
+	// for(int i = 0; i < logFs.cols(); ++i){ 
+	//   for(int f = 0; f < cs.keyLogFsta.dim(0); ++f)
+	//     for(int a = 0; a < cs.keyLogFsta.dim(1); ++a)
+	//       //if(cs0.keyLogFsta(f,a) > (-1))
+	//       if(sharedObs.keyFleetStock(f,s) == 0 & sharedObs.fleetType(f) == 0){
+	// 	  ans -= dnorm(logFs(f,a), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
+	// 	  logFs(cs0.keyLogFsta(f,a),i) = R_NegInf;		  
+	//       }
+	// }
+	// logF.col(s) = logFs;
+      }
     }else if(shared_F_type == 1){ // Scaling by vector AR(1)
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);
@@ -791,8 +819,8 @@ Type objective_function<Type>::operator() ()
 
   if(shared_Fseason_type == 1){
     for(int s = 0; s < nStocks; ++s){      
-      logitFseason.col(s) = logitFseason.col(0);
       array<Type> logitFSa = getArray(logitFseason, s);
+      logitFseason.col(s) = logitFseason.col(0);
       for(int i = 0; i < logitFseason.col(0).size(); ++i)
 	ans -= dnorm(logitFSa[i], Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
     }
@@ -819,8 +847,6 @@ Type objective_function<Type>::operator() ()
      }
    }
 
-
-
  
   ////////////////////////////////////////
   /////////// Mortality /////////////////
@@ -836,6 +862,8 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
 
+
+
   ////////////////////////////////////////
   /////////// Calculate forecast ////////
   //////////////////////////////////////
@@ -850,7 +878,6 @@ Type objective_function<Type>::operator() ()
     sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
   }
 
-  
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
@@ -966,7 +993,7 @@ Type objective_function<Type>::operator() ()
       }
     }
    }
-   
+
    // Update mortalities if simulating historical values
    SIMULATE{
      for(int s = 0; s < logF.cols(); ++s){
@@ -989,7 +1016,6 @@ Type objective_function<Type>::operator() ()
    }
 
 
- 
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
@@ -1087,7 +1113,7 @@ Type objective_function<Type>::operator() ()
   REPORT(Sigma);
   REPORT(SigmaTmp);
   REPORT(L);
-  REPORT(ncov)
+  REPORT(ncov);
 
 
     ////////////////////////////////////
@@ -1498,7 +1524,9 @@ Type objective_function<Type>::operator() ()
 		     stockAreas,
 		     Parea,
   		     maxAgeAll,
-  		     minAgeAll);
+  		     minAgeAll,
+		     this);
+
 
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
@@ -1516,6 +1544,8 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
+
+
 
   ////////////////////////////////////////////////////////
   ////// ADD REPORTED OBJECTS FROM stockassessment //////

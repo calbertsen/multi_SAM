@@ -70,12 +70,16 @@ deterministicReferencepoints.msam <- function(fit,
     .makeOneRpArgs <- function(i){
         ## Parse input reference points
         fS <- fit[[i]]
-        fS$pl$rec_pars <- splitParameter(attr(fit,"m_pl")$rec_pars)[[i]]
+        mpl <- attr(fit,"m_pl")
+        mplL <- lapply(mpl[intersect(names(mpl),names(fS$pl))],splitParameter)
+        mplL$logF <- attr(fit,"m_rep")$logFs
+        pli <- lapply(mplL,function(x) x[[i]])        
+        fS$pl <- pli
         rpArgs <- Reduce(.refpointMergerS,
                          lapply(referencepoints[[i]], .refpointParserS, nYears = nYears[[i]], aveYears = aveYears[[i]], selYears = selYears[[i]], logCustomSel = numeric(0), catchType = catchType[[i]] - 1),
                          list())
         ## Add starting values    
-        rpArgs <- lapply(seq_along(rpArgs), function(j).refpointStartingValueS(rpArgs[[j]], fit = fS, Fsequence = Fsequence[[i]], fay = fayTabs[[i]], fbar = fbarTabs[[i]][,1], checkValidity=FALSE))
+        rpArgs <- lapply(seq_along(rpArgs), function(j).refpointStartingValueS(rpArgs[[j]], fit = fS, Fsequence = Fsequence[[i]][Fsequence[[i]]>0], fay = fayTabs[[i]], fbar = fbarTabs[[i]][,1], checkValidity=FALSE))
         ## Add Fsequence
         rp0 <- list(rpType = -1,
                     xVal = log(Fsequence[[i]]),

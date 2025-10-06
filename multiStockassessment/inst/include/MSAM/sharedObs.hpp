@@ -41,6 +41,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 
   if(fleetType == 80){		// Total Catch/Landing proportions per season
     SAM_ASSERT(auxData.size() >= 6,"aux is not large enough for fleet type 80");
+    
     // Calculate proportion in pred(0), rest remain neginf
     Type Ctotal = 0.0;
     Type Cseason = 0.0;
@@ -51,32 +52,34 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
       flt1 = datA(0).fleetTypes.size()-1;
     }
     for(int s = 0; s < datA.size(); ++s){
-      int y = year - CppAD::Integer(datA(s).years(0));
-      for(int flt = flt0; flt <= flt1; ++flt){
-	if(datA(s).fleetTypes(flt) == 0){
-	  int aMin = datA(s).minAgePerFleet(flt);
-	  int aMax = datA(s).maxAgePerFleet(flt);
-	  if(age > -1){
-	    aMin = age;
-	    aMax = age;
-	  }
-	  for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
-	    //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
-	    Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
-	    Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
-	    // 0: Catch numbers
-	    if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
-	      Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
-	      Cstmp *= datA(s).catchMeanWeight(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
-	      Cttmp *= datA(s).landFrac(y,aa, flt);
-	      Cstmp *= datA(s).landFrac(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
-	      Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
-	      Cstmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+      if(keyFleetStock(s) > 0){
+	int y = year - CppAD::Integer(datA(s).years(0));
+	for(int flt = flt0; flt <= flt1; ++flt){
+	  if(datA(s).fleetTypes(flt) == 0){
+	    int aMin = datA(s).minAgePerFleet(flt);
+	    int aMax = datA(s).maxAgePerFleet(flt);
+	    if(age > -1){
+	      aMin = age;
+	      aMax = age;
 	    }
-	    Ctotal += Cttmp;
-	    Cseason += Cstmp;
+	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
+	      //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
+	      Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
+	      Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      // 0: Catch numbers
+	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
+		Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
+		Cstmp *= datA(s).catchMeanWeight(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
+		Cttmp *= datA(s).landFrac(y,aa, flt);
+		Cstmp *= datA(s).landFrac(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
+		Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+		Cstmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+	      }
+	      Ctotal += Cttmp;
+	      Cseason += Cstmp;
+	    }
 	  }
 	}
       }
@@ -98,29 +101,31 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
       flt0 = 0;
       flt1 = datA(0).fleetTypes.size()-1;
     }
-    for(int s = 0; s < datA.size(); ++s){      
-      int y = year - CppAD::Integer(datA(s).years(0));
-      // Calculate
-      for(int flt = flt0; flt <= flt1; ++flt){
-	if(datA(s).fleetTypes(flt) == 0){
-	  int aMin = datA(s).minAgePerFleet(flt);
-	  int aMax = datA(s).maxAgePerFleet(flt);
-	  if(age > -1){
-	    aMin = age;
-	    aMax = age;
-	  }
-	  for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
-	    Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
-	    // 0: Catch numbers
-	    if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
-	      Cstmp *= datA(s).catchMeanWeight(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
-	      Cstmp *= datA(s).landFrac(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
-	      Cstmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+    for(int s = 0; s < datA.size(); ++s){
+      if(keyFleetStock(s) > 0){
+	int y = year - CppAD::Integer(datA(s).years(0));
+	// Calculate
+	for(int flt = flt0; flt <= flt1; ++flt){
+	  if(datA(s).fleetTypes(flt) == 0){
+	    int aMin = datA(s).minAgePerFleet(flt);
+	    int aMax = datA(s).maxAgePerFleet(flt);
+	    if(age > -1){
+	      aMin = age;
+	      aMax = age;
 	    }
-	    Ctotal += Cstmp;
-	    Cstock(s) += Cstmp;
+	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
+	      Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      // 0: Catch numbers
+	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
+		Cstmp *= datA(s).catchMeanWeight(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
+		Cstmp *= datA(s).landFrac(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
+		Cstmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+	      }
+	      Ctotal += Cstmp;
+	      Cstock(s) += Cstmp;
+	    }
 	  }
 	}
       }
@@ -142,31 +147,33 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
       flt1 = datA(0).fleetTypes.size()-1;
     }
     for(int s = 0; s < datA.size(); ++s){
-      int y = year - CppAD::Integer(datA(s).years(0));
-      for(int flt = flt0; flt <= flt1; ++flt){
-	if(datA(s).fleetTypes(flt) == 0){
-	  int aMin = datA(s).minAgePerFleet(flt);
-	  int aMax = datA(s).maxAgePerFleet(flt);
-	  if(age > -1){
-	    aMin = age;
-	    aMax = age;
-	  }
-	  for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
-	    //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
-	    // Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
-	    Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
-	    // 0: Catch numbers
-	    if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
-	      Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
-	      Cttmp *= datA(s).landFrac(y,aa, flt);
-	    }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
-	      Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
-	    }	    
-	    if(stockAreas(CppAD::Integer(auxData(4)),s) == 1){
-	      Carea += Parea(CppAD::Integer(auxData(4)),s) * Cttmp;
+      if(keyFleetStock(s) > 0){
+	int y = year - CppAD::Integer(datA(s).years(0));
+	for(int flt = flt0; flt <= flt1; ++flt){
+	  if(datA(s).fleetTypes(flt) == 0){
+	    int aMin = datA(s).minAgePerFleet(flt);
+	    int aMax = datA(s).maxAgePerFleet(flt);
+	    if(age > -1){
+	      aMin = age;
+	      aMax = age;
 	    }
-	    Ctotal += Cttmp;
+	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
+	      //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
+	      // Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
+	      Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      // 0: Catch numbers
+	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
+		Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 2){ // 2: Landing numbers
+		Cttmp *= datA(s).landFrac(y,aa, flt);
+	      }else if(CppAD::Integer(auxData(3)) == 3){ // 3: Landing weight
+		Cttmp *= datA(s).landFrac(y,aa, flt) * datA(s).landMeanWeight(y,aa, flt);
+	      }	    
+	      if(stockAreas(CppAD::Integer(auxData(4)),s) == 1){
+		Carea += Parea(CppAD::Integer(auxData(4)),s) * Cttmp;
+	      }
+	      Ctotal += Cttmp;
+	    }
 	  }
 	}
       }
@@ -175,54 +182,56 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
     
     
   }else{ // if(fleetType <= 2){
+   
     vector<Type> NAs(datA.size());
     NAs.setConstant(R_NaReal);
     for(int s = 0; s < datA.size(); ++s){
-      // Skip if age or year is not used for this stock
-      int y = year -  CppAD::Integer(datA(s).years(0));
-      int a = age - confA(s).minAge;
-      if(y < 0 || y >= datA(s).noYears + forecastA(s).nYears)
-	continue;
-      if(a < 0 || a > (confA(s).maxAge - confA(s).minAge))
-	continue;
-
-      array<Type> logNa = getArray(logN,s);
-      array<Type> logFa = getArray(logF,s);
-      array<Type> logitFSa = getArray(logitFseason,s);
-      array<Type> logPa = logPs(s);
-    
-      pred(s) = predOneObs(fleet,	// obs.aux(i,1)
-			   fleetType,	// obs.fleetTypes(f-1)
-			   age,	// obs.aux(i,2)-confA(s).minAge
-			   year, // obs.aux(i,0)
-			   CppAD::Integer(datA(s).years(0)), // minYear
-			   noYearsLAI(s),
-			   datA(s),
-			   confA(s),
-			   parA(s),
-			   logFa,
-			   logNa,
-			   logPa,
-			   logitFSa,
-			   varAlphaSCB(s),
-			   mortalities(s),
-			   (Type)NAs(s),//logssb(s),
-			   (Type)NAs(s),//logtsb(s),
-			   (Type)NAs(s),//logfsb(s),
-			   (Type)NAs(s),//logCatch(s),
-			   (Type)NAs(s),//logLand(s),
-			   (Type)NAs(s),//logfbar(s),
-			   (Type)NAs(s),//releaseSurvival(s),
-			   auxData
-			   );
       if(keyFleetStock(s) == 0){
 	pred(s) = R_NegInf;
       }else{
+	// Skip if age or year is not used for this stock
+	int y = year -  CppAD::Integer(datA(s).years(0));
+	int a = age - confA(s).minAge;
+	if(y < 0 || y >= datA(s).noYears + forecastA(s).nYears)
+	  continue;
+	if(a < 0 || a > (confA(s).maxAge - confA(s).minAge))
+	  continue;
+
+	array<Type> logNa = getArray(logN,s);
+	array<Type> logFa = getArray(logF,s);
+	array<Type> logitFSa = getArray(logitFseason,s);
+	array<Type> logPa = logPs(s);
+    
+	pred(s) = predOneObs(fleet,	// obs.aux(i,1)
+			     fleetType,	// obs.fleetTypes(f-1)
+			     age,	// obs.aux(i,2)-confA(s).minAge
+			     year, // obs.aux(i,0)
+			     CppAD::Integer(datA(s).years(0)), // minYear
+			     noYearsLAI(s),
+			     datA(s),
+			     confA(s),
+			     parA(s),
+			     logFa,
+			     logNa,
+			     logPa,
+			     logitFSa,
+			     varAlphaSCB(s),
+			     mortalities(s),
+			     (Type)NAs(s),//logssb(s),
+			     (Type)NAs(s),//logtsb(s),
+			     (Type)NAs(s),//logfsb(s),
+			     (Type)NAs(s),//logCatch(s),
+			     (Type)NAs(s),//logLand(s),
+			     (Type)NAs(s),//logfbar(s),
+			     (Type)NAs(s),//releaseSurvival(s),
+			     auxData
+			     );
+      
 	pred(s) += log(keyFleetStock(s));
       }
     }
-  // }else{
-  //   Rf_error("fleetType not implemented for shared observations");
+    // }else{
+    //   Rf_error("fleetType not implemented for shared observations");
   }
   return pred;
 				  })

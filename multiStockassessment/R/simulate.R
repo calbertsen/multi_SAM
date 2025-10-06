@@ -15,10 +15,11 @@ simulate.msam <- function(object,
                           seed = NULL,
                           full.data = TRUE,
                           ready.to.fit = FALSE,
+                          simFlag,
                           ...){
     if(!is.null(seed)){
         set.seed(seed)
-    }else{
+    }else{        
         if(!exists(".Random.seed"))
             set.seed(NULL)
     }
@@ -28,10 +29,16 @@ simulate.msam <- function(object,
     par <- obj$env$last.par.best
     dots <- list(...)
     sn <- getStockNames(object)
+    if(!missing(simFlag)){
+        for(i in seq_along(obj$env$data$sam))
+            obj$env$data$sam[[i]]$simFlag <- rep(pmin(1,pmax(as.integer(simFlag),0)),length.out=4)
+        obj$env$retape(FALSE)
+    }
     if(full.data){
         ret <- replicate(nsim, {
             allDat <- lapply(object,function(x)x$data)
             simObs <- obj$simulate(par)
+            set.seed(NULL)
             for(i in 1:length(allDat)){
                 allDat[[i]]$logobs <- simObs$logobs[[i]]
             }
@@ -74,7 +81,7 @@ simulate.msam <- function(object,
     }else{
         if(ready.to.fit)
             warning("ready.to.fit is ignored when full.data is false")
-  	ret <- replicate(nsim, obj$simulate(par), simplify=FALSE)
+  	ret <- replicate(nsim, {a <- obj$simulate(par); set.seed(NULL); a}, simplify=FALSE)
     }
     attr(ret,".Random.seed") <- rngSeed
     attr(ret,"m_fit") <- object

@@ -105,6 +105,11 @@ modelforecast.msam <- function(fit,
     fastFixedF <- FALSE
     if(!is.na(match("fastFixedF",names(dots))))
         fastFixedF <- dots[[match("fastFixedF",names(dots))]]
+
+   addDataYears <- FALSE
+    if(!is.na(match("addDataYears",names(dots))))
+        addDataYears <- dots[[match("addDataYears",names(dots))]]
+
     
    if(!is.null(nosim) && nosim > 0){ 
         estimateLabel <- paste(deparse(substitute(estimate), 500L), collapse = " ")
@@ -115,6 +120,16 @@ modelforecast.msam <- function(fit,
     if(is.list(year.base)){
         year.base <- unlist(year.base)
     }
+    if(is.character(year.base)){
+        if(year.base == "lastCatchYear"){
+            year.base <- max(sapply(fit, function(x) max(x$data$aux[x$data$aux[,"fleet"] %in% which(x$data$fleetTypes==0),"year"])))
+        }else if(year.base == "secondLastYear"){
+            year.base <- max(sapply(fit,function(x) max(x$data$years)-1))
+        }else if(year.base == "lastYear"){
+            year.base <- max(sapply(fit,function(x) max(x$data$years)))
+        }
+    }
+    
     if(length(year.base) > 1)
         stop("year.base should be a single year to use for all stocks")
 
@@ -129,6 +144,8 @@ modelforecast.msam <- function(fit,
         incpb <- function(){ return(invisible(NULL)) }
     }
 
+
+  
     
     ## Handle year.base < max(fit$data$years)
     ## if(year.base > max(fit$data$years)){
@@ -237,7 +254,7 @@ modelforecast.msam <- function(fit,
     cstr <- lapply(seq_len(nStocks), function(s){
         v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
         v[!is.na(constraints[[s]])] <- .parseForecast(constraints[[s]][!is.na(constraints[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
-        })
+    })
     
     ## Use custom selectivity?
     if(is.null(customSel)){
@@ -379,6 +396,45 @@ modelforecast.msam <- function(fit,
     for(i in seq_along(args$data$sam))
         args$data$sam[[i]]$simFlag <- c(1,1,1,1)
 
+
+    if(addDataYears){
+        for(s in seq_along(fit)){
+            lastIndx <- args$data$sam[[s]]$aux[,"year"] == max(args$data$sam[[s]]$aux[,"year"])
+            lastAux <- args$data$sam[[s]]$aux[lastIndx,]
+            newAuxL <- replicate(nYears[s],lastAux, simplify = FALSE)
+            newAux <- do.call("rbind",lapply(seq_along(newAuxL), function(i){
+                v <- newAuxL[[i]]
+                v[,1] <- v[,1] + i
+                v
+            }))
+            args$data$sam[[s]]$aux <- rbind(args$data$sam[[s]]$aux,newAux)
+            args$data$sam[[s]]$auxData <- rbind(args$data$sam[[s]]$auxData,do.call("rbind",replicate(nYears[s],args$data$sam[[s]]$auxData[lastIndx,,drop=FALSE], simplify = FALSE)))
+            args$data$sam[[s]]$nobs <- as.numeric(nrow(args$data$sam[[s]]$aux))
+            args$data$sam[[s]]$logobs <- c(args$data$sam[[s]]$logobs,rep(0,nrow(newAux)))
+            suf <- sort(unique(args$data$sam[[s]]$aux[,"fleet"])) # sort-unique-fleet
+            yy <- min(as.numeric(args$data$sam[[s]]$aux[,"year"])):max(as.numeric(args$data$sam[[s]]$aux[,"year"]))
+            aa <- min(as.numeric(args$data$sam[[s]]$aux[,"age"])):max(as.numeric(args$data$sam[[s]]$aux[,"age"]))
+            mmfun<-function(f,y, ff){idx<-which(args$data$sam[[s]]$aux[,"year"]==y & args$data$sam[[s]]$aux[,"fleet"]==f); ifelse(length(idx)==0, NA, ff(idx)-1)}
+            args$data$sam[[s]]$idx1 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=min)
+            args$data$sam[[s]]$idx2 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=max)
+            args$data$sam[[s]]$idxCor <- cbind(args$data$sam[[s]]$idxCor,matrix(NA_real_,nrow(args$data$sam[[s]]$idxCor),nrow(newAux)))
+            args$data$sam[[s]]$weight <- c(args$data$sam[[s]]$weight, rep(NA_real_,nrow(newAux)))
+            args$data$sam[[s]]$TAC <- do.call(rbind,list(args$data$sam[[s]]$TAC,matrix(NA,nYears[s],ncol(args$data$sam[[s]]$TAC))))            
+            arc <- aperm(args$data$sam[[s]]$RecruitClimate,c(3,2,1))
+            if(length(arc) == 0){
+                args$data$sam[[s]]$RecruitClimate <- array(0,dim=c(dim(arc)[3]+nYears[[s]],0,0))
+            }else{
+                arcL <- lapply(split(arc,slice.index(arc,3)),function(x) array(x,c(1,length(x),1)))
+                args$data$sam[[s]]$RecruitClimate <- aperm(do.call(abind,c(arcL,replicate(nYears[[s]],arcL[[length(arcL)]],simplify=FALSE))),c(3,2,1))
+            }
+            rownames(args$data$sam[[s]]$TAC) <- rownames(args$data$sam[[s]]$RecruitClimate) <- yy
+        }
+        ## Handle shared data
+
+        ## Handle genetics!
+        
+    }
+    
     baseIsLast <- sapply(fit, function(x) max(x$data$years) == year.base)
     if(useFHessian){
         if(all(sapply(fit, function(x) max(x$data$years) == year.base))){
@@ -465,7 +521,6 @@ modelforecast.msam <- function(fit,
 
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)
-
     if(as.integer(returnObj)==1)
          return(obj)
 
@@ -654,10 +709,20 @@ modelforecast.msam <- function(fit,
             obj2 <- obj
             if(!is.null(re_constraint)){
                 ## Check length of constraints?
+                if(length(re_constraint) == 1){
+                    re_constraint <- lapply(seq_len(nStocks),function(s) rep(re_constraint,nYears[s]))
+                }
                 re_constraint <- targetToList(re_constraint, nStocks, character)
+                if(length(re_constraint) != nStocks)
+                    stop("Need constraints for each stock")                
+                ## for(s in seq_len(nStocks)){
+                ##     if(length(re_constraint[[s]]) < nYears[s]){
+                ##         re_constraint[[s]] <- c(re_constraint[[s]], replicate(nYears[s] - length(re_constraint[[s]]),tail(re_constraint[[s]],1)[[1]],FALSE))
+                ##     }                        
+                ## }
                 cstr <- lapply(seq_len(nStocks), function(s){
                     v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
-                    v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonFALSELinearityCorrection)
+                    v[!is.na(re_constraint[[s]])] <- .parseForecast(re_constraint[[s]][!is.na(re_constraint[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
                 })
                 for(i in seq_along(cstr))
                     obj2$env$data$sam[[i]]$forecast$constraints <- cstr[[i]]
@@ -786,6 +851,7 @@ modelforecast.msam <- function(fit,
                 }
             }
             v <- obj2$simulate(par = p)
+            ##set.seed(NULL)
             v$parameterVector <- p
             sniii <<- sniii+1
             incpb()

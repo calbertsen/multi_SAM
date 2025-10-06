@@ -58,6 +58,7 @@ multisam.fit <- function(x,
                          shared_fleetParameters = c(),
                          shared_proportionalHazard = NULL,
                          shared_phmap = NULL,
+                         shared_fecundityScaling = FALSE,
                          skip_stock_observations = FALSE,
                          stockAreas = matrix(1,1,length(x)),
                          genetics_data = prepareGenetics(),
@@ -268,7 +269,7 @@ multisam.fit <- function(x,
     pars$gen_logSdST <- numeric(pmax(0,nStockG-1))
     pars$gen_corparAge <- 0
     pars$gen_corparTrip <- n2cor(pmax(0,nStockG-1))
-    pars$gen_logSdTrip <- numeric(pmax(0,nStockG-1))
+    pars$gen_logSdTrip <- numeric(pmax(0,nStockG-1))    
     ad <- attr(dat$geneticsData,"alleleDim")
     pars$gen_alleleFreq <- array(0, dim = c(pmax(ad[1]-1,0),ad[2],nStockG))
     if(length(dat$geneticsData) > 0){   # Get better starting values
@@ -285,6 +286,7 @@ multisam.fit <- function(x,
     }
     pars$gen_dmScale <- matrix(0, nrow = ad[2], ncol = nStockG)
     pars$gen_muLogP <- matrix(0,dat$maxAgeAll-dat$minAgeAll+1,nStockG)
+    pars$gen_avgProbPar <- numeric(sum(is.na(dat$geneticsData$stock2gen) | (dat$geneticsData$stock2gen < 0)))
 
     maxAge <- max(sapply(x, function(xx) xx$conf$maxAge))
     minAge <- max(sapply(x, function(xx) xx$conf$minAge))
@@ -341,10 +343,25 @@ multisam.fit <- function(x,
             gmlpMap <- matrix(seq_along(pars$gen_muLogP), nrow(pars$gen_muLogP), ncol(pars$gen_muLogP))
             gmlpMap[,colSums(dat$geneticsData$stock2gen) > 0] <- NA
             map0$gen_muLogP <- factor(gmlpMap)
+            map0$gen_muLogP <- factor(NA * pars$gen_muLogP)
         }
         if(all(is.na(sapply(gen_samples,function(x)x$keyTrip)))){
             map0$gen_corparTrip <- factor(NA * pars$gen_corparTrip)
             map0$gen_logSdTrip <- factor(NA * pars$gen_logSdTrip)
+        }
+        if(length(pars$logGst)==0){
+            map0$gen_logKappaSpace <- factor(NA * pars$gen_logKappaSpace)
+            map0$gen_logKappaTime <- factor(NA * pars$gen_logKappaTime)
+            map0$gen_corparST <- factor(NA * pars$gen_corparST)
+            map0$gen_logSdST <- factor(NA * pars$gen_logSdST)
+            map0$gen_corparAge <- factor(NA * pars$gen_corparAge)          
+        }else{
+            if(nrow(dat$geneticsData$Qtime)==1){
+                map0$gen_logKappaTime <- factor(NA * pars$gen_logKappaTime)
+            }
+            if(nrow(dat$geneticsData$Qspace)==1){
+                map0$gen_logKappaSpace <- factor(NA * pars$gen_logKappaSpace)
+            }
         }
     }
     if(genetics_dirichlet){
@@ -439,6 +456,16 @@ multisam.fit <- function(x,
         if(sum(srvd) > 0)
             map0$rec_pars <- factor(unlist(lapply(seq_along(srvd), function(i){ if(srvd[i]==0) return(character(0)); paste0(sr[i],"_",seq_len(srvd[i]))})))
     }
+    if(shared_fecundityScaling){
+        mf0 <- map0$logFecundityScaling
+        if(is.null(map0$logFecundityScaling) || length(map0$logFecundityScaling) != length(x)){
+            map0$logFecundityScaling <- factor(rep(1,length(x)))
+        }else{
+            if(any(!is.na(map0$logFecundityScaling)))
+                map0$logFecundityScaling[!is.na(map0$logFecundityScaling)] <- 1
+            map0$logFecundityScaling <- factor(map0$logFecundityScaling)
+        }
+    }
     if(shared_selectivity != 0){
         lfm0 <- lapply(splitParameter(pars$logF),seq_along)
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
@@ -458,6 +485,22 @@ multisam.fit <- function(x,
         map0$missing <- factor(unlist(lfm0))
     }
 
+    ## Map survey catchabilities that are unused
+    if(is.null(map0$logFpar) && any(shared_data$keyFleetStock[shared_data$fleetTypes == 2,]==0)){
+        lfm0 <- lapply(splitParameter(pars$logFpar),seq_along)
+        names(lfm0) <- seq_along(lfm0)
+        ii <- which(shared_data$keyFleetStock == 0,arr.ind=TRUE)
+        for(j in 1:length(lfm0))
+            lfm0[[j]] <- paste(j,lfm0[[j]],sep="_")
+        for(j in 1:nrow(ii)){
+            if(shared_data$fleetTypes[ii[j,1]]==2){
+                key <- x[[ii[j,2]]]$conf$keyLogFpar[ii[j,1],]
+                lfm0[[ii[j,2]]][ key[key>=0] +1 ] <- NA
+            }
+        }
+        map0$logFpar <- factor(unlist(lfm0))
+    }
+    
     ## Map F if using shared_selectivity or proportional hazard
     ## if(any(sapply(dat$Xph,nrow) > 0) || shared_selectivity){
     ##     hasPH <- sapply(dat$Xph,nrow) > 0
@@ -477,9 +520,9 @@ multisam.fit <- function(x,
     prf <- NULL
     ## }else if(all(sapply(pars[prf], length) == 0)){
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
-    ## }    
-    ## return(list(dat=dat,pars=pars,map=map0,random=ran))
-
+    ## }
+    if(run == 2)
+        return(list(p=pars,m=map0))
     obj <- TMB::MakeADFun(dat, pars, map0,
                           random=ran,
                           ##profile = prf,

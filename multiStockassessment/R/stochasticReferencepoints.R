@@ -43,7 +43,7 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
     doSim
 }
 
-.perRecruitSR <- function(logf, fit, nYears, aveYears, selYears, pl = attr(fit,"m_pl"), ct=0, logCustomSel = NULL, nTail = 1,incpb=NULL, doSim = NULL, label="", constraint = "F=%f", deterministicF=TRUE, ...){    
+.perRecruitSR_MS <- function(logf, fit, nYears, aveYears, selYears, pl = attr(fit,"m_pl"), ct=0, logCustomSel = NULL, nTail = 1,incpb=NULL, doSim = NULL, label="", constraint = "F=%f", deterministicF=TRUE, ...){    
     ## pl$missing <- NULL
     ## attr(pl,"what") <- NULL
     ## f2 <- sam.fit(fit$data,fit$conf,pl, run = FALSE)
@@ -66,7 +66,7 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
     ##     incpb <- function(){}
     ## }
 
-    do.call("rbind",lapply(logf, function(lf){
+    tmp <- lapply(logf, function(lf){
         v <- doSim(sprintf(constraint,exp(lf)))
         rr <- lapply(seq_along(fit), function(ss){
             logRe <- tail(v$logN[[ss]][1,],nTail)
@@ -102,14 +102,17 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
         })
         names(rr) <- getStockNames(fit)
         rr
-        }))
+    })
+    lapply(seq_along(fit), function(s){
+        do.call("rbind",lapply(tmp, function(x) x[[s]]))
+    })
 }
 
 
 
 
 #' @importFrom stats runif predict
-.refpointSFitCriteria <- function(rpArgs, pl, MT, fit, nosim, Frange, aveYears, selYears, nYears, catchType, nTail = 1,doSim=NULL,incpb=NULL,label="",constraint="F=%f", deterministicF = TRUE, ...){
+.refpointSFitCriteria_MS <- function(rpArgs, pl, MT, fit, nosim, Frange, aveYears, selYears, nYears, catchType, nTail = 1,doSim=NULL,incpb=NULL,label="",constraint="F=%f", deterministicF = TRUE, randomF=TRUE, knots = 5, ...){
     .refpointSCurveFit <- getFromNamespace(".refpointSCurveFit","stockassessment")
     rfv <- function(n,a,b){
         u <- stats::runif(n)
@@ -117,8 +120,12 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
         v2 <- stats::runif(n,a,b)
         ifelse(u < 0.25, v1, v2)
     }
-    Fvals <- sort(rfv(nosim,Frange[1],Frange[2]))
-    PRvals <- .perRecruitSR(log(Fvals),
+    if(randomF){
+        Fvals <- sort(c(rep(1e-6,100), rfv(nosim,Frange[1],Frange[2])))
+    }else{
+        Fvals <- c(rep(1e-6,100), seq(Frange[1],Frange[2], len = nosim))
+    }
+    PRvals <- .perRecruitSR_MS(log(Fvals),
                             fit=fit,
                             nYears=nYears,
                             aveYears = aveYears,
@@ -264,6 +271,13 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
         Frng <- range(Fvals[cutfun(Crit)])
         inRng <- function(x,rng) x > rng[1] & x < rng[2]
         indx <- inRng(Fvals,Frng)
+        MT$positive <- TRUE
+        MT$monotone <- "n"
+        MT$formula <- ~ibc(F,knots)
+        if(rp$rpType %in% c(5,6)){
+            MT$formula <- ~iibc(F,knots)
+            MT$monotone <- "d"
+        }
         CurveFit <- .refpointSCurveFit(Fvals[indx], Crit[indx], MT)
         Fseq <- seq(Frng[1],Frng[2],len=200)
         pv <- predict(CurveFit,Fseq)
@@ -282,12 +296,22 @@ predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
                 Frng <- range(Fvals[cutfun(Crit)])
                 inRng <- function(x,rng) x > rng[1] & x < rng[2]
                 indx <- inRng(Fvals,Frng)
+                MT$positive <- TRUE
+                MT$monotone <- "n"
+                MT$formula <- ~ibc(F,knots)
+                if(what %in% c("logSPR","logSe","logLifeExpectancy")){
+                    MT$formula <- ~iibc(F,5)
+                    MT$monotone <- "d"
+                }else if(what %in% c("logYearsLost")){
+                    MT$formula <- ~iibc(F,knots)
+                    MT$monotone <- "i"
+                }
                 CurveFit <- .refpointSCurveFit(Fvals[indx], Crit[indx], MT)
                 predict(CurveFit, f)
             }
             return(sapply(c("logYPR","logSPR","logSe","logRe","logYe","logLifeExpectancy","logYearsLost"), doOneA))
         }else if(is.function(MT$derivedSummarizer)){  #Simulate
-            return(sapply(lapply(as.list(.perRecruitSR(rep(log(f),nosim),
+            return(sapply(lapply(as.list(.perRecruitSR_MS(rep(log(f),nosim),
                                                          fit=fit,
                                                          nYears=nYears,
                                                          aveYears = aveYears,
@@ -369,7 +393,7 @@ stochasticReferencepoints.msam <- function(fit,
     .refpointMerger <- getFromNamespace(".refpointMerger","stockassessment")
     .refpointParser <- getFromNamespace(".refpointParser","stockassessment")
     .refpointCheckRecruitment <- getFromNamespace(".refpointCheckRecruitment","stockassessment")
-    .refpointSFitCriteria <- getFromNamespace(".refpointSFitCriteria","stockassessment")
+    ##.refpointSFitCriteria <- getFromNamespace(".refpointSFitCriteria","stockassessment")
 
     MT <- .refpointSMethodParser(method, formula = formula, derivedSummarizer=derivedSummarizer)
 
@@ -406,7 +430,7 @@ stochasticReferencepoints.msam <- function(fit,
     pb <- .SAMpb(min = 0, max = nosim * (nosim_ci + 1 + is.function(derivedSummarizer)*length(rpArgs)))
     incpb <- function(label="") .SAM_setPB(pb, pb$getVal()+1,label)
     
-    v0 <- .refpointSFitCriteria(rpArgs, pl=fit$pl, MT=MT, fit=fit, nosim=nosim, Frange=Frange, aveYears=aveYears, selYears=selYears, nYears=nYears, catchType=catchType, nTail=nTail,incpb=incpb,doSim=doSim,label="Estimation:",constraint=constraint,deterministicF=deterministicF, ...)
+    v0 <- .refpointSFitCriteria_MS(rpArgs, pl=fit$pl, MT=MT, fit=fit, nosim=nosim, Frange=Frange, aveYears=aveYears, selYears=selYears, nYears=nYears, catchType=catchType, nTail=nTail,incpb=incpb,doSim=doSim,label="Estimation:",constraint=constraint,deterministicF=deterministicF, ...)
 
     MakeOne <- function(v0){
         resTabs <- lapply(rownames(v0$Estimates), function(nm){
