@@ -68,7 +68,7 @@ Type dAlleleCount(matrix<Type> x, matrix<Type> mu, vector<Type> scale, int give_
       r += 0.0;
     }else if(R_finite(asDouble(scale(i)))){
       r += ddirichletmultinom(y,logp,scale(i),true);
-    }else if(!R_finite(asDouble(scale(i)))){
+      //}else if(!R_finite(asDouble(scale(i)))){
     }else{
       r += dmultinom2(y,logp,true);
     }
@@ -297,7 +297,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 			 }
 
 			 vector<Type> auxData(obs.auxData.cols());
-			 auxData.setZero()
+			 auxData.setZero();
 			 // for(int q = 0; q < auxData.size(); ++q)
 			 //   auxData(q) = obs.auxData(i,q);
 
