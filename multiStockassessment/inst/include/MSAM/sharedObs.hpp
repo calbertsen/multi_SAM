@@ -708,6 +708,8 @@ Type sharedObservation(shared_obs<Type>& obs,
   }
   vector<Type> shared_logobs = obs.logobs;
   REPORT_F(shared_logobs,of);
+  matrix<Type> shared_predPerStock = predPerStock;
+  REPORT_F(shared_predPerStock,of);
   return nll; //nll;
   
 			 });

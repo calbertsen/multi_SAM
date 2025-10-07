@@ -43,6 +43,7 @@ simulate.msam <- function(object,
                 allDat[[i]]$logobs <- simObs$logobs[[i]]
             }
             shObs$logobs <- simObs$shared_logobs
+            shObs$predPerStock <- simObs$shared_predPerStock
             if(ready.to.fit){
                 fa <- formalArgs(stockassessment::sam.fit)
                 fa <- fa[fa != "..."]
