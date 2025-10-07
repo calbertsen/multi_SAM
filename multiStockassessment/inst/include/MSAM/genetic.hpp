@@ -297,8 +297,9 @@ Type nllGenetics(shared_obs<Type>& obs,
 			 }
 
 			 vector<Type> auxData(obs.auxData.cols());
-			 for(int q = 0; q < auxData.size(); ++q)
-			   auxData(q) = obs.auxData(i,q);
+			 auxData.setZero()
+			 // for(int q = 0; q < auxData.size(); ++q)
+			 //   auxData(q) = obs.auxData(i,q);
 
 			 for(int aa = a1; aa <= a2; ++aa){
 			   vector<Type> PCtmpM(nStockManagement); // Should be nModelledStocks (not nGeneticStocks)
