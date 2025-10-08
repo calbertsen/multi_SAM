@@ -31,9 +31,9 @@ as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted
                                        fit$data$sampleTimesEnd[fleet])
                 return(tmp)
             }
-            CN_all <- simplify2array(lapply(which(fit$data$fleetTypes %in% c(0,1,7)),function(i)grabFleet(fit,i)))
-            LN_all <- CN_all *  fit$data$landFrac
-            DN_all <- CN_all *  (1 - fit$data$landFrac)
+            CN_all <- apply(Reduce("+",(lapply(which(fit$data$fleetTypes %in% c(0,1,7)),function(i)grabFleet(fit,i)))),1:2,sum)
+            LN_all <- CN_all *  apply(fit$data$landFrac,1:2,mean)
+            DN_all <- CN_all *  (1 - apply(fit$data$landFrac,1:2,mean))
             CN <- toFLQ(resize(na2zero(CN_all),ages,years))
             LN <- toFLQ(resize(na2zero(LN_all),ages,years))
             DN <- toFLQ(resize(na2zero(DN_all),ages,years))
@@ -62,7 +62,7 @@ as.FLStock.msam <- function(mfit, unit.w = "kg", name = "", desc = "", predicted
         if(biopar && mfit[[i]]$conf$catchWeightModel > 0){
             xx <- attr(mfit,"m_rep")$catchMeanWeight[[i]]
             dimnames(xx) <- dimnames(mfit[[i]]$data$catchMeanWeight)
-            catch.wt(fls[[i]]) <- toFLQ(resize(xx,ages,years,TRUE))
+            catch.wt(fls[[i]]) <- toFLQ(apply(resize(xx,ages,years,TRUE),1:2,mean))
         }
         if(biopar && mfit[[i]]$conf$mortalityModel > 0){
             xx <- attr(mfit,"m_rep")$natMor[[i]]
