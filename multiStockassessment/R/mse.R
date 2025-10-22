@@ -888,7 +888,7 @@ MSE <- function(OM,
         }
         tab <- ssbtable(OM_update,addTotal=TRUE,returnList=TRUE)
         for(s in seq_along(tab))
-            ssb[yr,s,"True")] <- tab[[s]][yr,1]
+            ssb[yr,s,"True"] <- tab[[s]][yr,1]
         tab <- fbartable(OM_update,addTotal=TRUE,returnList=TRUE)
         for(s in seq_along(tab))
             fbar[yr,s,"True"] <- tab[[s]][yr,1]
