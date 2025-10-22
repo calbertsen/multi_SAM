@@ -316,6 +316,8 @@ Type sharedObservation(shared_obs<Type>& obs,
 		       vector<MortalitySet<Type> >& mortalities,
 		       matrix<int>& stockAreas,
 		       matrix<Type>& Parea,
+		       array<Type>& logContamination,
+		       matrix<int>& keyContamination,
 		       // vector<Type> logSdObs,
 		       int minYearAll,
 		       int minAgeAll,
@@ -361,8 +363,17 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    for(int s = 0; s < predUse.cols(); ++s){ // loop over stocks
 	      predObsSegment(a) = logspace_add_SAM(predObsSegment(a), predUse(a,s));
 	    }
+	    // Add contamination
+	    int a0 = (a + datA(0).minAgePerFleet(f)) - confA(0).minAge;
+	    if(keyContamination.size() > 0 && logContamination.size() > 0){
+	      int kc = keyContamination(f,a0);
+	      if(kc >= 0){
+		for(int ss = 0; ss < logContamination.dim[2]; ++ss)
+		  predObsSegment(a) = logspace_add_SAM(predObsSegment(a),logContamination(kc,y,ss));
+	      }
+	    }
 	  }
-
+	 
 	  MVMIX_t<Type> thisNll;
 	  // obs.covCombineType
 	  if(obs.covCombine(f) == shared_obs<Type>::CC_Delta_LogSumExp ||
@@ -715,6 +726,6 @@ Type sharedObservation(shared_obs<Type>& obs,
 			 });
 
 
-MSM_SPECIALIZATION(double sharedObservation(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, matrix<int>&, matrix<double>&, int, int, data_indicator<vector<double>, double>&, objective_function<double>*));
-MSM_SPECIALIZATION(TMBad::ad_aug sharedObservation(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, matrix<int>&, matrix<TMBad::ad_aug>&, int, int, data_indicator<vector<TMBad::ad_aug>, TMBad::ad_aug>&, objective_function<TMBad::ad_aug>*));
+MSM_SPECIALIZATION(double sharedObservation(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, matrix<int>&, matrix<double>&, array<double>&, matrix<int>&, int, int, data_indicator<vector<double>, double>&, objective_function<double>*));
+MSM_SPECIALIZATION(TMBad::ad_aug sharedObservation(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, matrix<int>&, matrix<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<int>&, int, int, data_indicator<vector<TMBad::ad_aug>, TMBad::ad_aug>&, objective_function<TMBad::ad_aug>*));
 			 

@@ -95,9 +95,8 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         obj$fn(p0)
         pl0 <- obj$env$parList(par = obj$env$last.par)        
     }else{
-        pl0 <- NULL
+        pl0 <- attr(fit,"m_pl")
     }
-    
     doSim <- modelforecast(fit, constraints, nosim=1, returnObj=2,addDataYears=TRUE,resampleFirst=resampleFirst, useModelLastN = FALSE,customSel = trueSel, custom_pl = pl0, ...)
     v <- doSim()
     obj <- environment(doSim)$obj    
@@ -146,7 +145,7 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         nn <- intersect(setdiff(names(dat$sam[[i]]),names(cnf[[i]])),names(fit[[i]]$data))
         dat$sam[[i]][nn]
     })
-    mpl <- obj$env$parList(obj$env$last.par.best)
+    mpl <- obj$env$parList(par=obj$env$last.par.best)
     ## Replace simulated values
     mpl$logN <- combineParameter(v$logN)
     mpl$logF <- combineParameter(v$logF)
@@ -189,11 +188,12 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         ee$newFitS <- newFitS
         ee$sharedObs <- dat$sharedObs
         cc$x <- newFitS
-        cc$shared_data <- sharedObs
+        cc$shared_data <- as.name("sharedObs")
         ##cc$map <- mmap ## NOT IMPLEMENTED??
         cc$parlist <- mpl
         cc$run <- FALSE
         obj <- do.call(multisam.fit,cc, envir = ee)
+        
         newFitM <- newFitS
         class(newFitM) <- "msam"
         attr(newFitM,"m_opt") <- list(par = obj$par,
@@ -219,7 +219,7 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         ## SDREPORT
         obj2 <- TMB::MakeADFun(obj$env$data, obj$env$parameters, type = "ADFun", 
                                ADreport = TRUE, DLL = obj$env$DLL, silent = obj$env$silent)
-        sdv <- obj2$fn(obj$env$last.par.best[obj$env$lfixed()])
+        sdv <- obj2$fn(obj$env$last.par.best)
         sdrep <- list(value = sdv,
                       sd = rep(0,length(sdv)))
         
@@ -312,6 +312,102 @@ reduce_shared <- function(data, year = NULL, fleet = NULL, age = NULL){
 }
 
 
+ICESAdviceForecast <- function(EM, ...){
+    UseMethod("ICESAdviceForecast")
+}
+
+ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePoints, ...){
+    ## When to check SSB against MSYBtrigger and Blim
+    dySSBAR <- rep(NA_real_,length(EM_update))
+    dySSBZC <- rep(NA_real_,length(EM_update))
+    for(s in seq_along(EM_update)){
+        ## If given, use that
+        if(!is.null(EMReferencePoints[[s]]$dySSBAR)){
+            dySSBAR[s] <- EMReferencePoints[[s]]$dySSBAR
+        }else if(any(EM_update[[s]]$data$propM > 0) || any(EM_update[[s]]$data$propF > 0)){ ## Spawning in year
+            ##SSB year before advice year for advice rule
+            dySSBAR[s] <- -1
+        }else{
+            dySSBAR[s] <- 0
+        }
+        ## "ICES advice will be based on bringing the stock above Blim at the end of the projection year"
+        if(!is.null(EMReferencePoints[[s]]$dySSBZC)){
+            dySSBZC[s] <- EMReferencePoints[[s]]$dySSBARZC
+        }else if(mean(EM_update[[s]]$data$propF) > 0.5){ 
+            ## If substantial fishing before spawning, use advice year to check for zero catch advice              
+            dySSBZC[s] <- 0
+        }else{
+            ## Otherwise, use advice year + 1
+            dySSBZC[s] <- 1
+        }
+    }
+                                        #cstr0 <- fcThisYear$constraints
+    ## Forecast with F=Ftarget
+    ## F = FMSY when SSB is at or above MSY Btrigger
+    for(s in seq_along(EM))
+        fcThisYear$constraints[[s]] <- c(head(fcThisYear$constraints[[s]],-2),
+                                         sprintf("F=%f",EMReferencePoints[[s]]$Ftarget),
+                                         "F=1*")
+    ##fcThisYear$fastFixedF <- TRUE
+    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    afFTab <- lapply(adviceForecast,attr, which = "tab")
+    tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
+    ## Check if SSB at beginning of advice year is < Btrigger
+    adviceRules[yr_tac,seq_along(OM)] <- "ICES MSY"
+    redoForecast <- FALSE
+    for(s in seq_along(EM)){
+        ## Check if SSB < MSY Btrigger at the "beginning of advice year"
+        fcorr <- afFTab[[s]][as.character(as.numeric(yr_tac)+dySSBAR[s]),sprintf("ssb:%s",tabLab[[s]])] / EMReferencePoints[[s]]$Btrigger                    
+        if(fcorr < 1){
+            ## F = FMSY × SSB/MSY Btrigger when the stock is below MSY Btrigger and above Blim (or below Blim but forecasted SSB > Blim
+            fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",EMReferencePoints[[s]]$Ftarget * fcorr)
+            redoForecast <- TRUE
+            adviceRules[yr_tac,s] <- "ICES MSY PA (Below MSYBtrigger)"
+        }
+    }
+    if(redoForecast){
+        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        afFTab <- lapply(adviceForecast,attr, which = "tab")
+        tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
+    }
+    ## Check if SSB at "end of projection year" is < Blim
+    redoForecast <- FALSE
+    for(s in seq_along(EM)){
+        nssb <- afFTab[[s]][as.character(as.numeric(yr_tac)+dySSBZC[s]),sprintf("ssb:%s",tabLab[[s]])]
+        if(nssb < EMReferencePoints[[s]]$Blimit){
+                                        #If so, forecast to reach Blim
+            fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("SSB=%f",EMReferencePoints[[s]]$Blimit)
+            redoForecast <- TRUE
+            adviceRules[yr_tac,s] <- "ICES MSY PA (Below Blim)"
+        }
+    }
+    if(redoForecast){
+        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        afFTab <- lapply(adviceForecast,attr, which = "tab")
+        tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
+    }
+    ## Check again
+    redoForecast <- FALSE
+    for(s in seq_along(EM)){
+        nssb <- afFTab[[s]][as.character(as.numeric(yr_tac)+dySSBZC[s]),sprintf("ssb:%s",tabLab[[s]])]
+        if(nssb < EMReferencePoints[[s]]$Blimit){
+            ## If SSB is below Blim, zero catch advice 
+            fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",1e-4)
+            redoForecast <- TRUE
+            adviceRules[yr_tac,s] <- "ICES MSY PA (Zero catch)"
+        }
+    }
+    if(redoForecast){
+        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        afFTab <- lapply(adviceForecast,attr, which = "tab")
+        tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
+    } 
+    return(list(adviceForecast = adviceForecast,
+                afFTab = afFTab,
+                tabLab = tabLab)
+}
+
+
 
 updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
     if(is(OM,"sam")){
@@ -370,6 +466,12 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
         return(EM_New)
     }else if(is(OM,"msam")){
         datNew <- attr(OM,"m_data")
+        ## ConfNew
+        if(is(EM,"msam")){
+            confNew <- lapply(EM,function(x) x$conf)
+        }else if(is(EM,"sam")){
+            confNew <- replicate(EM$conf,length(OM),simplify=FALSE)
+        }
         ## Handle advice year lag        
         if(AdviceLag > 0){
             if(length(intermediateFleets) == 0){ ## Reduce fully
@@ -382,7 +484,8 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
                 }
                 ## Reduce shared data
                 if(datNew$sharedObs$hasSharedObs){
-                    
+                    datNew$sharedObs <- reduce_shared(datNew$sharedObs,
+                                                      year = tail(datNew$sam[[i]]$years, AdviceLag))
                 }
                 ## Reduce genetic data
             }else{ ## Keep some fleets in first year
@@ -392,11 +495,12 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
                         datNew$sam[[i]] <- reduce(datNew$sam[[i]],
                                                   year = tail(datNew$sam[[i]]$years, AdviceLag-1),
                                                   conf = confNew[[i]])
-                        confNew[[i]] <- attr(datNew[[i]],"conf")
+                        confNew[[i]] <- attr(datNew$sam[[i]],"conf")
                     }
                     ## Reduce shared data
                     if(datNew$sharedObs$hasSharedObs){
-
+                        datNew$sharedObs <- reduce_shared(datNew$sharedObs,
+                                                          year = tail(datNew$sam[[1]]$years, AdviceLag-1))
                     }
                 }
                 ## Remove fleets not in intermediateFleets for first intermediate year
@@ -408,24 +512,26 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
                 for(i in seq_along(datNew$sam)){
                     datNew$sam[[i]] <- reduce(datNew$sam[[i]],
                                               year = tail(datNew$sam[[i]]$years, 1),
-                                              fleet = setdiff(seq_along(datNew$fleetTypes), intermediateFleets),
+                                              fleet = setdiff(seq_along(datNew$sam[[i]]$fleetTypes), intermediateFleets),
                                               conf = confNew[[i]])
-                    confNew[[i]] <- attr(datNew[[i]],"conf")
+                    confNew[[i]] <- attr(datNew$sam[[i]],"conf")
                 }
                 ## Reduce shared data
                 if(datNew$sharedObs$hasSharedObs){
-
+                    datNew$sharedObs <- reduce_shared(datNew$sharedObs,
+                                                      year = tail(datNew$sam[[1]]$years, 1),
+                                                      fleet = setdiff(seq_along(datNew$sam[[1]]$fleetTypes), intermediateFleets))
                 }
             }
         }
         if(is(EM,"sam")){
             ## Collect data
-
+            stop("Not implemented yet")
             ## Handle advice year lag
 
             ## Setup new fit
         }else if(is(EM,"msam")){
-            confNew <- lapply(EM,function(x) x$conf)
+            ##confNew <- lapply(EM,function(x) x$conf) # Updated above
             ## Prepare data
             ## 1) Prep single stock
             sdat <- lapply(seq_along(EM), function(i){
@@ -507,7 +613,7 @@ MSE <- function(OM,
                 knotRange = 3,
                 intermediateFleets = numeric(0),
                 OMselectivityFixed = FALSE,
-                singleStockManagementToPopulation = function(x,OM){
+                singleStockManagementToPopulation = function(x,OM){                    
                     v <- tail(catchtable(OM),1)[(seq_len(length(OM)*3)-1)%%3 == 0]
                     sum(x) * v / sum(v)
                 },
@@ -564,11 +670,17 @@ MSE <- function(OM,
     fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
     rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
     catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-
+    adviceRules <- matrix(NA_character_,nYears+AdviceLag,nStocksOM+1)
     
     dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
                                                                                 c(getStockNames(OM),"Total"),
                                                                                 c("Advice","True","Estimate","Low","High"))
+    dimnames(adviceRules) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
+                                  c(getStockNames(OM),"Total"))
+
+    EMoutput <- vector("list",nYears+AdviceLag)
+    AFoutput <- vector("list",nYears+AdviceLag)
+    names(EMoutput) <- names(AFoutput) <- seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag)
 
 ##### Copy OM and EM for safe overwriting #####
     OM_update <- OM
@@ -577,23 +689,41 @@ MSE <- function(OM,
 
 ##### Insert initialAdvice in results table #####
     if(is(EM,"msam")){
-        for(s in seq_along(fit)){
-            catch[seq_len(AdviceLag),s,"Advice"] <- rep(initialAdvice[[s]],length.out = AdviceLag)
+        if(!is.matrix(initialAdvice))
+            initialAdvice <- matrix(initialAdvice,AdviceLag,length(OM),byrow=TRUE)
+        for(s in seq_along(EM)){
+            catch[seq_len(AdviceLag),s,"Advice"] <- initialAdvice[,s]
         }
+        ## Total
+        catch[seq_len(AdviceLag),"Total","Advice"] <- rowSums(initialAdvice)
+        adviceRules[seq_len(AdviceLag),seq_along(OM)] <- "Initial advice"
     }else{
-        v <- singleStockAdviceToSubstock(rep(Reduce("+",initialAdvice),length.out = AdviceLag),OM)
-        for(s in seq_along(fit)){
-            catch[seq_len(AdviceLag),s,"Advice"] <- v[s,]
-        }
+        ## v <- singleStockManagementToSubstock(rep(Reduce("+",initialAdvice),length.out = AdviceLag),OM)
+        ## for(s in seq_along(EM)){
+        ##     catch[seq_len(AdviceLag),s,"Advice"] <- v[s,]
+        ## }
+        catch[seq_len(AdviceLag),"Total","Advice"] <- rep(initialAdvice,length.out = AdviceLag)
+        adviceRules[seq_len(AdviceLag),"Total"] <- "Initial advice"
     }
-    ## Total
-    catch[seq_len(AdviceLag),"Total","Advice"] <- rep(Reduce("+",initialAdvice),length.out = AdviceLag)
 
 ##### Helper function to convert advice (number) to forecast constraint for addSimulatedYears #####
+    splitYears <- function(x) split(x,row(x))
     AdviceToCatchConstraint <- function(x, OM){
-        lapply(x, function(y) ifelse(is.na(y),NA_real_,sprintf("C=%f",implementationError(singleStockAdviceToPopulation(y,OM)))))
+        ## By year
+        v <- lapply(splitYears(x), function(y) sprintf("C=%f",implementationError(singleStockManagementToPopulation(adviceToManagement(y),OM))))
+        ## By stock
+        v2 <- do.call(rbind,v)
+        r <- split(v2,col(v2))
+        names(r) <- getStockNames(OM)
+        r
     }
-
+    drop3D <- function(x){
+        if(is.matrix(x))
+            return(x)
+        dim(x) <- dim(x)[1:2]
+        x
+    }
+    
 ###### Make sure AdviceForecast is long enough #####
     ## Default: Need to forecast AdviceLag years + AdviceYears years
     yx <- 0
@@ -604,7 +734,7 @@ MSE <- function(OM,
             stop("Advice forecast year.base cannot be set to a specific year in the MSE. Use 'lastCatchYear', 'secondLastYear', or 'lastYear'.")
         ## If year.base is last catch year, and we have intermediate year fleets, we need to forecast one more year
         if(AdviceForecastSettings$year.base == "lastCatchYear" &&
-           length(AdviceForecastSettings$intermediateFleets) > 0){            
+           length(intermediateFleets) > 0){            
             yx <- 1
             ## Else, if year.base is secondLastYear, we need to forecast one more year
         }else if(AdviceForecastSettings$year.base == "secondLastYear"){
@@ -614,7 +744,7 @@ MSE <- function(OM,
     }
     ## Check AdviceForecast is long ennough
     if(any(sapply(AdviceForecastSettings$constraints,length) < AdviceLag + AdviceYears + yx)){
-        warning("Length of AdviceForecastSettings$constraints should equal AdviceLag + AdviceYears + 1. Modifying to match.")
+        warning(sprintf("Length of AdviceForecastSettings$constraints should equal AdviceLag + AdviceYears + %d = %d. Modifying to match.",yx,AdviceLag+AdviceYears+yx))
         ## If it's not set, insert NA to forecast using model
         if(is.null(AdviceForecastSettings$constraints)){
             if(is(EM,"msam")){
@@ -638,10 +768,12 @@ MSE <- function(OM,
     }
 
     if(AdviceLag > 0){
-        capture.output(OM_update <- try({addSimulatedYears(OM_update, 
-                                                           constraints = AdviceToCatchConstraint(initialAdvice,OM_update),
-                                                          ...)}))
+        ## Update OM
         iy <- head(rownames(ssb),AdviceLag)
+        capture.output(OM_update <- try({addSimulatedYears(OM_update, 
+                                                           constraints = AdviceToCatchConstraint(drop3D(catch[iy,,"Advice",drop=FALSE]),OM_update),
+                                                          ...)}))
+      
         ssb[iy,,"True"] <- ssbtable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
         fbar[iy,,"True"] <- fbartable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
         rec[iy,,"True"] <- rectable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
@@ -659,119 +791,113 @@ MSE <- function(OM,
         cat("\tAssessment year",yr[1],"\n")
         cat("\tCurrent SSB",ssb[yr[1],,"True"],"\n")
 
+        ## Update assessment
+        EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag, intermediateFleets)})
+        if(!methods::is(EM_update,"sam") || !methods::is(EM_update,"msam")){
+            msg <- "Assessment error"
+            break;
+        }       
+        if(is(EM,"msam")){
+            EMoutput[[yr]] <- list(fbar = fbartable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                   ssb = ssbtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                   catch = catchtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                   tsb = tsbtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                   rec = rectable(EM_update,returnList=TRUE,addTotal=TRUE))
+            tab <- ssbtable(EM_update,addTotal=TRUE,returnList=TRUE)
+            for(s in seq_along(tab))
+                ssb[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+            tab <- fbartable(EM_update,addTotal=TRUE,returnList=TRUE)
+            for(s in seq_along(tab))
+                fbar[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+            tab <- rectable(EM_update,addTotal=TRUE,returnList=TRUE)
+            for(s in seq_along(tab))
+                rec[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+            tab <- catchtable(EM_update,addTotal=TRUE,returnList=TRUE)
+            for(s in seq_along(tab))
+                catch[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE] 
+        }else if(is(EM,"sam")){
+            EMoutput[[yr]] <- list(fbar = list(Total=fbartable(EM_update)),
+                                   ssb = list(Total=ssbtable(EM_update)),
+                                   catch = list(Total=catchtable(EM_update)),
+                                   tsb = list(Total=tsbtable(EM_update)),
+                                   rec = list(Total=rectable(EM_update)))
+            ssb[yr,,c("Estimate","Low","High")] <- ssbtable(EM_update)[yr,,drop=FALSE]
+            fbar[yr,,c("Estimate","Low","High")] <- fbartable(EM_update)[yr,,drop=FALSE]
+            rec[yr,,c("Estimate","Low","High")] <- rectable(EM_update)[yr,,drop=FALSE]
+            catch[yr,,c("Estimate","Low","High")] <- catchtable(EM_update)[yr,,drop=FALSE] 
+        }
+     
+
         fcThisYear <- AdviceForecastSettings
         ## Insert advice in forecast constraints if requested
         if(is(EM,"msam")){
             fcThisYear$constraints <- lapply(seq_along(fcThisYear$constraints), function(s){
-                v <- gsub("%ADVICE%",catch[yr,s,"Advice"],fcThisYear$constraints[[i]])
-                v[grepl("C=NA",fcThisYear$constraints)] <- NA
+                v <- gsub("%ADVICE%",catch[yr,s,"Advice"],fcThisYear$constraints[[s]])
+                if(any(grepl("C=NA",fcThisYear$constraints)))
+                    v[grepl("C=NA",fcThisYear$constraints)] <- NA
                 v
             })
         }else{
             fcThisYear$constraints <- gsub("%ADVICE%",catch[yr,"Total","Advice"],fcThisYear$constraints)
             fcThisYear$constraints[grepl("C=NA",fcThisYear$constraints)] <- NA
         }
-        if(forecastMethod == "Basic"){
+        if(adviceMethod == "Basic"){
             adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-        }else if(forecastMethod == "ICES"){
             if(is(EM,"msam")){
-                cstr0 <- fcThisYear$constraints
-                ## Forecast with F=Ftarget
-                for(s in seq_along(EM))
-                    fcThisYear$constraints[[s]] <- c(head(fcThisYear$constraints[[s]],-1),
-                                                     sprintf("F=%f",EMReferencePoints[[s]]$Ftarget),
-                                                     "F=1*")
-                adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-                afFTab <- lapply(adviceForecast,attr, which = "tab")
-                tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
-                ## Check if SSB at beginning of advice year is < Btrigger
-                redoForecast <- FALSE
-                for(s in seq_along(EM)){
-                    fcorr <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])] / EMReferencePoints[[s]]$Btrigger
-                    if(fcorr < 1){
-                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",EMReferencePoints[[s]]$Ftarget * fcorr)
-                        redoForecast <- TRUE
-                    }
-                }
-                if(redoForecast){
-                    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-                    afFTab <- lapply(adviceForecast,attr, which = "tab")
-                    tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
-                }
-                ## Check if SSB at beginning of year after advice is < Blim
-                redoForecast <- FALSE
-                for(s in seq_along(EM)){
-                    nssb <- afFTab[[s]][as.character(as.numeric(yr_tac)+1),sprintf("ssb:%s",tabLab[[s]])]
-                    if(nssb < EMReferencePoints[[s]]$Blimit){
-                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("SSB=%f",EMReferencePoints[[s]]$Blimit)
-                        redoForecast <- TRUE
-                    }
-                }
-                if(redoForecast){
-                    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-                    afFTab <- lapply(adviceForecast,attr, which = "tab")
-                    tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
-                }
-                ## Check again
-                redoForecast <- FALSE
-                for(s in seq_along(EM)){
-                    nssb <- afFTab[[s]][as.character(as.numeric(yr_tac)+1),sprintf("ssb:%s",tabLab[[s]])]
-                    if(nssb < EMReferencePoints[[s]]$Blimit){
-                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",1e-9)
-                        redoForecast <- TRUE
-                    }
-                }
-                if(redoForecast){
-                    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-                    afFTab <- lapply(adviceForecast,attr, which = "tab")
-                    tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
-                }
+                adviceRules[yr_tac,seq_alon(OM)] <- "Basic"
             }else{
-
+                adviceRules[yr_tac,"Total"] <- "Basic"
             }
+        }else if(adviceMethod == "ICES"){
+            tmp <- ICESAdviceForecast(EM_update,OM_update,fcThisYear,EMReferencePoints,...)
+            adviceForecast <- tmp$adviceForecast
+            if(methods::is(adviceForecast,"try-error")){
+                msg <- "Advice forecast error"
+                break;
+            }
+            afFTab <- tmp$afFTab
+            tabLab <- tmp$tabLab
+            AFoutput[[yr]] <- afFTab
         }
-        if(methods::is(adviceForecast,"try-error")){
-            msg <- "Advice forecast error"
-            break;
-        }
+        ## Save advice
         afFTab <- lapply(adviceForecast,attr, which = "tab")
         tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
         if(is(EM,"msam")){
             for(s in seq_along(EM)){
                 cat("\tAdvice",paste(yr_tac,afFTab[[s]][yr_tac,sprintf("catch:%s",tabLab[[s]])],sep=": ",collapse="; "),"\n\n\n")        
-                catch[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("catch:%s",tabLab[[s]])]
-                fbar[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
-                ssb[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
-                rec[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
+                catch[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("catch:%s",tabLab[[s]])]
+                fbar[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
+                ssb[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
+                rec[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
             }
-            ## Total
-## MADE IT TO HERE!!
+            ## Total (Does this make sense?)
+            catch[yr_tac,"Total","Advice"] <- adviceToManagement(catch[yr_tac,,"Advice"])
+            #fbar[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
+            #ssb[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
+            #rec[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
         }else{
 
         }
         ## Simulate next year (implement different rules for AdviceYears > 0)
         capture.output(OM_update <- try({addSimulatedYears(OM_update, 
-                                                          constraints = AdviceToCatchConstraint(rep(catch[yr_tac,,"Advice"],length.out = AdviceYears)),
+                                                          constraints = AdviceToCatchConstraint(drop3D(catch[yr_tac,,"Advice",drop=FALSE]),OM_update),
                                                           ...)}))
         if(methods::is(OM_update,"try-error")){
             msg <- "Adding simulated year error"
             break;
         }
-        ssb[yr_tac,,"True"] <- ssbtable(OM_update)[yr_tac,1]
-        fbar[yr_tac,,"True"] <- fbartable(OM_update)[yr_tac,1]
-        rec[yr_tac,,"True"] <- rectable(OM_update)[yr_tac,1]
-        catch[yr_tac,,"True"] <- catchtable(OM_update)[yr_tac,1]
-        
-        ## New assessment
-        EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag, intermediateFleets)})
-        if(!methods::is(EM_update,"sam")){
-            msg <- "Assessment error"
-            break;
-        }
-        ssb[yr,,c("Estimate","Low","High")] <- ssbtable(EM_update)[yr,,drop=FALSE]
-        fbar[yr,,c("Estimate","Low","High")] <- fbartable(EM_update)[yr,,drop=FALSE]
-        rec[yr,,c("Estimate","Low","High")] <- rectable(EM_update)[yr,,drop=FALSE]
-        catch[yr,,c("Estimate","Low","High")] <- catchtable(EM_update)[yr,,drop=FALSE]        
+        tab <- ssbtable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            ssb[yr,s,"True")] <- tab[[s]][yr,1]
+        tab <- fbartable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            fbar[yr,s,"True"] <- tab[[s]][yr,1]
+        tab <- rectable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            rec[yr,s,"True"] <- tab[[s]][yr,1]
+        tab <- catchtable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            catch[yr,s,"True"] <- tab[[s]][yr,1]     
     }
     ## Last year assessments
     if(msg == "OK")
@@ -786,10 +912,36 @@ MSE <- function(OM,
                 msg <- "Assessment error"
                 break;
             }
-            ssb[yr,,c("Estimate","Low","High")] <- ssbtable(EM_update)[yr,,drop=FALSE]
-            fbar[yr,,c("Estimate","Low","High")] <- fbartable(EM_update)[yr,,drop=FALSE]
-            rec[yr,,c("Estimate","Low","High")] <- rectable(EM_update)[yr,,drop=FALSE]
-            catch[yr,,c("Estimate","Low","High")] <- catchtable(EM_update)[yr,,drop=FALSE]        
+            if(is(EM,"msam")){
+                EMoutput[[yr]] <- list(fbar = fbartable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                       ssb = ssbtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                       catch = catchtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                       tsb = tsbtable(EM_update,returnList=TRUE,addTotal=TRUE),
+                                       rec = rectable(EM_update,returnList=TRUE,addTotal=TRUE))
+                tab <- ssbtable(EM_update,addTotal=TRUE,returnList=TRUE)
+                for(s in seq_along(tab))
+                    ssb[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+                tab <- fbartable(EM_update,addTotal=TRUE,returnList=TRUE)
+                for(s in seq_along(tab))
+                    fbar[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+                tab <- rectable(EM_update,addTotal=TRUE,returnList=TRUE)
+                for(s in seq_along(tab))
+                    rec[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE]
+                tab <- catchtable(EM_update,addTotal=TRUE,returnList=TRUE)
+                for(s in seq_along(tab))
+                    catch[yr,s,c("Estimate","Low","High")] <- tab[[s]][yr,,drop=FALSE] 
+            }else if(is(EM,"sam")){
+                EMoutput[[yr]] <- list(fbar = list(Total=fbartable(EM_update)),
+                                       ssb = list(Total=ssbtable(EM_update)),
+                                       catch = list(Total=catchtable(EM_update)),
+                                       tsb = list(Total=tsbtable(EM_update)),
+                                       rec = list(Total=rectable(EM_update)))
+                ssb[yr,,c("Estimate","Low","High")] <- ssbtable(EM_update)[yr,,drop=FALSE]
+                fbar[yr,,c("Estimate","Low","High")] <- fbartable(EM_update)[yr,,drop=FALSE]
+                rec[yr,,c("Estimate","Low","High")] <- rectable(EM_update)[yr,,drop=FALSE]
+                catch[yr,,c("Estimate","Low","High")] <- catchtable(EM_update)[yr,,drop=FALSE] 
+            }
+            
         }
     
 

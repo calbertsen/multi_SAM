@@ -65,6 +65,7 @@ multisam.fit <- function(x,
                          genetics_dirichlet = FALSE,
                          genetics_spatialAge = TRUE,
                          genetics_independentStocks = TRUE,
+                         genetics_keyContamination,
                          initN = 0,
                          initF = FALSE,
                          parlist = NULL,
@@ -96,6 +97,10 @@ multisam.fit <- function(x,
 
     ## Prepare data for TMB
     dat0 <- collect_data(x)
+    maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years))))
+    minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years))))
+    maxAgeAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$maxAge))))
+    minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge))))
     if(!is.list(shared_proportionalHazard)){
             shared_proportionalHazard <- replicate(length(x), shared_proportionalHazard, simplify = FALSE)
             shared_proportionalHazard[1] <- list(NULL)
@@ -106,10 +111,6 @@ multisam.fit <- function(x,
     Xph <- lapply(shared_proportionalHazard, function(f){
         if(is.null(f) || !(shared_selectivity %in% c(3,4,6)))
             return(matrix(0,0,0))
-        maxYearAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$years))))
-        minYearAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$years))))
-        maxAgeAll = as.integer(max(unlist(lapply(dat0,function(dd)dd$maxAge))))
-        minAgeAll = as.integer(min(unlist(lapply(dat0,function(dd)dd$minAge))))
         AYgrd <- expand.grid(Age = as.numeric(minAgeAll:maxAgeAll),
                              Year = as.numeric(minYearAll:maxYearAll))
         if(inherits(f,"formula")){
@@ -143,6 +144,49 @@ multisam.fit <- function(x,
     }else{
         mohn_fake_obs <- numeric(0)
     }
+
+    ## Add gen2con
+    if(ncol(genetics_data$stock2gen) > 0){
+        gen2con <- rep(-1,ncol(genetics_data$stock2gen))
+        ii <- which(colSums(genetics_data$stock2gen)==0)
+        gen2con[ii] <- seq_along(ii)-1
+        genetics_data$gen2con <- gen2con
+        nContStocks <- length(ii)
+        nAge <- maxAgeAll-minAgeAll+1             
+        if(missing(genetics_keyContamination)){            
+            genetics_keyContamination <- matrix(-1,nrow(shared_data$keyFleetStock),nAge)
+            ## Fill with default if relevant
+            if(nContStocks > 0){
+                fleetsWithSamples <- sort(unique(sapply(genetics_data$samples,function(x)x$fleet)))
+                nAgeFleet <- x[[1]]$data$maxAgePerFleet - x[[1]]$data$minAgePerFleet + 1
+                nAgeBefore <- cumsum(c(0,nAgeFleet))
+                for(f in seq_along(fleetsWithSamples)){
+                    ## Only ages used in fleet
+                    agesFleet <- x[[1]]$data$minAgePerFleet[fleetsWithSamples[f]]:x[[1]]$data$maxAgePerFleet[fleetsWithSamples[f]] - minAgeAll + 1
+                    genetics_keyContamination[fleetsWithSamples[f],agesFleet] <- pmin((seq_len(nAgeFleet[fleetsWithSamples[f]])-1),ncol(genetics_keyContamination)-2) + nAgeBefore[fleetsWithSamples[f]]
+                }
+                .reidx <- function(x){
+                    if(any(x >= (-0.5) & !is.na(x))){
+                        xx <- x[x >= (-.5) & !is.na(x)]
+                        x[x >= (-.5) &!is.na(x)] <- match(xx,sort(unique(xx)))-1
+                    }
+                    x
+                }
+                genetics_keyContamination <- .reidx(genetics_keyContamination)
+                
+            }
+        }else{
+            ## Check size
+            if(nrow(genetics_keyContamination) != nrow(shared_data$keyFleetStock))
+                stop("genetics_keyContamination should have as many rows as the number of fleets in shared observations")
+            if(ncol(genetics_keyContamination) != nAge)
+                stop("genetics_keyContamination should have as many columns as the number of ages")
+        }
+    }else{
+        genetics_data$gen2con <- numeric(0)
+        genetics_keyContamination <- matrix(-1,0,maxAgeAll-minAgeAll+1)
+        nContStocks = 0
+    }
     
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
@@ -163,6 +207,7 @@ multisam.fit <- function(x,
                 shared_Fseason_type = as.integer(shared_seasonality),
                 skip_stock_observations = as.integer(skip_stock_observations),
                 stockAreas = stockAreas,
+                keyContamination = genetics_keyContamination,
                 fake_obs = numeric(0),
                 fake_stock = integer(0),
                 fake_indx = integer(0),
@@ -288,11 +333,26 @@ multisam.fit <- function(x,
     pars$gen_muLogP <- matrix(0,dat$maxAgeAll-dat$minAgeAll+1,nStockG)
     pars$gen_avgProbPar <- numeric(sum(is.na(dat$geneticsData$stock2gen) | (dat$geneticsData$stock2gen < 0)))
 
-    maxAge <- max(sapply(x, function(xx) xx$conf$maxAge))
-    minAge <- max(sapply(x, function(xx) xx$conf$minAge))
-    pars$logGst <- array(0, dim = c(nrow(dat$geneticsData$Qspace),
+  
+    ## logContamination
+    if(nContStocks == 0){
+        pars$logContamination <- array(0, dim = c(0,maxYearAll-minYearAll+1,0))
+        pars$meanContamination <- matrix(0,0,0)
+        pars$transfRhoContamination <- numeric(0)
+        pars$logSdContamination <- numeric(0)
+    }else{
+        pars$logContamination <- array(0, dim = c(max(dat$keyContamination)+1,maxYearAll-minYearAll+1,nContStocks))
+        pars$meanContamination <- matrix(0,max(dat$keyContamination)+1,nContStocks)
+        pars$transfRhoContamination <- numeric(nContStocks)
+        pars$logSdContamination <- numeric(nContStocks)
+    }
+   
+    ## Genetic random effects
+   ## maxAge <- max(sapply(x, function(xx) xx$conf$maxAge))
+   ##  minAge <- max(sapply(x, function(xx) xx$conf$minAge))  
+   pars$logGst <- array(0, dim = c(nrow(dat$geneticsData$Qspace),
                                     nrow(dat$geneticsData$Qtime),
-                                    ifelse(genetics_spatialAge,maxAge-minAge+1,1),
+                                    ifelse(genetics_spatialAge,maxAgeAll-minAgeAll+1,1),
                                     pmax(0,nStockG-1)))
     
     pars$logGtrip <- matrix(0, pmax(0,nStockG-1), attr(dat$geneticsData,"nTrips"))
@@ -514,7 +574,7 @@ multisam.fit <- function(x,
     ## }
     
     ## Create initial TMB Object
-    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip","mohn_fake_obs")
+    ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logContamination", "logGst", "logGtrip","mohn_fake_obs")
     ## prf <- c("gen_alleleFreq", "gen_muLogP")
     ## if(all(sapply(pars[prf], length) == 0)){
     prf <- NULL
@@ -522,7 +582,7 @@ multisam.fit <- function(x,
     ##     prf <- setdiff(prf, prf[sapply(pars[prf], length) == 0])
     ## }
     if(run == 2)
-        return(list(p=pars,m=map0))
+        return(list(d=dat,p=pars,m=map0))
     obj <- TMB::MakeADFun(dat, pars, map0,
                           random=ran,
                           ##profile = prf,

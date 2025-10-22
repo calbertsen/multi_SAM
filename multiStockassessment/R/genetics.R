@@ -8,7 +8,8 @@ prepareGenetics <- function(baselineFile,
                   Qtime = as(matrix(0,0,0),"TsparseMatrix"),
                   QorderTime = 1L,
                   QorderSpace = 1L,
-                  stock2gen = matrix(0,0,0))
+                  stock2gen = matrix(0,0,0)
+                  )
         attr(r, "alleleDim") <- c(0,0) # ploidity x nloci
         attr(r, "nTrips") <- 0
         class(r) <- "msam_genetic"

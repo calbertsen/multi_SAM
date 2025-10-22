@@ -133,6 +133,7 @@ struct genetic_data {
   int QorderTime;
   int QorderSpace;
   matrix<Type> stock2gen;	// nStocks x nGenetics
+  vector<int> gen2con;
   // Constructors
   genetic_data();
   genetic_data(SEXP x);
@@ -161,6 +162,7 @@ SOURCE(
 	 QorderTime = (int)*REAL(getListElement(x,"QorderTime"));
 	 QorderSpace = (int)*REAL(getListElement(x,"QorderSpace"));
 	 stock2gen = asMatrix<Type>(getListElement(x,"stock2gen"));
+	 gen2con = asVector<int>(getListElement(x,"gen2con"));
        }
        )
 
@@ -208,6 +210,8 @@ Type nllGenetics(shared_obs<Type>& obs,
 		 matrix<Type>& logGtrip, // (nStock-1) x nTrips
 		 matrix<int>& stockAreas,
 		 matrix<Type>& Parea,
+		 array<Type>& logContamination,
+		 matrix<int>& keyContamination,
 		 int maxAgeAll,
 		 int minAgeAll,
 		 objective_function<Type>* of
@@ -240,6 +244,8 @@ Type nllGenetics(shared_obs<Type>& obs,
 		     logPosteriorProbabilityIndividual_flatPrior.setZero();
 		     matrix<Type> logPropPopulations(nStockGenetic,gendat.samples.size());
 		     logPropPopulations.setZero();
+		     matrix<Type> predCatchOut(nStockGenetic,gendat.samples.size());
+		     predCatchOut.setConstant(R_NaReal);
 		     // int nre_Space = logGst.dim[0];
 		     // int nre_Time = logGst.dim[1];
 		     int nre_Age = logGst.dim[2];
@@ -330,7 +336,16 @@ Type nllGenetics(shared_obs<Type>& obs,
 							 (vector<Type>)obs.keyFleetStock.row(gs.fleet-1));
 			   }
 			   // Map modelled stocks to genetic stocks
-			   PCtmpG = PCtmpM.matrix().transpose() * stock2gen;
+			   Type lsM = logspace_sum(PCtmpM);
+			   PCtmpG = exp(PCtmpM).matrix().transpose() * stock2gen;
+			   PCtmpG = log(PCtmpG);
+			   
+			   // Add contamination
+			   for(int s = 0; s < nStockGenetic; ++s){
+			     int kc = keyContamination(gs.fleet-1,aa-minAgeAll);
+			     if(kc >= 0 && gendat.gen2con(s) >= 0)
+			       PCtmpG(s) = logspace_add_SAM(PCtmpG(s),logContamination(kc,gs.year-CppAD::Integer(datA(0).years(0)),gendat.gen2con(s)));
+			   }
 			   for(int s = 0; s < nStockGenetic; ++s){
 			     Type PCcorrected = PCtmpG(s) + genpar.muLogP(aa - minAgeAll,s);
 			     if(s < nStockGenetic-1){
@@ -346,7 +361,8 @@ Type nllGenetics(shared_obs<Type>& obs,
 			       }
 			     }
 			     predCatch(s) = logspace_add2(predCatch(s), PCcorrected);
-			   }	
+			   }
+			   predCatchOut.col(i) = predCatch;
 			 }
 			 // if(nre_Age == 1 && (maxAgeAll - minAgeAll > 0)){
 			 // 	for(int s = 0; s < nStockGenetic-1; ++s)
@@ -362,6 +378,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		       Type logPZ = logspace_sum(logPnn);
 		       vector<Type> logP = logPnn - logPZ;
 		       logPropPopulations.col(i) = logP;
+		       
 
 		       // Data contribution
 		       Type llTmp = R_NegInf;
@@ -389,6 +406,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		     REPORT_F(logPosteriorProbabilityIndividual,of);
 		     REPORT_F(logPosteriorProbabilityIndividual_flatPrior,of);
 		     REPORT_F(logPropPopulations,of);
+		     REPORT_F(predCatchOut,of);
 		     REPORT_F(stock2gen,of);
 		     ADREPORT_F(stock2gen,of);
 		     return nll;
@@ -396,6 +414,31 @@ Type nllGenetics(shared_obs<Type>& obs,
 		   )
 
 
-MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<int>&, matrix<double>&, int, int, objective_function<double>*));
-MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, int, int, objective_function<TMBad::ad_aug>*));
+MSM_SPECIALIZATION(double nllGenetics(shared_obs<double>&, vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, vector<forecastSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_matrix<double>&, cmoe_3darray<double>&, vector<MortalitySet<double> >&, genetic_parameters<double>&, genetic_data<double>&, array<double>&, matrix<double>&, matrix<int>&, matrix<double>&, array<double>&, matrix<int>&, int, int, objective_function<double>*));
+MSM_SPECIALIZATION(TMBad::ad_aug nllGenetics(shared_obs<TMBad::ad_aug>&, vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, vector<forecastSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, cmoe_3darray<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, genetic_parameters<TMBad::ad_aug>&, genetic_data<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, array<TMBad::ad_aug>&, matrix<int>&, int, int, objective_function<TMBad::ad_aug>*));
 
+
+template<class Type>
+Type nllContamination(array<Type>& logContamination,
+		      matrix<int>& keyContamination,
+		      matrix<Type>& meanContamination,
+		      vector<Type>& transfRhoContamination,
+		      vector<Type>& logSdContamination) SOURCE({
+  if(logContamination.size() == 0)
+    return 0.0;
+  
+  Type ans = 0;
+  for(int s = 0; s < logContamination.dim[2]; ++s){
+    Type rho = toInterval(transfRhoContamination(s),Type(0.0),Type(1.0),Type(1.0));
+    for(int a = 0; a < logContamination.dim[0]; ++a){
+      ans -= dnorm(logContamination(a,0,s), meanContamination(a,s), exp(logSdContamination(s)) / sqrt(1.0 - rho*rho), true);
+      for(int y = 1; y < logContamination.dim[1]; ++y){
+	ans += -dnorm(logContamination(a,y,s), meanContamination(a,s) + rho * (logContamination(a,y-1,s) - meanContamination(a,s)), exp(logSdContamination(s)), true);      
+      }
+    }
+  }
+  return ans;  
+			})
+
+MSM_SPECIALIZATION(double nllContamination(array<double>&, matrix<int>&, matrix<double>&, vector<double>&, vector<double>&));
+MSM_SPECIALIZATION(TMBad::ad_aug nllContamination(array<TMBad::ad_aug>&, matrix<int>&, matrix<TMBad::ad_aug>&, vector<TMBad::ad_aug>&, vector<TMBad::ad_aug>&));

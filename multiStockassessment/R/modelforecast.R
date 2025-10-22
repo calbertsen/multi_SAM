@@ -325,8 +325,9 @@ modelforecast.msam <- function(fit,
     ## Prepare forecast
     obj0 <- attr(fit,"m_obj")
     args <- as.list(obj0$env)[methods::formalArgs(TMB::MakeADFun)[methods::formalArgs(TMB::MakeADFun) != "..."]]
-    args$random <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
-    
+    args$random <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip","logContamination")
+
+   
     pl <- attr(fit,"m_pl")
 
     if(nosim > 0 && !is.na(match("logF",names(args$map)))){
@@ -414,7 +415,7 @@ modelforecast.msam <- function(fit,
             suf <- sort(unique(args$data$sam[[s]]$aux[,"fleet"])) # sort-unique-fleet
             yy <- min(as.numeric(args$data$sam[[s]]$aux[,"year"])):max(as.numeric(args$data$sam[[s]]$aux[,"year"]))
             aa <- min(as.numeric(args$data$sam[[s]]$aux[,"age"])):max(as.numeric(args$data$sam[[s]]$aux[,"age"]))
-            mmfun<-function(f,y, ff){idx<-which(args$data$sam[[s]]$aux[,"year"]==y & args$data$sam[[s]]$aux[,"fleet"]==f); ifelse(length(idx)==0, NA, ff(idx)-1)}
+            mmfun<-function(f,y, ff){idx<-which(args$data$sam[[s]]$aux[,"year"]==y & args$data$sam[[s]]$aux[,"fleet"]==f); ifelse(length(idx)==0, NA, suppressWarnings(ff(idx))-1)}
             args$data$sam[[s]]$idx1 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=min)
             args$data$sam[[s]]$idx2 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=max)
             args$data$sam[[s]]$idxCor <- cbind(args$data$sam[[s]]$idxCor,matrix(NA_real_,nrow(args$data$sam[[s]]$idxCor),nrow(newAux)))
@@ -517,7 +518,13 @@ modelforecast.msam <- function(fit,
         args$map$logitFseason <- factor(unlist(lfm0))
     }
 
-    
+    ## Remove empty maps
+    mtorm <- which(sapply(args$map,length)==0)
+    args$map <- args$map[-mtorm]
+   
+
+    if(as.integer(returnObj)==3)
+        return(args)
 
     ## Create forecast object
     obj <- do.call(TMB::MakeADFun, args)

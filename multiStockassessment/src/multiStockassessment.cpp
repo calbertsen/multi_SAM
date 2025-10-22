@@ -138,6 +138,7 @@ Type objective_function<Type>::operator() ()
   DATA_INTEGER(skip_stock_observations);
 
   DATA_IMATRIX(stockAreas); // areas x stocks. 1 if active, 0 otherwise
+  DATA_IMATRIX(keyContamination);
   
   // Related to residuals
   DATA_VECTOR(fake_obs);
@@ -274,6 +275,8 @@ Type objective_function<Type>::operator() ()
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
   ////////////////////////////////////////
+
+  
   PARAMETER_VECTOR(RE);
   PARAMETER_VECTOR(betaCon); // (nages*nAreas) x (nages*nAreas)
 
@@ -290,7 +293,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(initLogN);
   PARAMETER_CMOE_VECTOR(initLogF);
 
-   PARAMETER_VECTOR(mohn_fake_obs);
+  PARAMETER_VECTOR(mohn_fake_obs);
 
   int nStocks = logF.cols();
 
@@ -377,9 +380,13 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(gen_logSdTrip); genParSet.logSdTrip = gen_logSdTrip;
   PARAMETER_ARRAY(gen_alleleFreq); genParSet.alleleFreq = gen_alleleFreq;
   PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
- PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
- PARAMETER_VECTOR(gen_avgProbPar); genParSet.avgProbPar = gen_avgProbPar;
-
+  PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
+  PARAMETER_VECTOR(gen_avgProbPar); genParSet.avgProbPar = gen_avgProbPar;
+  PARAMETER_ARRAY(logContamination); // Age x Year x Fleet x (management+Contamination stock); use map to fix things not needed; RE
+  PARAMETER_MATRIX(meanContamination);
+  PARAMETER_VECTOR(transfRhoContamination);
+  PARAMETER_VECTOR(logSdContamination);
+ 
   PARAMETER_ARRAY(logGst);
   PARAMETER_MATRIX(logGtrip);
 
@@ -1496,6 +1503,8 @@ Type objective_function<Type>::operator() ()
   			   // shared_logSdObs,
 			   stockAreas,
 			   Parea,
+			   logContamination,
+			   keyContamination,
   			   minYearAll,
   			   minAgeAll,
   			   keep(keep.size()-1),
@@ -1523,10 +1532,17 @@ Type objective_function<Type>::operator() ()
   		     logGtrip,
 		     stockAreas,
 		     Parea,
+		     logContamination,
+		     keyContamination,
   		     maxAgeAll,
   		     minAgeAll,
 		     this);
 
+  ans += nllContamination(logContamination,
+			  keyContamination,
+			  meanContamination,
+			  transfRhoContamination,
+			  logSdContamination);
 
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
