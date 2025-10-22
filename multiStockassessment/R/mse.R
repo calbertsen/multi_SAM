@@ -404,7 +404,7 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     } 
     return(list(adviceForecast = adviceForecast,
                 afFTab = afFTab,
-                tabLab = tabLab)
+                tabLab = tabLab))
 }
 
 
