@@ -16,6 +16,7 @@ simulate.msam <- function(object,
                           full.data = TRUE,
                           ready.to.fit = FALSE,
                           simFlag,
+                          sim.keepRec,
                           ...){
     if(!is.null(seed)){
         set.seed(seed)
@@ -32,8 +33,13 @@ simulate.msam <- function(object,
     if(!missing(simFlag)){
         for(i in seq_along(obj$env$data$sam))
             obj$env$data$sam[[i]]$simFlag <- rep(pmin(1,pmax(as.integer(simFlag),0)),length.out=4)
-        obj$env$retape(FALSE)
     }
+    if(!missing(sim.keepRec)){
+        for(i in seq_along(obj$env$data$sam))
+            obj$env$data$sam[[i]]$simKeepRec <- as.numeric(sim.keepRec)
+    }
+    if(!missing(simFlag) || !missing(sim.keepRec))
+        obj$env$retape(FALSE)
     if(full.data){
         ret <- replicate(nsim, {
             allDat <- lapply(object,function(x)x$data)

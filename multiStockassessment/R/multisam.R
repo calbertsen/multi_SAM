@@ -59,6 +59,7 @@ multisam.fit <- function(x,
                          shared_proportionalHazard = NULL,
                          shared_phmap = NULL,
                          shared_fecundityScaling = FALSE,
+                         shared_recVarScalePar = FALSE,
                          skip_stock_observations = FALSE,
                          stockAreas = matrix(1,1,length(x)),
                          genetics_data = prepareGenetics(),
@@ -75,6 +76,7 @@ multisam.fit <- function(x,
                          mohn = FALSE,
                          doSdreport = TRUE,
                          skip.hessian = FALSE,
+                         hessian.method,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     envir <- parent.frame(1L)
@@ -526,6 +528,18 @@ multisam.fit <- function(x,
             map0$logFecundityScaling <- factor(map0$logFecundityScaling)
         }
     }
+    if(shared_recVarScalePar){
+        mf0 <- map0$recVarScalePar
+        p0 <- splitParameter(pars$recVarScalePar)
+        mfx <- unlist(lapply(p0,seq_along))
+        if(is.null(map0$recVarScalePar) || length(map0$recVarScalePar) == 0){
+            map0$recVarScalePar <- factor(mfx)
+        }else{
+            if(any(!is.na(map0$recVarScalePar)))
+                map0$recVarScalePar[!is.na(map0$recVarScalePar)] <- mfx[[!is.na(map0$recVarScalePar)]]
+            map0$recVarScalePar <- factor(map0$recVarScalePar)
+        }
+    }
     if(shared_selectivity != 0){
         lfm0 <- lapply(splitParameter(pars$logF),seq_along)
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
@@ -649,12 +663,28 @@ multisam.fit <- function(x,
                          lower=lower2,
                          upper=upper2)
 
+    if(missing(hessian.method)){        
+        He <- function(par, fn, gr, ...){
+            he <- optimHess(par, fn, gr)
+            if(any(!is.finite(he)))
+                he <- hessian(fn, par)
+            he
+        }
+    }else if(is.character(hessian.method)){
+        He <- eval(as.name(hessian.method))
+    }else if(is.function(hessian.method)){
+        He <- hessian.method
+    }else{
+        stop("Wrong hessian.method")
+    }
+    
+
     for(i in seq_len(newtonsteps)) { # Take a few extra newton steps
         atLBound <- (opt$par < (lower2 + sqrt(.Machine$double.eps)))
         atUBound <- (upper2 < (opt$par + sqrt(.Machine$double.eps)))
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
-        h <- stats::optimHess(opt$par, obj$fn, obj$gr)
+        h <- He(opt$par, obj$fn, obj$gr)
         ##h <- stockassessment:::hessian(obj$fn, opt$par)
         ss <- try({svd_solve(h[!atBound,!atBound]) %*% g[!atBound]})
         if(!is(ss,"try-error")){
@@ -668,7 +698,7 @@ multisam.fit <- function(x,
     }
     ##opt$he <- stockassessment:::hessian(obj$fn, opt$par)
     if(!skip.hessian)
-        opt$he <- optimHess(opt$par, obj$fn, obj$gr)
+        opt$he <- He(opt$par, obj$fn, obj$gr)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
     if(doSdreport){

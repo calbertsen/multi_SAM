@@ -68,6 +68,7 @@ svd_solve <- function(x){
 hessian <- function(func, x,
                     h = abs(1e-04 * x) + 1e-04 * (abs(x) < sqrt(.Machine$double.eps/7e-07)),
                     columns = seq_along(x),
+                    symmetrize = TRUE,
                     ...){
     if(any(columns < 1 | columns > length(x)))
         stop("Issue with columns")
@@ -77,6 +78,11 @@ hessian <- function(func, x,
                globalenv(),
                h,
                as.integer(columns-1))
+    add <- function(a,b){
+        ifelse(is.na(a),b,a)+ifelse(is.na(b),a,b)        
+    }
+    if(symmetrize)
+        r[] <- 0.5 * add(r[],t(r)[])
     r
 }
 

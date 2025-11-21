@@ -345,8 +345,8 @@ Type sharedObservation(shared_obs<Type>& obs,
     nllVecPerStock(s) = getnllVec(datA(s), confA(s), parA(s), of);
 
   Type nll = 0.0;
-
-  for(int y=0;y<obs.noYears;y++){
+  int noYears = datA(0).idx1.dim(1); //dat.noYears; Also works when forecast has new data
+  for(int y=0;y<noYears;y++){
     int totalParKey = 0;
     for(int f=0;f<obs.noFleets;f++){
       if(!((obs.fleetTypes(f)==5)||(obs.fleetTypes(f)==3)||(obs.fleetTypes(f)==6)||(obs.fleetTypes(f)==80)||(obs.fleetTypes(f)==90)||(obs.fleetTypes(f)==92))){
@@ -462,7 +462,13 @@ Type sharedObservation(shared_obs<Type>& obs,
 	      nll += thisNll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment)/sqrtW,keep.segment(idxfrom,idxlength));
 	      nll += (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
 	      SIMULATE_F(of){
-		obs.logobs.segment(idxfrom,idxlength) = predObsSegment + (thisNll.simulate()*sqrtW);
+		if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		   (forecastA(0).nYears > 0 &&
+		    forecastA(0).forecastYear(y) > 0 &&
+		    forecastA(0).simFlag(2)==0 &&
+		    y >= datA(0).noYears)){
+		  obs.logobs.segment(idxfrom,idxlength) = predObsSegment + (thisNll.simulate()*sqrtW);
+		}
 	      }
 	    }else{
 	      int thisdim=currentVar.size();
@@ -477,7 +483,13 @@ Type sharedObservation(shared_obs<Type>& obs,
 	      nll+= thisnll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment)/sqrtW, keep.segment(idxfrom,idxlength));              
 	      nll+= (log(sqrtW)*keep.segment(idxfrom,idxlength)).sum();
 	      SIMULATE_F(of){
-		obs.logobs.segment(idxfrom,idxlength) = predObsSegment + thisnll.simulate()*sqrtW;
+		if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		   (forecastA(0).nYears > 0 &&
+		    forecastA(0).forecastYear(y) > 0 &&
+		    forecastA(0).simFlag(2)==0 &&
+		    y >= datA(0).noYears)){
+		  obs.logobs.segment(idxfrom,idxlength) = predObsSegment + thisnll.simulate()*sqrtW;
+		}
 	      }
 	    }
 
@@ -499,14 +511,20 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    nll -= log(fabs(obs_fun::jacobianDet((vector<Type>)obs.logobs.segment(idxfrom,idxlength).exp())));
             nll -= obs.logobs.segment(idxfrom,idxlength).sum();
 	    SIMULATE_F(of){
-	      vector<Type> logProb(idxlength);
-	      logProb.setZero();
-	      logProb.segment(0,idxlength-1) = obs_fun::addLogratio(((vector<Type>)predObsSegment)) + thisNll.simulate();
-	      Type logDenom = obs_fun::logExpSum(logProb);
-	      logProb -= logDenom;
-	      Type logTotal = rnorm(log(obs_fun::log2expsum((vector<Type>)predObsSegment)),
-	  			    exp(parA(0).logSdLogTotalObs(totalParKey++)));
-	      obs.logobs.segment(idxfrom,idxlength) = logProb + logTotal; 
+	      if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		 (forecastA(0).nYears > 0 &&
+		  forecastA(0).forecastYear(y) > 0 &&
+		  forecastA(0).simFlag(2)==0 &&
+		  y >= datA(0).noYears)){
+		vector<Type> logProb(idxlength);
+		logProb.setZero();
+		logProb.segment(0,idxlength-1) = obs_fun::addLogratio(((vector<Type>)predObsSegment)) + thisNll.simulate();
+		Type logDenom = obs_fun::logExpSum(logProb);
+		logProb -= logDenom;
+		Type logTotal = rnorm(log(obs_fun::log2expsum((vector<Type>)predObsSegment)),
+				      exp(parA(0).logSdLogTotalObs(totalParKey++)));
+		obs.logobs.segment(idxfrom,idxlength) = logProb + logTotal;
+	      }
 	    }
 	    break;
 	  default:
@@ -561,8 +579,14 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nSeasons-1) - log_P(nSeasons-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
-	    SIMULATE_F(of){	      
+	    SIMULATE_F(of){
+	      if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		 (forecastA(0).nYears > 0 &&
+		  forecastA(0).forecastYear(y) > 0 &&
+		  forecastA(0).simFlag(2)==0 &&
+		  y >= datA(0).noYears)){
 		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	      }
 	    }
 		
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
@@ -623,8 +647,14 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nStocks-1) - log_P(nStocks-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
-	    SIMULATE_F(of){	      
-	      obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	    SIMULATE_F(of){
+	      if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		 (forecastA(0).nYears > 0 &&
+		  forecastA(0).forecastYear(y) > 0 &&
+		  forecastA(0).simFlag(2)==0 &&
+		  y >= datA(0).noYears)){
+		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	      }
 	    }
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
 	    Type log_alpha = R_NegInf;
@@ -688,8 +718,14 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nAreas-1) - log_P(nAreas-1);
 	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
-	    SIMULATE_F(of){	      
-	      obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	    SIMULATE_F(of){
+	      if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
+		 (forecastA(0).nYears > 0 &&
+		  forecastA(0).forecastYear(y) > 0 &&
+		  forecastA(0).simFlag(2)==0 &&
+		  y >= datA(0).noYears)){
+		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+	      }
 	    }
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet
 	    Type log_alpha = R_NegInf;

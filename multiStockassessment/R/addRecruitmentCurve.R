@@ -63,6 +63,16 @@ addRecruitmentCurve.msam <- function(fit,
             valsd <- as.vector(sqrt(t(g) %*% covar %*% g))
             pisig <- exp(splitParameter(pl$logSdLogN)[[sii]][fit[[sii]]$conf$keyVarLogN[1] + 
                                                              1])
+            rvsp <- splitParameter(pl$recVarScalePar)[[sii]]
+            if(length(rvsp) > 0){
+                ## lv <- 0#pisig*pisig
+                ## lv <- lv + (rvsp[1]) * val
+                ## if(length(rvsp) > 1)
+                ##     lv <- lv + (rvsp[2]) * logssb
+                ## pisig <- pisig * exp(lv)
+                k <- log(pisig) + sum(((pl$recVarScalePar)) * (val-logssb)^seq_along(pl$recVarScalePar))
+                pisig <- sqrt(log(exp(k)+1))
+            }
             res <- exp(val)
             attr(res, "ci_low") <- exp(val - 2 * valsd)
             attr(res, "ci_high") <- exp(val + 2 * valsd)

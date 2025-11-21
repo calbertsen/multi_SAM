@@ -211,6 +211,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(sepFlogitRho);
   PARAMETER_CMOE_VECTOR(sepFlogSd);
   PARAMETER_CMOE_VECTOR(predVarObs);
+  PARAMETER_CMOE_VECTOR(recVarScalePar);
   PARAMETER_VECTOR(logFecundityScaling);
 
   PARAMETER_CMOE_VECTOR(logPhiSW);
@@ -331,6 +332,7 @@ Type objective_function<Type>::operator() ()
     paraSets(s).sepFlogitRho = sepFlogitRho.col(s);
     paraSets(s).sepFlogSd = sepFlogSd.col(s);
     paraSets(s).predVarObs = predVarObs.col(s);
+    paraSets(s).recVarScalePar = recVarScalePar.col(s);
     paraSets(s).logFecundityScaling = logFecundityScaling(s);
     // Forecast FMSY
     paraSets(s).logFScaleMSY = logFScaleMSY(s);
@@ -806,6 +808,9 @@ Type objective_function<Type>::operator() ()
 	    }
 	  }
 	  // Implement simulation of logF with shared selectivity(?)	 
+	}else if(sam.forecastSets(s).nYears > 0 && sam.forecastSets(s).forecastYear(i) > 0){
+	  // fake contribution from unused shared_logFscale
+	  ans -= dnorm(shared_logFscale.col(s)(0,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
 	}
       }
       logF.col(s) = logFs;
@@ -1128,7 +1133,7 @@ Type objective_function<Type>::operator() ()
     ////////////////////////////////////
 
 
-    // add wide prior for first state, but _only_ when computing ooa residuals
+    // add wide prior for first state, but _only_ when computing osa residuals
     if(doResiduals){
       Type huge = 10.0;
       for(int s = 0; s < nAreas; ++s){
@@ -1205,6 +1210,8 @@ Type objective_function<Type>::operator() ()
     // Determine which ages to use with keep vector
     vector<Type> keepN(ncov.rows());
     keepN.setZero();
+    vector<Type> logVarScale(predN.size());
+    logVarScale.setZero();
     // Loop over stocks
     for(int s = 0; s < nAreas; ++s){
       dataSet<Type> ds = sam.dataSets(s);
@@ -1229,13 +1236,17 @@ Type objective_function<Type>::operator() ()
     predN -= AlphaCon * lastN;
     vector<Type> Nscale(predN.size());
     Nscale.setConstant(1.0);
-    if(keepN.sum()>0){
+   if(keepN.sum()>0){
       // forecast correction to recruitment
        // Nscale += 1.0;
       // vector<Type> predNTmp = predN;
 
       for(int s = 0; s < nAreas; ++s){
 	dataSet<Type> ds = sam.dataSets(s);
+	confSet cs = sam.confSets(s);
+	paraSet<Type> ps = paraSets(s);
+	array<Type> logNa = getArray(logN, s);
+	array<Type> logFa = getArray(logF, s);
 	int ageOffset = sam.confSets(s).minAge - minAgeAll;
 	int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
 	int fcOffset = 0;
@@ -1250,9 +1261,36 @@ Type objective_function<Type>::operator() ()
 	  Nscale(s * nages + ageOffset) = sqrt(sam.forecastSets(s).logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
 	  predN(s * nages + ageOffset) = sam.forecastSets(s).logRecruitmentMedian;
 	}
+	if(ps.recVarScalePar.size() > 0){
+	  Type sigmaR = sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
+	  // Type log_kappa2 = sigmaR * sigmaR;
+	  // First is for recruitment
+	  Type logThisSSB=Type(R_NegInf);
+	  if((y-cs.minAge)>=0){
+	    // logThisSSB=ssbi(dat,conf,logN,logF,mort,i-conf.minAge, true);    
+	    logThisSSB=erbi(ds,cs,ps,logNa,logFa,mortalities(s),y-cs.minAge, true);    
+	  }else{
+	    // logThisSSB=ssbi(dat,conf,logN,logF,mort,0, true); // use first in beginning       
+	    logThisSSB=erbi(ds,cs,ps,logNa,logFa,mortalities(s),0, true); // use first in beginning       
+	  }
+	  Type xx = 0.0;
+	  Type xv = 1.0;
+	  for(int qq = 0; qq < ps.recVarScalePar.size(); ++qq){
+	    xv *=  (predN(s * nages + ageOffset) - logThisSSB);
+	    xx += (exp( ps.recVarScalePar(qq) )-1) * xv;
+	    xx += (( ps.recVarScalePar(qq) )) * xv;
+	  }
+	  // xx += ps.recVarScalePar(0) * logThisSSB;
+	  // if(ps.recVarScalePar.size() > 1)
+	  //   xx += ps.recVarScalePar(1) * predN(s * nages + ageOffset);
+	  
+	  Type k = log(sigmaR) + xx;
+	  logVarScale(s * nages + ageOffset) = log(sqrt(log(exp(k)+Type(1))) / sigmaR);	  	 
+	}
       }
+      Nscale *= exp(logVarScale);
       ans+=neg_log_densityN((newN-predN) / Nscale, keepN) + (keepN * log(Nscale)).sum();	  
-    }// else{	// end forecast correction to recruitment
+   }// else{	// end forecast correction to recruitment
     //   ans+=neg_log_densityN(newN-predN, keepN);
     // }
       
@@ -1269,6 +1307,7 @@ Type objective_function<Type>::operator() ()
       NscaleSim.diagonal() = Nscale;
       matrix<Type> ncovSim = NscaleSim * ncov * NscaleSim; // No need to transpose a diagonal matrix
       bool doSim = false;
+      bool isForecast = false;
       // Check if at least one stock should be simulated
       for(int s = 0; s < nAreas; ++s){
 	int nYears = sam.forecastSets(s).nYears;
@@ -1285,6 +1324,7 @@ Type objective_function<Type>::operator() ()
 	   sam.forecastSets(s).forecastYear(y) > 0 &&
 	     //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	     sam.forecastSets(s).forecastYear(y) > 0){
+	    isForecast = TRUE;
 	    fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
 	  }
 	  if(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0){
@@ -1310,6 +1350,7 @@ Type objective_function<Type>::operator() ()
 	notCondOn.setZero();
 	for(int i = 0; i < notCondOn.size(); ++i){
 	  int s = (int)i / (int)nages;
+	  int a = (int)i % (int)nages;
 	  int nYears = sam.forecastSets(s).nYears;
 	  if(nYears > 0){
 	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
@@ -1410,7 +1451,10 @@ Type objective_function<Type>::operator() ()
 	      int a = i % nages;
 	      int ageOffset = sam.confSets(s).minAge - minAgeAll;
 	      int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	      Type logRec = logN.col(s)(0,y);
 	      logN.col(s)(a - ageOffset,y) = simRes(k1++);
+	      if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast)
+		logN.col(s)(a - ageOffset,y) = logRec;
 	    }
 	  }
 	  // 5) Update if recruitment age is 0
@@ -1457,6 +1501,9 @@ Type objective_function<Type>::operator() ()
 		int ageOffset = sam.confSets(s).minAge - minAgeAll;
 		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
 		logN.col(s)(a - ageOffset,y) = simRes(k1++);
+		Type logRec = logN.col(s)(0,y);
+		if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast)
+		  logN.col(s)(a - ageOffset,y) = logRec;
 	      }
 	    }
 	  }	    
@@ -1471,6 +1518,29 @@ Type objective_function<Type>::operator() ()
   ////////// OBSERVATIONS //////////
   /////////////////////////////////
 
+
+   // REPORT F at this point as well to get simulated forecast for MSE
+   SIMULATE{
+     for(int s = 0; s < logF.cols(); ++s){
+       oftmp<Type> of(this->do_simulate);
+       matrix<Type> logFs = logF.col(s);
+       REPORT_F(logFs,(&of));
+       ADREPORT_F(logFs,(&of));
+       ofAll.addToReport(of.report,s);
+       moveADREPORT(&of,this,s);
+     }
+     for(int s = 0; s < nStocks; ++s){
+       oftmp<Type> of(this->do_simulate);     
+       array<Type> logFa = getArray(logF, s);
+       array<Type> lfs = getArray(logitFseason,s);
+       mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
+       reportMort((MortalitySet<Type>)mortalities(s),&of);
+       ofAll.addToReport(of.report,s);
+       moveADREPORT(&of,this,s);
+     }
+   }
+
+   
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa = getArray(logN, s);

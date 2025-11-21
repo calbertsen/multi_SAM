@@ -167,7 +167,7 @@ modelforecast.msam <- function(fit,
     
     nStocks <- length(fit)
 
-    constraints <- targetToList(constraints, nStocks, character)
+    constraints <- targetToList(constraints, nStocks, character)    
     fscale <- targetToList(fscale, nStocks)
     catchval <- targetToList(catchval, nStocks)
     fval <- targetToList(fval, nStocks)
@@ -251,9 +251,20 @@ modelforecast.msam <- function(fit,
         v
     })
 
+    removeBound <- function(x){
+        gsub("([^|]+)(\\|.+)","\\1",x)
+    }
+    getBound <- function(x){
+        gsub("(.+\\|)(.+)","\\2",x)
+    }
+
     cstr <- lapply(seq_len(nStocks), function(s){
         v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
-        v[!is.na(constraints[[s]])] <- .parseForecast(constraints[[s]][!is.na(constraints[[s]])], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+        v[!is.na(constraints[[s]])] <- .parseForecast(removeBound(constraints[[s]][!is.na(constraints[[s]])]), fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+    })
+    ubcstr <- lapply(seq_len(nStocks), function(s){
+        v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
+        v[!is.na(constraints[[s]])] <- .parseForecast(getBound(constraints[[s]][!is.na(constraints[[s]])]), fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
     })
     
     ## Use custom selectivity?
@@ -333,8 +344,24 @@ modelforecast.msam <- function(fit,
     if(nosim > 0 && !is.na(match("logF",names(args$map)))){
         ## Remove logF map for simulating
         args$map$logF <- NULL
-        pl$logF <- combineParameter(attr(fit,"m_rep")$logFs)
-        
+        pl$logF <- combineParameter(attr(fit,"m_rep")$logFs)        
+    }else if(nosim == 0 && !is.na(match("logF",names(args$map)))){
+        logFSize <- attributes(combineParameter(attr(fit,"m_rep")$logFs))
+        lft <- as.character(args$map$logF)
+        attributes(lft) <- logFSize
+        logFTmp <- splitParameter(lft)
+        cumsumAttr <- function(x){
+            a <- attributes(x)
+            v <- cumsum(x)
+            attributes(v) <- a
+            v
+        }
+        newLF <- lapply(as.list(1:length(logFTmp)), function(i) matrix(1,nrow(logFTmp[[i]]),ncol(logFTmp[[i]])+postYears[i]))
+        newLF <- splitMatrices(cumsumAttr(combineMatrices(newLF)))
+        for(i in seq_along(newLF)){
+            newLF[[i]][which(is.na(logFTmp[[i]]),arr.ind=TRUE)] <- NA
+        }
+        args$map$logF <- factor(combineMatrices(newLF))
     }
     
     logFTmp <- splitMatrices(pl$logF)
@@ -346,13 +373,15 @@ modelforecast.msam <- function(fit,
                                        function(i)cbind(logNTmp[[i]],
                                                         matrix(logNTmp[[i]][,ncol(logNTmp[[i]])],nrow(logNTmp[[i]]),postYears[i]))))
 
-    sfsTmp <- splitMatrices(pl$shared_logFscale)
-    pl$shared_logFscale <- combineMatrices(lapply(as.list(1:length(sfsTmp)),
-                                                  function(i){
-                                                      if(ncol(sfsTmp[[i]]) == 0) return(sfsTmp[[i]]);
-                                                      cbind(sfsTmp[[i]],
-                                                            matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),postYears[i]))
-                                                  }))
+    if(length(pl$shared_logFscale) > 0){
+        sfsTmp <- splitMatrices(pl$shared_logFscale)
+        pl$shared_logFscale <- combineMatrices(lapply(as.list(1:length(sfsTmp)),
+                                                      function(i){
+                                                          if(ncol(sfsTmp[[i]]) == 0) return(sfsTmp[[i]]);
+                                                          cbind(sfsTmp[[i]],
+                                                                matrix(sfsTmp[[i]][,ncol(sfsTmp[[i]])],nrow(sfsTmp[[i]]),postYears[i]))
+                                                      }))
+    }
  
     ## if(any(useModelBio)){
     ## Update biopar processes
@@ -393,7 +422,7 @@ modelforecast.msam <- function(fit,
                                                   }))
     
     args$parameters <- pl
-    args$random <- unique(names(obj0$env$par[obj0$env$random]))
+    ##args$random <- unique(names(obj0$env$par[obj0$env$random]))
     for(i in seq_along(args$data$sam))
         args$data$sam[[i]]$simFlag <- c(1,1,1,1)
 
@@ -420,6 +449,7 @@ modelforecast.msam <- function(fit,
             args$data$sam[[s]]$idx2 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=max)
             args$data$sam[[s]]$idxCor <- cbind(args$data$sam[[s]]$idxCor,matrix(NA_real_,nrow(args$data$sam[[s]]$idxCor),nrow(newAux)))
             args$data$sam[[s]]$weight <- c(args$data$sam[[s]]$weight, rep(NA_real_,nrow(newAux)))
+            ## Handle TAC and RecruitClimate
             args$data$sam[[s]]$TAC <- do.call(rbind,list(args$data$sam[[s]]$TAC,matrix(NA,nYears[s],ncol(args$data$sam[[s]]$TAC))))            
             arc <- aperm(args$data$sam[[s]]$RecruitClimate,c(3,2,1))
             if(length(arc) == 0){
@@ -431,7 +461,28 @@ modelforecast.msam <- function(fit,
             rownames(args$data$sam[[s]]$TAC) <- rownames(args$data$sam[[s]]$RecruitClimate) <- yy
         }
         ## Handle shared data
-
+        if(args$data$sharedObs$hasSharedObs){
+            lastIndx <- args$data$sharedObs$aux[,"year"] == max(args$data$sharedObs$aux[,"year"])
+            lastAux <- args$data$sharedObs$aux[lastIndx,]
+            newAuxL <- replicate(max(nYears),lastAux, simplify = FALSE)
+            newAux <- do.call("rbind",lapply(seq_along(newAuxL), function(i){
+                v <- newAuxL[[i]]
+                v[,1] <- v[,1] + i
+                v
+            }))
+            args$data$sharedObs$aux <- rbind(args$data$sharedObs$aux,newAux)
+            args$data$sharedObs$auxData <- rbind(args$data$sharedObs$auxData,do.call("rbind",replicate(max(nYears),args$data$sharedObs$auxData[lastIndx,,drop=FALSE], simplify = FALSE)))
+            args$data$sharedObs$nobs <- as.numeric(nrow(args$data$sharedObs$aux))
+            args$data$sharedObs$logobs <- c(args$data$sharedObs$logobs,rep(0,nrow(newAux)))
+            suf <- sort(unique(args$data$sharedObs$aux[,"fleet"])) # sort-unique-fleet
+            yy <- min(as.numeric(args$data$sharedObs$aux[,"year"])):max(as.numeric(args$data$sharedObs$aux[,"year"]))
+            aa <- min(as.numeric(args$data$sharedObs$aux[,"age"])):max(as.numeric(args$data$sharedObs$aux[,"age"]))
+            mmfun<-function(f,y, ff){idx<-which(args$data$sharedObs$aux[,"year"]==y & args$data$sharedObs$aux[,"fleet"]==f); ifelse(length(idx)==0, NA, suppressWarnings(ff(idx))-1)}
+            args$data$sharedObs$idx1 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=min)
+            args$data$sharedObs$idx2 <- outer(suf, yy, Vectorize(mmfun,c("f","y")), ff=max)
+            args$data$sharedObs$idxCor <- cbind(args$data$sharedObs$idxCor,matrix(NA_real_,nrow(args$data$sharedObs$idxCor),nrow(newAux)))
+            args$data$sharedObs$weight <- c(args$data$sharedObs$weight, rep(NA_real_,nrow(newAux)))
+        }
         ## Handle genetics!
         
     }
@@ -477,6 +528,7 @@ modelforecast.msam <- function(fit,
                                             FModel = as.numeric(FModel[[i]]),
                                             ##target = as.numeric(target[[i]]),
                                             constraints = cstr[[i]],
+                                            upperbound_constraints = ubcstr[[i]],
                                             cfg = newton_config,
                                             selectivity = as.numeric(customSel[[i]]),
                                             recModel = as.numeric(recList[[i]]$recModel),
@@ -512,10 +564,31 @@ modelforecast.msam <- function(fit,
         itr0 <- lapply(splitParameter(args$parameters$itrans_rho),seq_along)
         args$map$itrans_rho <- factor(unlist(itr0))
     }
+    mapLFStmp <- args$map$logitFseason
     if(!is.null(attr(fit,"m_call")$shared_seasonality) && attr(fit,"m_call")$shared_seasonality != 0){
         lfm0 <- lapply(splitParameter(args$parameters$logitFseason),seq_along)
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
         args$map$logitFseason <- factor(unlist(lfm0))
+    }
+    ## Map logitFseason if fixed effect
+    if(!is.null(args$map$logitFseason) & !is.null(mapLFStmp)){
+        if(length(mapLFStmp) == length(args$map$logitFseason)){ ## Not made longer yet
+            lfm0 <- unlist(lapply(splitParameter(args$parameters$logitFseason),seq_along))
+        }else{
+            lfm0 <- args$map$logitFseason
+        }
+        attributes(lfm0) <- attributes(pl$logitFseason)
+        mlfs <- splitParameter(lfm0)
+        attributes(mapLFStmp) <- attributes(combineParameter(logitFSTmp))
+        mlfsO <- splitParameter(mapLFStmp)
+        for(s in seq_along(mlfs)){
+            if(args$data$sam[[s]]$seasonFixedEffect){
+                mlfs[[s]][] <- NA
+            }else{
+                mlfs[[s]][which(is.na(mlfsO[[s]]),arr.ind=TRUE)] <- NA
+            }            
+        }
+        args$map$logitFseason <- factor(unlist(mlfs))
     }
 
     ## Remove empty maps
