@@ -84,6 +84,26 @@ modelforecast.msam <- function(fit,
                           useNonLinearityCorrection = (nosim > 0 && !deterministicF),
                           ncores = 1,
                           overwriteBioProcessModel = FALSE,
+                          useManagementLag = FALSE,
+                          assessmentErrorMean_F = 0,
+                          assessmentErrorRho_F = 0,
+                          assessmentErrorSigma_F = 0,
+                          assessmentErrorMean_N = 0,
+                          assessmentErrorRho_N = 0,
+                          assessmentErrorSigma_N = 0,
+                          assessmentErrorMean_M = 0,
+                          assessmentErrorRho_M = 0,
+                          assessmentErrorSigma_M = 0,
+                          assessmentErrorMean_Mat = 0,
+                          assessmentErrorRho_Mat = 0,
+                          assessmentErrorSigma_Mat = 0,
+                          assessmentErrorMean_SW = 0,
+                          assessmentErrorRho_SW = 0,
+                          assessmentErrorSigma_SW = 0,
+                          assessmentErrorMean_CW = 0,
+                          assessmentErrorRho_CW = 0,
+                          assessmentErrorSigma_CW = 0,
+                          implementationErrorRho_F = 0,
                           ...){
    
     dots <- list(...)
@@ -144,6 +164,33 @@ modelforecast.msam <- function(fit,
         incpb <- function(){ return(invisible(NULL)) }
     }
 
+    assessmentErrorMean_F =  rep(assessmentErrorMean_F,length.out = length(fit))
+    assessmentErrorRho_F =  rep(assessmentErrorRho_F,length.out = length(fit))
+    assessmentErrorSigma_F =  rep(assessmentErrorSigma_F,length.out = length(fit))
+    assessmentErrorMean_N =  rep(assessmentErrorMean_N,length.out = length(fit))
+    assessmentErrorRho_N =  rep(assessmentErrorRho_N,length.out = length(fit))
+    assessmentErrorSigma_N =  rep(assessmentErrorSigma_N,length.out = length(fit))
+    assessmentErrorMean_M =  rep(assessmentErrorMean_M,length.out = length(fit))
+    assessmentErrorRho_M =  rep(assessmentErrorRho_M,length.out = length(fit))
+    assessmentErrorSigma_M =  rep(assessmentErrorSigma_M,length.out = length(fit))
+    assessmentErrorMean_Mat =  rep(assessmentErrorMean_Mat,length.out = length(fit))
+    assessmentErrorRho_Mat =  rep(assessmentErrorRho_Mat,length.out = length(fit))
+    assessmentErrorSigma_Mat =  rep(assessmentErrorSigma_Mat,length.out = length(fit))
+    assessmentErrorMean_SW =  rep(assessmentErrorMean_SW,length.out = length(fit))
+    assessmentErrorRho_SW =  rep(assessmentErrorRho_SW,length.out = length(fit))
+    assessmentErrorSigma_SW =  rep(assessmentErrorSigma_SW,length.out = length(fit))
+    assessmentErrorMean_CW =  rep(assessmentErrorMean_CW,length.out = length(fit))
+    assessmentErrorRho_CW = rep(assessmentErrorRho_CW,length.out = length(fit))
+    assessmentErrorSigma_CW = rep(assessmentErrorSigma_CW,length.out = length(fit))
+    implementationErrorRho_F <- rep(implementationErrorRho_F,length.out = length(fit))
+    useManagementLag <- rep(useManagementLag,length.out = length(fit))
+
+    useAssessmentError <- as.integer(any(range(assessmentErrorSigma_F) > 0) ||
+                                     any(range(assessmentErrorSigma_N) > 0) ||
+                                     any(range(assessmentErrorSigma_Mat) > 0) ||
+                                     any(range(assessmentErrorSigma_M) > 0) ||
+                                     any(range(assessmentErrorSigma_SW) > 0) ||
+                                     any(range(assessmentErrorSigma_CW) > 0))
 
   
     
@@ -255,7 +302,7 @@ modelforecast.msam <- function(fit,
         gsub("([^|]+)(\\|.+)","\\1",x)
     }
     getBound <- function(x){
-        gsub("(.+\\|)(.+)","\\2",x)
+        ifelse(!grepl("\\|",x),"",gsub("(.+\\|)(.+)","\\2",x))
     }
 
     cstr <- lapply(seq_len(nStocks), function(s){
@@ -529,6 +576,7 @@ modelforecast.msam <- function(fit,
                                             ##target = as.numeric(target[[i]]),
                                             constraints = cstr[[i]],
                                             upperbound_constraints = ubcstr[[i]],
+                                            hasManagementLag = as.numeric(useManagementLag[i]),
                                             cfg = newton_config,
                                             selectivity = as.numeric(customSel[[i]]),
                                             recModel = as.numeric(recList[[i]]$recModel),
@@ -542,7 +590,15 @@ modelforecast.msam <- function(fit,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
                                             FdeviationCov = diag(1,nrow(splitMatrices(pl$logF)[[i]]),nrow(splitMatrices(pl$logF)[[i]])),
                                             FEstCov = FEstCov[[i]],
-                                            useModelLastN = (useModelLastN && !baseIsLast[i]) 
+                                            useModelLastN = (useModelLastN && !baseIsLast[i]),
+                                            useAssessmentError = useAssessmentError,
+                                            assessmentErrorDeviation_F = matrix(0,0,0),#assessmentErrorDeviance_F,
+                                            assessmentErrorDeviation_N = matrix(0,0,0),#assessmentErrorDeviance_N,
+                                            assessmentErrorDeviation_M = matrix(0,0,0),#assessmentErrorDeviance_M,
+                                            assessmentErrorDeviation_Mat = matrix(0,0,0),#assessmentErrorDeviance_Mat,
+                                            assessmentErrorDeviation_SW = matrix(0,0,0),#assessmentErrorDeviance_CW)
+                                            assessmentErrorDeviation_CW = matrix(0,0,0),
+                                            implementationErrorRho_F = implementationErrorRho_F[[i]]
                                             )
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
@@ -930,6 +986,25 @@ modelforecast.msam <- function(fit,
                     obj2$env$data$sam[[i]]$forecast$FdeviationCov <- cov[cindx,cindx]
                 }
             }
+            if(useAssessmentError){
+                for(i in 1:nStocks){
+                    ## Simulate assessment error
+                    ny <- length(obj2$env$data$sam[[i]]$forecast$forecastYear)
+                    nage <- obj2$env$data$sam[[i]]$maxAge - obj2$env$data$sam[[i]]$minAge + 1 ##nrow(pl$logN)
+                    nflt <- dim(obj2$env$data$sam[[i]]$catchMeanWeight)[3]
+                    toMatr <- function(x, n){
+                        if(is.matrix(x)) return(x)
+                        diag(rep(x, length.out=n),n,n)
+                    }
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_F = simVAR(ny,attr(pl$logF,"rdim")[i],assessmentErrorMean_F[[i]],assessmentErrorRho_F[[i]],toMatr(assessmentErrorSigma_F[[i]],attr(pl$logF,"rdim")[i]))
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_N = simVAR(ny,nage,assessmentErrorMean_N[[i]],assessmentErrorRho_N[[i]],toMatr(assessmentErrorSigma_N[[i]],nage))
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_M = simVAR(ny,nage,assessmentErrorMean_M[[i]],assessmentErrorRho_M[[i]],toMatr(assessmentErrorSigma_M[[i]],nage))
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_Mat = simVAR(ny,nage,assessmentErrorMean_Mat[[i]],assessmentErrorRho_Mat[[i]],toMatr(assessmentErrorSigma_Mat[[i]],nage))
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_SW = simVAR(ny,nage,assessmentErrorMean_SW[[i]],assessmentErrorRho_SW,toMatr(assessmentErrorSigma_SW[[i]],nage))
+                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_CW = simplify2array(replicate(nflt,simVAR(ny,nage,assessmentErrorMean_CW[[i]],assessmentErrorRho_CW[[i]],toMatr(assessmentErrorSigma_CW[[i]],nage)),FALSE))
+                }
+            }
+            
             v <- obj2$simulate(par = p)
             ##set.seed(NULL)
             v$parameterVector <- p

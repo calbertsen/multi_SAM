@@ -204,11 +204,11 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         cc$shared_data <- as.name("sharedObs")
         ##cc$map <- mmap ## NOT IMPLEMENTED??
         ## Anything related to shared selectivity needs to be removed
-        ## mpl$shared_phbeta <- combineParameters(replicate(length(newFitS),numeric(0),FALSE))
+        mpl$shared_phbeta <- combineParameter(replicate(length(newFitS),numeric(0),FALSE))
+        cc$shared_selectivity <- 0
+        cc$shared_seasonality <- 0
         cc$parlist <- mpl
-        cc$run <- FALSE
-        ## cc$shared_selectivity <- 0
-        ## cc$shared_seasonality <- 0
+        cc$run <- FALSE        
         obj <- do.call(multisam.fit,cc, envir = ee)
         
         newFitM <- newFitS
@@ -538,7 +538,13 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
                 redoForecast <- TRUE
             }else if(hasBelowTrigger){ ## If one is below the trigger all get the same reduction in F                
                 if(s != stockWithRedu){
-                    fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])] * maxRedu )           
+                    if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
+                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])] * maxRedu,1e-4) )
+                    }else if(EMReferencePoints[[s]]$PAcompare == "target"){
+                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(EMReferencePoints[[s]]$Ftarget * maxRedu,1e-4) )
+                    }else{
+                        stop("PAcompare should be 'intermediateYear' or 'target'")
+                    }
                     adviceRules[yr_tac,s] <- sprintf("ICES Precautionary reduction (%.2f%%)",(1-maxRedu)*100)
                     redoForecast <- TRUE
                 }
@@ -721,9 +727,10 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
             cc <- as.list(attr(EM,"m_call"))[-1]
             ee$newFitS <- newFitS
             ee$sharedObs <- datNew$sharedObs
-            
+            ee$mpl <- attr(EM,"m_pl")
             cc$x <- as.name("newFitS")
             cc$shared_data <- as.name("sharedObs")
+            cc$parlist <- as.name("mpl")
             cc$silent <- TRUE
             EM_New <- do.call(multisam.fit,cc, envir = ee)
         }
@@ -1053,7 +1060,7 @@ MSE <- function(OM,
                 rec[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
             }
             ## Total (Does this make sense?)
-            catch[yr_tac,"Total","Advice"] <- adviceToManagement(catch[yr_tac,,"Advice"])
+            catch[yr_tac,"Total","Advice"] <- adviceToManagement(catch[yr_tac,,"Advice"],cAdd(catch[yr_tac,,"Advice"],-1))
             #fbar[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
             #ssb[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
             #rec[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]

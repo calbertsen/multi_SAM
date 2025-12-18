@@ -1,3 +1,16 @@
+forcePosDef <- function(x, doit = FALSE){
+    if(!doit) return(x)
+    if(any(!is.finite(x))){
+        if(any(!is.finite(x) & row(x) == col(x)))
+            x[!is.finite(x) & row(x) == col(x)] <- 0.0001
+        if(any(!is.finite(x) & row(x) != col(x)))
+            x[!is.finite(x) & row(x) != col(x)] <- 0
+    }
+    v <- svd(X)
+    v$u %*% diag(pmax(v$d,1e-8)) %*% t(v$v)
+}
+
+
 ##' Fit multiple SAM models with correlated survival processes.
 ##'
 ##' @title Fit multiple SAM models with correlations
@@ -76,7 +89,8 @@ multisam.fit <- function(x,
                          mohn = FALSE,
                          doSdreport = TRUE,
                          skip.hessian = FALSE,
-                         hessian.method,
+                         hessian.method = "optimHess",
+                         forcePDHess = FALSE,
                          ...){
     mc <- match.call(expand.dots = TRUE)
     envir <- parent.frame(1L)
@@ -113,8 +127,14 @@ multisam.fit <- function(x,
     Xph <- lapply(shared_proportionalHazard, function(f){
         if(is.null(f) || !(shared_selectivity %in% c(3,4,6)))
             return(matrix(0,0,0))
+        if(!is.null(shared_data$fleetTypes)){
+            flts <- LETTERS[which(shared_data$fleetTypes == 0)]
+        }else{
+            flts <- "A"
+        }
         AYgrd <- expand.grid(Age = as.numeric(minAgeAll:maxAgeAll),
-                             Year = as.numeric(minYearAll:maxYearAll))
+                             Year = as.numeric(minYearAll:maxYearAll),
+                             Fleet = flts)
         if(inherits(f,"formula")){
             return(model.matrix(f, AYgrd))
         }
@@ -684,7 +704,7 @@ multisam.fit <- function(x,
         atUBound <- (upper2 < (opt$par + sqrt(.Machine$double.eps)))
         atBound <- atLBound | atUBound
         g <- as.numeric( obj$gr(opt$par) )
-        h <- He(opt$par, obj$fn, obj$gr)
+        h <- forcePosDef(He(opt$par, obj$fn, obj$gr),forcePDHess)
         ##h <- stockassessment:::hessian(obj$fn, opt$par)
         ss <- try({svd_solve(h[!atBound,!atBound]) %*% g[!atBound]})
         if(!is(ss,"try-error")){
@@ -698,7 +718,7 @@ multisam.fit <- function(x,
     }
     ##opt$he <- stockassessment:::hessian(obj$fn, opt$par)
     if(!skip.hessian)
-        opt$he <- He(opt$par, obj$fn, obj$gr)
+        opt$he <- forcePosDef(He(opt$par, obj$fn, obj$gr),forcePDHess)
     ## Get report and sdreport
     rep <- obj$report(obj$env$last.par.best)
     if(doSdreport){
