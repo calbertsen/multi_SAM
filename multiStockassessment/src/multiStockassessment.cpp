@@ -46,25 +46,25 @@ tmbutils::array<Type> toArray(matrix<Type> x){
 }
 
 
-template<class Type>
-void reportMort(MortalitySet<Type> mort, objective_function<Type>* of){
-  REPORT_F(mort.cumulativeHazard,of);
-  REPORT_F(mort.cumulativeHazard_F,of);
-  REPORT_F(mort.logFleetSurvival_before,of);
-  REPORT_F(mort.fleetCumulativeIncidence,of);
-  REPORT_F(mort.otherCumulativeIncidence,of);
-  REPORT_F(mort.ssbSurvival_before,of);
-  REPORT_F(mort.Fseason,of);
-  vector<Type> brk(mort.activeHazard_breakpoints);
-  REPORT_F(brk,of);
-  REPORT_F(mort.activeHazard_season,of);
-  REPORT_F(mort.activeHazard_F,of);
-  REPORT_F(mort.activeHazard_M,of);
-  REPORT_F(mort.Hazard_breakpoints,of);
-  REPORT_F(mort.CIF_F_breakpoints,of);
-  REPORT_F(mort.CIF_M_breakpoints,of);
-  return;
-}
+// template<class Type>
+// void reportMort(MortalitySet<Type> mort, objective_function<Type>* of){
+//   REPORT_F(mort.cumulativeHazard,of);
+//   REPORT_F(mort.cumulativeHazard_F,of);
+//   REPORT_F(mort.logFleetSurvival_before,of);
+//   REPORT_F(mort.fleetCumulativeIncidence,of);
+//   REPORT_F(mort.otherCumulativeIncidence,of);
+//   REPORT_F(mort.ssbSurvival_before,of);
+//   REPORT_F(mort.Fseason,of);
+//   vector<Type> brk(mort.activeHazard_breakpoints);
+//   REPORT_F(brk,of);
+//   REPORT_F(mort.activeHazard_season,of);
+//   REPORT_F(mort.activeHazard_F,of);
+//   REPORT_F(mort.activeHazard_M,of);
+//   REPORT_F(mort.Hazard_breakpoints,of);
+//   REPORT_F(mort.CIF_F_breakpoints,of);
+//   REPORT_F(mort.CIF_M_breakpoints,of);
+//   return;
+// }
 
 template<class Type>
 vector<Type> toLogProportion(vector<Type> x){
@@ -109,9 +109,9 @@ extern "C" {
 template<class Type>
 Type objective_function<Type>::operator() ()
 {
-  SIMULATE{
-    GetRNGstate();
-  }
+  // SIMULATE{
+  //   GetRNGstate();
+  // }
   DATA_STRUCT(sam,sam_data);
   DATA_STRUCT(sharedObs,shared_obs);
   DATA_STRUCT(geneticsData, genetic_data);
@@ -140,6 +140,7 @@ Type objective_function<Type>::operator() ()
 
   DATA_STRUCT(Xph, listArrayFromR);
   /*
+    -1: Same F for all stocks
     0: Not shared, a RW by stock
     1: RW for first stock, others used the first scaled by vector AR1
     2: RW for first stock, others used the first scaled by scalar RW
@@ -241,10 +242,17 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(logPhiNM);
   PARAMETER_CMOE_VECTOR(logSdProcLogNM);
   PARAMETER_CMOE_VECTOR(meanLogNM);
+  PARAMETER_CMOE_MATRIX(Mbeta);
   PARAMETER_CMOE_VECTOR(logSdLogNM);
   PARAMETER_CMOE_VECTOR(logXtraSd);
   PARAMETER_CMOE_VECTOR(initF);
   PARAMETER_CMOE_VECTOR(initN);
+  PARAMETER_CMOE_VECTOR(scaleMpars);
+  PARAMETER_CMOE_VECTOR(cp_m);
+  PARAMETER_CMOE_VECTOR(cp_logk);
+  PARAMETER_CMOE_VECTOR(cp_loga);
+  PARAMETER_CMOE_VECTOR(cp_logb);
+  
 
   PARAMETER_CMOE_MATRIX(seasonMu);
   PARAMETER_CMOE_VECTOR(seasonLogitRho);
@@ -365,10 +373,16 @@ Type objective_function<Type>::operator() ()
     paraSets(s).logPhiNM = logPhiNM.col(s);
     paraSets(s).logSdProcLogNM = logSdProcLogNM.col(s);
     paraSets(s).meanLogNM = meanLogNM.col(s);
+    paraSets(s).Mbeta = Mbeta.col(s);
     paraSets(s).logSdLogNM = logSdLogNM.col(s);
     paraSets(s).logXtraSd = logXtraSd.col(s);
     paraSets(s).initF = initF.col(s);
     paraSets(s).initN = initN.col(s);
+    paraSets(s).scaleMpars = scaleMpars.col(s);
+    paraSets(s).cp_m = cp_m.col(s);
+    paraSets(s).cp_logk = cp_logk.col(s);
+    paraSets(s).cp_loga = cp_loga.col(s);
+    paraSets(s).cp_logb = cp_logb.col(s);
     if(splinePenalty.size() > 0)
       paraSets(s).splinePenalty = splinePenalty(s);
     paraSets(s).seasonMu = seasonMu.col(s);
@@ -503,7 +517,6 @@ Type objective_function<Type>::operator() ()
 	    ans -= dnorm((Type)missing(idxmis-1),Type(0.0),Type(1.0 / sqrt(2.0 * M_PI)),true);
 	}
       }
- 
     // patch missing vulnerability keys with parameters
     idxmis = 0;
     for(int i = 0; i < sharedObs.keyFleetStock.rows(); ++i)
@@ -633,7 +646,9 @@ Type objective_function<Type>::operator() ()
     array<Type> logFa = getArray(logF, s);
     array<Type> lfs = getArray(logitFseason,s);
     mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-    reportMort((MortalitySet<Type>)mortalities(s),&of);
+    // reportMort((MortalitySet<Type>)mortalities(s),&of);
+    MortalitySet<Type> mort = mortalities(s);
+    REPORT_F(mort, (&of));
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
@@ -715,7 +730,7 @@ Type objective_function<Type>::operator() ()
 
     }
   }
-
+  
   // bool overwriteF = false;
   for(int s = 1; s < nStocks; ++s){ // First F is always an RW process
     oftmp<Type> of(this->do_simulate);
@@ -950,7 +965,9 @@ Type objective_function<Type>::operator() ()
      array<Type> logFa = getArray(logF, s);
      array<Type> lfs = getArray(logitFseason,s);
      mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-     reportMort((MortalitySet<Type>)mortalities(s),&of);
+     // reportMort((MortalitySet<Type>)mortalities(s),&of);
+     MortalitySet<Type> mort = mortalities(s);
+     REPORT_F(mort, (&of));
      ofAll.addToReport(of.report,s);
      moveADREPORT(&of,this,s);
    }
@@ -993,6 +1010,7 @@ Type objective_function<Type>::operator() ()
       moveADREPORT(&of,this,s);
       // If simulate -> move grab new logF values and move them to the right place!
       // Does this ruin things???
+      //logF.col(s) = asMatrix<Type>((vector<Type>)logFa.vec(),logFa.dim[0],logFa.dim[1]);
       logF.col(s) = logFa.matrix();
     }else if(shared_F_type != 0 && s > 0){
       // Get likelihood contribution of forecast
@@ -1099,7 +1117,6 @@ Type objective_function<Type>::operator() ()
       }
     }
    }
-
    // Update mortalities if simulating historical values
    SIMULATE{
      for(int s = 0; s < logF.cols(); ++s){
@@ -1115,13 +1132,15 @@ Type objective_function<Type>::operator() ()
        array<Type> logFa = getArray(logF, s);
        array<Type> lfs = getArray(logitFseason,s);
        mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-       reportMort((MortalitySet<Type>)mortalities(s),&of);
+       // reportMort((MortalitySet<Type>)mortalities(s),&of);
+       MortalitySet<Type> mort = mortalities(s);
+       REPORT_F(mort, (&of));
        ofAll.addToReport(of.report,s);
        moveADREPORT(&of,this,s);
      }
    }
 
-
+ 
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
@@ -1237,13 +1256,12 @@ Type objective_function<Type>::operator() ()
       }
     } 
 
-
+ 
 
    density::MVNORM_t<Type> neg_log_densityN(ncov);
 
    // Loop over time
    for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
-
      // Handle simulation of F for forecast and HCR
      SIMULATE{
 
@@ -1296,7 +1314,7 @@ Type objective_function<Type>::operator() ()
        for(int s = 1; s < nAreas; ++s){
 	 array<Type> logNa = getArray(logN, s);
 	 array<Type> logFa = getArray(logF, s);
-	 array<Type> logitFSa = getArray(logitFseason, s);	 
+	 array<Type> logitFSa = getArray(logitFseason, s);
 	 if(sam.forecastSets(s).nYears > 0){
 	   dataSet<Type> ds = sam.dataSets(s);
 	   confSet cs = sam.confSets(s);
@@ -1318,13 +1336,16 @@ Type objective_function<Type>::operator() ()
 	     if(fi >= 0){
 	       // SET sam.forecastSets(s).nvar HERE!!! SAM CODE WILL NOT WORK WITH CORRELATION IN N
 	       sam.forecastSets(s).updateForecast(fi, logFa, logNa, logitFSa, ds, cs, ps, recruits(s), mortalities(s), this->do_simulate); // Should not be necessary??
+	       logF.col(s).col(y) = logFa.col(y);
+	       mortalities(s).updateYear(ds, cs, ps, logFa, logitFSa,y);	       
 	       //  F contribution
 	       // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
 	       Type timeScale = exp(sam.forecastSets(s).forecastCalculatedLogSdCorrection(fi));
-	       ans += neg_log_densityF((logFa.col(y) - (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi)) / timeScale) + log(timeScale) * Type(logFa.dim[0]);	   
+	       ans += neg_log_densityF((logFa.col(y) - (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi)) / timeScale) + log(timeScale) * Type(logFa.dim[0]);
 	     }	 
 	   }
 	 }
+	 logF.col(s) = logFa.matrix();
        }
 
        
@@ -1386,10 +1407,10 @@ Type objective_function<Type>::operator() ()
 	   y < ds.noYears + sam.forecastSets(s).nYears - fcOffset &&
 	   sam.forecastSets(s).nYears > 0 &&
 	   sam.forecastSets(s).forecastYear(y) > 0 &&
-	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
+	   sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) == sam.forecastSets(s).useIID &&
 	   sam.forecastSets(s).forecastYear(y) > 0){
-	  Nscale(s * nages + ageOffset) = sqrt(sam.forecastSets(s).logRecruitmentVar) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
-	  predN(s * nages + ageOffset) = sam.forecastSets(s).logRecruitmentMedian;
+	  Nscale(s * nages + ageOffset) = sqrt(sam.forecastSets(s).logRecruitmentVar(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1)) / sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
+	  predN(s * nages + ageOffset) = sam.forecastSets(s).logRecruitmentMedian(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1);
 	}
 	if(ps.recVarScalePar.size() > 0){
 	  Type sigmaR = sqrt(ncov(s * nages + ageOffset,s * nages + ageOffset));
@@ -1497,18 +1518,17 @@ Type objective_function<Type>::operator() ()
 	       //sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) != sam.forecastSets(s).asRecModel &&
 	       sam.forecastSets(s).forecastYear(y) > 0){
 	      fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
-	    }	
-	    if((sam.confSets(s).simFlag(1) == 0 ||
-		(fi >= 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
-	       keepN(i) == 1){
-	      if(!(fi == 0 && sam.forecastSets(s).useModelLastN))
-		notCondOn(i) = 1;
 	    }
+	      if((sam.confSets(s).simFlag(1) == 0 ||
+		  (fi >= 0 && sam.forecastSets(s).simFlag(1) == 0)) &&
+		 keepN(i) == 1){
+		if(!(fi == 0 && sam.forecastSets(s).useModelLastN))
+		  notCondOn(i) = 1;
+	      }
 	  }else if(sam.confSets(s).simFlag(1) == 0 && keepN(i) == 1){
 	    notCondOn(i) = 1;
-	  }
+	  }	  
 	}
-
 	int nAll = ncovSim.cols();
 	int nNotCond = notCondOn.sum();
 	int nCond = nAll - nNotCond;
@@ -1568,13 +1588,14 @@ Type objective_function<Type>::operator() ()
 	    }else{
 	      muNew(k2++) = predN(i);
 	    }
-	  }
+	  }	  
 	  vector<Type> noiseN = density::MVNORM(newSigma).simulate();
 	  vector<Type> simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + noiseN;
+	  REPORT(noiseN)
 	 	  
 	  // 4) Insert into logN at the right places
 	  k1 = 0;
-	  for(int i = 0; i < notCondOn.size(); ++i){
+	  for(int i = 0; i < notCondOn.size(); ++i){	    
 	    if(notCondOn(i) == 1){
 	      int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
 	      // Age index = age - minAge
@@ -1583,8 +1604,9 @@ Type objective_function<Type>::operator() ()
 	      int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
 	      Type logRec = logN.col(s)(0,y);
 	      logN.col(s)(a - ageOffset,y) = simRes(k1++);
-	      if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast)
+	      if(a - ageOffset == 0 && sam.confSets(s).simKeepRec){// && isForecast)
 		logN.col(s)(a - ageOffset,y) = logRec;
+	      }
 	    }
 	  }
 	  // 5) Update if recruitment age is 0
@@ -1632,15 +1654,16 @@ Type objective_function<Type>::operator() ()
 		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
 		logN.col(s)(a - ageOffset,y) = simRes(k1++);
 		Type logRec = logN.col(s)(0,y);
-		if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast)
+		if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast){
 		  logN.col(s)(a - ageOffset,y) = logRec;
+		}
 	      }
 	    }
 	  }	    
 	}	  
       }// End doSim
     } // End simulate
-  } // End year loop
+   } // End year loop
 
 
   ///////////////////////////////////
@@ -1663,7 +1686,9 @@ Type objective_function<Type>::operator() ()
        array<Type> logFa = getArray(logF, s);
        array<Type> lfs = getArray(logitFseason,s);
        mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-       reportMort((MortalitySet<Type>)mortalities(s),&of);
+       //reportMort((MortalitySet<Type>)mortalities(s),&of);
+       MortalitySet<Type> mort = mortalities(s);
+       REPORT_F(mort, (&of));
        ofAll.addToReport(of.report,s);
        moveADREPORT(&of,this,s);
      }
@@ -1742,7 +1767,7 @@ Type objective_function<Type>::operator() ()
 			  transfRhoContamination,
 			  logSdContamination);
 
-  
+
   ///////////////////////////////////////
   ////////// REFERENCE POINTS //////////
   /////////////////////////////////////
@@ -1768,14 +1793,13 @@ Type objective_function<Type>::operator() ()
   if(isDouble<Type>::value && this->current_parallel_region<0)
     moveREPORT(this->report,ofAll.report);
 
-
-
-  getTotals(sam.dataSets,
+   ans += getTotals(sam.dataSets,
 	    sam.confSets,
 	    paraSets,
 	    logF,
 	    logN,
 	    mortalities,
+	    sharedObs,
 	    minYearAll,
 	    maxYearAll,
 	    minAgeAll,
@@ -1783,9 +1807,9 @@ Type objective_function<Type>::operator() ()
 	    mohn,
 	    this);
 
-  SIMULATE{
-    PutRNGstate();
-  }
+  // SIMULATE{
+  //   PutRNGstate();
+  // }
 
 
   return ans;

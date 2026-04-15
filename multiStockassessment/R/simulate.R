@@ -17,6 +17,7 @@ simulate.msam <- function(object,
                           ready.to.fit = FALSE,
                           simFlag,
                           sim.keepRec,
+                          pl,
                           ...){
     if(!is.null(seed)){
         set.seed(seed)
@@ -27,7 +28,20 @@ simulate.msam <- function(object,
     rngSeed <- .Random.seed
     obj <- attr(object,"m_obj")
     shObs <- attr(object,"m_dat")$sharedObs
-    par <- obj$env$last.par.best
+    if(!missing(pl)){
+        plMap <- attr(object,"m_pl")
+        ## Should probably check names and dimensions
+        plMap[names(pl)] <- pl
+        map <- obj$env$map
+        with.map <- intersect(names(plMap), names(map))
+        applyMap <- function(par.name) {
+            tapply(plMap[[par.name]], map[[par.name]], mean)
+        }
+        plMap[with.map] <- sapply(with.map, applyMap, simplify = FALSE)         
+        par <- unlist(plMap)
+    }else{
+        par <- obj$env$last.par.best
+    }
     dots <- list(...)
     sn <- getStockNames(object)
     if(!missing(simFlag)){

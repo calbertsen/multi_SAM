@@ -38,6 +38,9 @@
 
 \item{...}{}
 }
+\value{
+results
+}
 \description{
 Deterministic reference points
 }

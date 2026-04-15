@@ -64,8 +64,8 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 	    }
 	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
 	      //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
-	      Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
-	      Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + mortalities(s).fleetLogCumulativeIncidence(aa,y,flt));
+	      Type Cstmp = exp(logN.col(s)(aa,y) + mortalities(s).partialLogCIF(flt,aa,y, auxData(1), auxData(2)));
 	      // 0: Catch numbers
 	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
 		Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
@@ -114,7 +114,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 	      aMax = age;
 	    }
 	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
-	      Type Cstmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      Type Cstmp = exp(logN.col(s)(aa,y) + mortalities(s).partialLogCIF(flt,aa,y, auxData(1), auxData(2)));
 	      // 0: Catch numbers
 	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
 		Cstmp *= datA(s).catchMeanWeight(y,aa, flt);
@@ -160,7 +160,7 @@ vector<Type> predOneObsPerStock(int fleet,	// obs.aux(i,1)
 	    for(int aa = aMin - confA(s).minAge; aa < aMax - confA(s).minAge; ++aa){
 	      //Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).CIF(flt,aa,y,datA(s).sampleTimesStart(flt),datA(s).sampleTimesEnd(flt));
 	      // Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).logFleetSurvival_before(aa,y,flt) + log(mortalities(s).fleetCumulativeIncidence(aa,y,flt)));
-	      Type Cttmp = exp(logN.col(s)(aa,y)) * mortalities(s).partialCIF(flt,aa,y, auxData(1), auxData(2));
+	      Type Cttmp = exp(logN.col(s)(aa,y) + mortalities(s).partialLogCIF(flt,aa,y, auxData(1), auxData(2)));
 	      // 0: Catch numbers
 	      if(CppAD::Integer(auxData(3)) == 1){ // 1: Catch weight
 		Cttmp *= datA(s).catchMeanWeight(y,aa, flt);
@@ -433,10 +433,37 @@ Type sharedObservation(shared_obs<Type>& obs,
 
 
 
+	    // for(int idxV=0; idxV<currentVar.size(); ++idxV){
+	    //   if(isNA(obs.weight(idxfrom+idxV))){
+	    // 	sqrtW(idxV)=Type(1.0);
+	    // 	int a = obs.aux(idxfrom+idxV,2)-confA(0).minAge;
+	    // 	if(confA(0).predVarObsLink(f,a)>(-1)){
+	    // 	  sqrtW(idxV) = sqrt(obs_fun::findLinkV(parA(0).logSdLogObs(confA(0).keyVarObs(f,a))+(exp(parA(0).predVarObs(confA(0).predVarObsLink(f,a))) -Type(1))*predObsSegment(idxV),0)/currentVar(idxV));
+	    // 	}
+	    // 	for(int idxXtraSd=0; idxXtraSd<(confA(0).keyXtraSd).rows(); ++idxXtraSd){
+	    // 	  int realfleet=f+1;
+	    // 	  int realyear=y+CppAD::Integer(min(datA(0).years));
+	    // 	  int realage=obs.aux(idxfrom+idxV,2);		    
+	    // 	  vector<int> fyac=confA(0).keyXtraSd.row(idxXtraSd);
+	    // 	  if((realfleet==fyac(0))&&(realyear==fyac(1))&&(realage==fyac(2))){
+	    // 	    sqrtW(idxV)=exp(parA(0).logXtraSd(fyac(3)));
+	    // 	    break;
+	    // 	  }
+	    // 	}
+	    //   }else{
+	    // 	if(confA(0).fixVarToWeight(f)==1){
+	    // 	  sqrtW(idxV)=sqrt(obs.weight(idxfrom+idxV)/currentVar(idxV));
+	    // 	}else{
+	    // 	  sqrtW(idxV)=sqrt(Type(1)/obs.weight(idxfrom+idxV));
+	    // 	}
+	    //   }
+	    // }
 	    for(int idxV=0; idxV<currentVar.size(); ++idxV){
-	      if(isNA(obs.weight(idxfrom+idxV))){
+	      if(confA(0).fixVarToWeight(f)==1 && !isNA(datA(0).weight(idxfrom+idxV))){
+		sqrtW(idxV)=sqrt(datA(0).weight(idxfrom+idxV)/currentVar(idxV));
+	      }else{
 		sqrtW(idxV)=Type(1.0);
-		int a = obs.aux(idxfrom+idxV,2)-confA(0).minAge;
+		int a = datA(0).aux(idxfrom+idxV,2)-confA(0).minAge;
 		if(confA(0).predVarObsLink(f,a)>(-1)){
 		  sqrtW(idxV) = sqrt(obs_fun::findLinkV(parA(0).logSdLogObs(confA(0).keyVarObs(f,a))+(exp(parA(0).predVarObs(confA(0).predVarObsLink(f,a))) -Type(1))*predObsSegment(idxV),0)/currentVar(idxV));
 		}
@@ -446,17 +473,14 @@ Type sharedObservation(shared_obs<Type>& obs,
 		  int realage=obs.aux(idxfrom+idxV,2);		    
 		  vector<int> fyac=confA(0).keyXtraSd.row(idxXtraSd);
 		  if((realfleet==fyac(0))&&(realyear==fyac(1))&&(realage==fyac(2))){
-		    sqrtW(idxV)=exp(parA(0).logXtraSd(fyac(3)));
+		    sqrtW(idxV)*=exp(parA(0).logXtraSd(fyac(3)));
 		    break;
 		  }
 		}
-	      }else{
-		if(confA(0).fixVarToWeight(f)==1){
-		  sqrtW(idxV)=sqrt(obs.weight(idxfrom+idxV)/currentVar(idxV));
-		}else{
-		  sqrtW(idxV)=sqrt(Type(1)/obs.weight(idxfrom+idxV));
+		if(!isNA(datA(0).weight(idxfrom+idxV))){
+		  sqrtW(idxV)=sqrt(Type(1)/datA(0).weight(idxfrom+idxV));
 		}
-	      }
+	      }		  
 	    }
 	    if(isNAINT(obs.idxCor(f,y))){
 	      nll += thisNll((obs.logobs.segment(idxfrom,idxlength)-predObsSegment)/sqrtW,keep.segment(idxfrom,idxlength));
@@ -639,21 +663,30 @@ Type sharedObservation(shared_obs<Type>& obs,
 	    // SigmaCombine /= d;
 	    // pCombine /= d;
 	    // // 4) Create MVMIX
-	    // thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);
+	    // thisNll = MVMIX_t<Type>(SigmaCombine, pCombine);	    
 	    MVMIX_t<Type> thisNll = nllVecPerStock(0)(f);
+	    vector<Type> sqrtW(nStocks-1);
+	    sqrtW.setConstant(1.0);
 
 	    // Keep free observations, already on correct scale
 	    vector<Type> logXuse = log_X.segment(0,nStocks-1);
 	    // Additive logistic transformation of predicted proportions
 	    vector<Type> logPuse = log_P.segment(0,nStocks-1) - log_P(nStocks-1);
-	    nll += thisNll((vector<Type>)(logXuse-logPuse),K2);
+
+	    for(int ssi = 0; ssi < nStocks-1; ++ssi){
+	      if(confA(0).predVarObsLink(f,ssi)>(-1)){
+		sqrtW(ssi) = sqrt(obs_fun::findLinkV(parA(0).logSdLogObs(confA(0).keyVarObs(f,ssi))+(exp(parA(0).predVarObs(confA(0).predVarObsLink(f,ssi))) -Type(1))*logPuse(ssi),0)/thisNll.cov()(ssi,ssi));
+	      }
+	    }	    
+	    nll += thisNll((vector<Type>)((logXuse-logPuse)/sqrtW),K2);
+	    nll += (log(sqrtW) * K2).sum();
 	    SIMULATE_F(of){
 	      if((confA(0).simFlag(2)==0 && y < datA(0).noYears) ||
 		 (forecastA(0).nYears > 0 &&
 		  forecastA(0).forecastYear(y) > 0 &&
 		  forecastA(0).simFlag(2)==0 &&
 		  y >= datA(0).noYears)){
-		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate();
+		obs.logobs.segment(obs.idx1(f,y),obs.idx2(f,y)-obs.idx1(f,y)+1) = logPuse + thisNll.simulate() * sqrtW;
 	      }
 	    }
 	  }else if(confA(0).obsLikelihoodFlag(f) == 2){ // Dirichlet

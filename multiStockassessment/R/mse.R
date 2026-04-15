@@ -12,6 +12,8 @@ addSimulatedYears <- function(fit, constraints, ...){
 }
 
 ## Function to add simulated years to fit for single-stock sam
+##' @method addSimulatedYears sam
+##' @export
 addSimulatedYears.sam <- function(fit, constraints,resampleFirst=FALSE,trueSel=NULL,refit=FALSE,silent=TRUE, resampleParameters = FALSE, deterministicF=TRUE, maxTrueF = 3.0,maxScaleF=1.5, ...){
 
     if(resampleParameters){
@@ -97,6 +99,8 @@ addSimulatedYears.sam <- function(fit, constraints,resampleFirst=FALSE,trueSel=N
 
 ## Function to add simulated years to fit
 ## NOT DONE YET
+##' @method addSimulatedYears msam
+##' @export
 addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=NULL,refit=FALSE,silent=TRUE, resampleParameters = FALSE, deterministicF=TRUE, maxTrueF = 3.0, ...){
  
     if(resampleParameters){
@@ -751,6 +755,25 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
 ## Celtic herring: https://www.ices.dk/sites/pub/Publication%20Reports/Advice/2018/Special_requests/eu.2018.03.pdf
 
 
+splitCatch <- function(C,fit, Type = c("KeepF","KeepC"), nTail = 1){
+    Type <- match.arg(Type)
+    if(Type == "KeepF"){
+        mort <- attr(fit,"m_rep")$mort
+        F <- lapply(mort, function(x) colMeans(tail(t(apply(exp(x$FullYear_logCumulativeIncidence_Fishing),1:2,sum)),nTail)))
+        M <- lapply(mort, function(x) colMeans(tail(t(apply(exp(x$FullYear_logCumulativeIncidence_Other),1:2,sum)),nTail)))
+        N1 <- lapply(ntable(fit,returnList=TRUE),function(x) head(tail(x,2),1))
+        N2 <- lapply(ntable(fit,returnList=TRUE),function(x) tail(x,1))
+        a <- exp(nlminb(0,function(a) (sum(sapply(seq_along(fit),function(s)(sum(F[[s]]*exp(a)/(F[[s]]*exp(a)+M[[s]])*(1-exp(-F[[s]]*exp(a)-M[[s]]))*N2[[s]]))))-sum(C))^2)$par)
+        Csa <- sapply(seq_along(fit),function(s)(sum(F[[s]]*exp(a)/(F[[s]]*exp(a)+M[[s]])*(1-exp(-F[[s]]*exp(a)-M[[s]]))*N2[[s]])))
+        return(unname(sum(C) * Csa / sum(Csa)))
+    }else{
+        v <- colMeans(tail(catchtable(fit),nTail))[(seq_len(length(fit)*3)-1)%%3 == 0]
+        return(unname(sum(C) * v / sum(v)))
+    }
+    return(unname(C * rep(1/length(fit),length.out = length(fit))))
+}
+
+
 ##' Management strategy evaluation using SAM models
 ##'
 ##' @param OM sam.fit that will work as operating model
@@ -778,8 +801,7 @@ MSE <- function(OM,
                 intermediateFleets = numeric(0),
                 OMselectivityFixed = FALSE,
                 managementToPopulation = function(x,OM){                    
-                    v <- tail(catchtable(OM),1)[(seq_len(length(OM)*3)-1)%%3 == 0]
-                    sum(x) * v / sum(v)
+                    splitCatch(x,OM,"KeepF",1)
                 },
                 adviceToManagement = function(advice,adviceLast) advice,
                 adviceMethod = c("Basic","ICES","Empirical"),
@@ -1030,7 +1052,7 @@ MSE <- function(OM,
         if(adviceMethod == "Basic"){
             adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
             if(is(EM,"msam")){
-                adviceRules[yr_tac,seq_alon(OM)] <- "Basic"
+                adviceRules[yr_tac,seq_along(OM)] <- "Basic"
             }else{
                 adviceRules[yr_tac,"Total"] <- "Basic"
             }
@@ -1060,7 +1082,7 @@ MSE <- function(OM,
                 rec[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
             }
             ## Total (Does this make sense?)
-            catch[yr_tac,"Total","Advice"] <- adviceToManagement(catch[yr_tac,,"Advice"],cAdd(catch[yr_tac,,"Advice"],-1))
+            catch[yr_tac,"Total","Advice"] <- sum(adviceToManagement(catch[yr_tac,,"Advice"],cAdd(catch[yr_tac,,"Advice"],-1)))
             #fbar[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
             #ssb[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
             #rec[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]

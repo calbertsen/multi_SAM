@@ -2,7 +2,7 @@
 ##' @importFrom stockassessment runwithout reduce saveConf loadConf defpar sam.fit
 ##' @method runwithout msam
 ##' @export
-runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRUE, initializeRandomEffects = FALSE, silent = FALSE, ...){
+runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRUE, initializeRandomEffects = FALSE, silent = FALSE, newtonsteps, ...){
     ran <- c("logN", "logF", "missing","logSW", "logCW", "logitMO", "logNM", "logP","logitFseason", "shared_logFscale","shared_missingObs", "logGst", "logGtrip")
     fake_runwithout_sam <- function (fit, year = NULL, fleet = NULL, map = fit$obj$env$map, 
                                      ...) {
@@ -23,6 +23,11 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRU
     }
     fitRed <- do.call("c",lapply(fit, fake_runwithout_sam, year = year, fleet = fleet, ...))
     args <- as.list(attr(fit,"m_call"))[-1]
+    env <- attr(fit,"m_envir")
+    if(!missing(newtonsteps)){
+        args$newtonsteps <- as.name("nts")
+        env$nts <- newtonsteps        
+    }
     args$x <- fitRed
     ## args <- list(x = fitRed,
     ##              formula = formula(attr(attr(fit,"m_data")$X,"terms")),
@@ -73,7 +78,7 @@ runwithout.msam <- function(fit, year = NULL, fleet = NULL, initializePars = TRU
     args$parlist <- defPars
     args$silent <- silent
 
-    try({do.call(multisam.fit, args, envir = attr(fit,"m_envir"))})
+    try({do.call(multisam.fit, args, envir = env)})
 }
 
 
@@ -90,7 +95,7 @@ retro.msam <- function(fit, year=NULL, ncores=parallel::detectCores()-1, initial
     
     yy <- lapply(tail(dd$minYearAll:dd$maxYearAll,year), function(y) seq(y, dd$maxYearAll, 1)) 
     doRun <- function(years){
-        runwithout(fit, year = years, initializePars=initializePars, initializeRandomEffects=initializeRandomEffects)
+        runwithout(fit, year = years, initializePars=initializePars, initializeRandomEffects=initializeRandomEffects,...)
     }
     if(ncores>1){
         if(!requireNamespace("parallel"))
@@ -304,17 +309,32 @@ as_samset <- function(x){
 ##' @importFrom stats rnorm
 ##' @importFrom stockassessment jit
 ##' @export
-jit.msam <- function(fit, nojit=10, par=NULL, sd=.25, ncores=parallel::detectCores()-1, silent = TRUE){
+jit.msam <- function(fit, nojit=10, par=NULL, sd=NULL, pct=NULL,  ncores=parallel::detectCores()-1, silent = TRUE, newtonsteps = NULL){
+    if(is.null(sd) && is.null(pct))
+        stop("Either sd or pct must be given")
+    if(!is.null(sd) && !is.null(pct))
+        stop("Only one of sd and pct can be given") 
     if(is.null(par))
-        par <- multiStockassessment:::collect_pars(as_samset(fit))
+        par <- attr(fit,"m_opt")$par
     pars <- lapply(1:nojit, function(i){
-        lapply(par, function(xx) xx + rnorm(length(xx),sd=sd))
+        if(!is.null(pct)){
+            p <- par + runif(length(par),-abs(par)*pct,abs(par)*pct)
+        }else{
+            p <- rnorm(length(par),par,sd)
+        }
+        capture.output(attr(fit,"m_obj")$fn(p))
+        attr(fit,"m_obj")$env$parList()
     })
     ##relist(parv+rnorm(length(parv),sd=sd), par))
-    doRun <- function(p){
+    doRun <- function(p,newtonsteps = NULL){
         args <- as.list(attr(fit,"m_call"))[-1]
+        if(!is.null(newtonsteps)){
+            args$newtonsteps <- as.name("nts")
+            env$nts <- newtonsteps        
+        }
         args$parlist <- p
         args$silent <- silent
+        args$starting <- NULL
         try({do.call(multisam.fit, args, envir = attr(fit,"m_envir"))})
     }
     if(ncores>1){
@@ -326,12 +346,13 @@ jit.msam <- function(fit, nojit=10, par=NULL, sd=.25, ncores=parallel::detectCor
         parallel::clusterExport(cl, varlist=ls(attr(fit,"m_envir")), envir=attr(fit,"m_envir"))
         parallel::clusterEvalQ(cl, {library(stockassessment, lib.loc=lib.ver1)})
         parallel::clusterEvalQ(cl, {library(multiStockassessment, lib.loc=lib.ver2)})
-        fits <- parallel::parLapply(cl, pars, doRun) 
+        fits <- parallel::parLapply(cl, pars, doRun, newtonsteps=newtonsteps) 
     } else {
-        fits <- lapply(pars, doRun)
+        fits <- lapply(pars, doRun, newtonsteps=newtonsteps)
     }
     attr(fits,"fit") <- fit
     attr(fits,"jitflag") <- 1
-    class(fits) <- c("samset")
+    class(fits) <- c("msamset")
     fits
 }
+

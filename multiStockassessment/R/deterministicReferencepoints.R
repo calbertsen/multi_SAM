@@ -10,7 +10,7 @@
 ##' @param biasCorrect 
 ##' @param newton.control 
 ##' @param ... 
-##' @return 
+##' @return results
 ##' @author Christoffer Moesgaard Albertsen
 ##' @importFrom stockassessment deterministicReferencepoints
 ##' @method deterministicReferencepoints msam

@@ -9,6 +9,7 @@ hessian(
   x,
   h = abs(1e-04 * x) + 1e-04 * (abs(x) < sqrt(.Machine$double.eps/7e-07)),
   columns = seq_along(x),
+  symmetrize = TRUE,
   ...
 )
 }

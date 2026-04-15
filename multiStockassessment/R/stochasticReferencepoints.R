@@ -1,6 +1,7 @@
 .timeToSeed <- getFromNamespace(".timeToSeed","stockassessment")
 .SAM_setPB <- getFromNamespace(".SAM_setPB","stockassessment")
 .SAMpb <- getFromNamespace(".SAMpb","stockassessment")
+#' @export
 predict.rpscurvefit <- getFromNamespace("predict.rpscurvefit","stockassessment")
 
 .getDoSim <- function (logf1, fit, nYears, aveYears, selYears, pl, logCustomSel = NULL, 

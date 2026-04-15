@@ -1,6 +1,7 @@
 SAM_DEPENDS(define)
 SAM_DEPENDS(incidence)
 SAM_DEPENDS(derived)
+MSM_DEPENDS(define)
 MSM_DEPENDS(param_types)
 MSM_DEPENDS(convenience)
 
@@ -115,12 +116,13 @@ MSM_DEPENDS(convenience)
 
 
 template<class Type>
-void getTotals(vector<dataSet<Type> >& datA,
+Type getTotals(vector<dataSet<Type> >& datA,
 	       vector<confSet>& confA,
 	       vector<paraSet<Type> >& parA,
 	       cmoe_matrix<Type>& logF,
 	       cmoe_matrix<Type>& logN,
 	       vector<MortalitySet<Type> >& mortalities,
+	       shared_obs<Type>& obs,
 	       int minYearAll,
 	       int maxYearAll,
 	       int minAgeAll,
@@ -169,6 +171,10 @@ void getTotals(vector<dataSet<Type> >& datA,
   tmp_u.setZero();
   matrix<Type> tmp_N(nAge,nYear);
   tmp_N.setZero();
+  matrix<Type> total_natMor(nAge,nYear);
+  total_natMor.setZero();
+  matrix<Type> total_FAY(nAge,nYear);
+  total_FAY.setZero();
   vector<Type> total_logfbar_Effective(nYear);
   total_logfbar_Effective.setConstant(R_NegInf);
   vector<Type> total_logmbar_Effective(nYear);
@@ -228,24 +234,42 @@ void getTotals(vector<dataSet<Type> >& datA,
 	for(int aall = 0; aall < maxAgeAll - minAgeAll + 1; ++aall){
 	  int a = aall - (conf.minAge - minAgeAll);
 	  if(a >= 0 && a < conf.maxAge - conf.minAge + 1){ 
-	    tmp_v(aall,yall) += exp(-mortalities(s).cumulativeHazard(a,y)) * exp(logNa(a,y));
-	    tmp_u(aall,yall) += mortalities(s).FullYear_cumulativeIncidence_Fishing(a,y) * exp(logNa(a,y));
+	    tmp_v(aall,yall) += exp(-exp(mortalities(s).logCumulativeHazard(a,y))) * exp(logNa(a,y));
+	    //tmp_u(aall,yall) += mortalities(s).FullYear_cumulativeIncidence_Fishing(a,y) * exp(logNa(a,y));
+	    for(int f = 0; f < mortalities(s).FullYear_logCumulativeIncidence_Fishing.dim[2]; ++f)
+	      tmp_u(aall,yall) += exp(mortalities(s).FullYear_logCumulativeIncidence_Fishing(a,y,f) + logNa(a,y));
 	    tmp_N(aall,yall) += exp(logNa(a,y));
 	  }
 	}	
       }
     }  
   }
-
+  Type nll = 0.0;
   for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
     Type Fbar = 0.0;
     Type Mbar = 0.0;
+    for(int aa = 0; aa < nAge; ++aa){
+      Type v = tmp_v(aa,yall) / tmp_N(aa,yall);
+      Type u = tmp_u(aa,yall) / tmp_N(aa,yall);
+      total_natMor(aa,yall) = -log(v) * (1.0 - u - v) / (1.0 - v);
+      if(obs.hasSharedObs){
+	if((obs.natMor.dim[0] > yall) && (obs.natMor.dim[0] > aa)){
+	  if(!isNA(obs.natMor(yall,aa))){
+	    Type sdv = 0;
+	    for(int s = 0; s < datA.size(); ++s)
+	      sdv += (exp(parA(s).logSdLogNM(confA(s).keyMortalityObsVar(aa)))) / ((double)datA.size());
+	    nll += -dnorm(log(obs.natMor(yall,aa)), log(total_natMor(aa,yall)), sdv, true);
+	  }
+	}
+      }
+      total_FAY(aa,yall) = -log(v) * u / (1.0 - v);
+    }      
     for(int aall = confA(0).fbarRange(0) - minAgeAll; aall <= confA(0).fbarRange(1) - minAgeAll; ++aall){
       Type v = tmp_v(aall,yall) / tmp_N(aall,yall);
       Type u = tmp_u(aall,yall) / tmp_N(aall,yall);
       //Type logf = log(-log(v)) + log(u) - log(1.0 - v);
       //total_logfbar(yall) = logspace_add(total_logfbar(yall),logf);
-      Fbar += -log(v) * u / (1.0 - v);
+      Fbar += -log(v) * u / (1.0 - v);      
       Mbar += -log(v) * (1.0 - u - v) / (1.0 - v);
     }
     total_logfbar_Effective(yall) = log(Fbar / Type(confA(0).fbarRange(1)-confA(0).fbarRange(0)+1.0));
@@ -268,6 +292,9 @@ void getTotals(vector<dataSet<Type> >& datA,
   ADREPORT_F(total_logfbarL,of);
   ADREPORT_F(total_logCatAge,of);
 
+  REPORT_F(total_natMor,of);
+  REPORT_F(total_FAY,of);
+  
   REPORT_F(total_logssb,of);
   REPORT_F(total_logfsb,of);
   REPORT_F(total_logCatch,of);
@@ -343,10 +370,10 @@ void getTotals(vector<dataSet<Type> >& datA,
   }
   
 
-  return;
+  return nll;
 		 })
 
 
-
-		 MSM_SPECIALIZATION(void getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, int, int, int, int, bool,objective_function<double>*));
-		 MSM_SPECIALIZATION(void getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, int, int, int, int,bool, objective_function<TMBad::ad_aug>*));
+		 
+		 MSM_SPECIALIZATION(double getTotals(vector<dataSet<double> >&, vector<confSet>&, vector<paraSet<double> >&, cmoe_matrix<double>&, cmoe_matrix<double>&, vector<MortalitySet<double> >&, shared_obs<double>&, int, int, int, int, bool,objective_function<double>*));
+		 MSM_SPECIALIZATION(TMBad::ad_aug getTotals(vector<dataSet<TMBad::ad_aug> >&, vector<confSet>&, vector<paraSet<TMBad::ad_aug> >&, cmoe_matrix<TMBad::ad_aug>&, cmoe_matrix<TMBad::ad_aug>&, vector<MortalitySet<TMBad::ad_aug> >&, shared_obs<TMBad::ad_aug>&, int, int, int, int,bool, objective_function<TMBad::ad_aug>*));

@@ -64,11 +64,11 @@ struct shared_obs {
   array<int> idx2;
   array<int> idxCor;
   listMatrixFromR<Type> corList;
-
-  
-
+ 
   vector<CovCombineType> covCombine;
 
+   array<Type> natMor;
+  
   shared_obs();
   shared_obs(SEXP x);  
 };
@@ -90,7 +90,8 @@ SOURCE(
        idx2(),
        idxCor(),
        corList(),
-       covCombine() {};
+       covCombine(),
+       natMor() {};
        )
 
 
@@ -119,7 +120,8 @@ SOURCE(
 	   corList = listMatrixFromR<Type>(getListElement(x,"corList"));
 	   covCombine = vector<CovCombineType>(covCombineTmp.size());
 	   for(int i = 0; i < covCombine.size(); ++i)
-	     covCombine(i) = static_cast<CovCombineType>(covCombineTmp(i));
+	     covCombine(i) = static_cast<CovCombineType>(covCombineTmp(i));	   
+	   natMor = asArray<Type>(getListElement(x,"natMor",&Rf_isArray));   
 	 }
        };  
        )

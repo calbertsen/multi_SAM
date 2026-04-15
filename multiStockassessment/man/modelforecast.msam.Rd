@@ -16,6 +16,8 @@
   year.base = unlist(min(sapply(fit, function(x) max(x$data$years)))),
   ave.years = lapply(fit, function(x) max(x$data$years) + (-9:0)),
   rec.years = lapply(fit, function(x) numeric(0)),
+  rec.fixval = lapply(fit, function(x) numeric(0)),
+  rec.fixvalVar = lapply(fit, function(x) (1e-06)^2),
   label = NULL,
   overwriteSelYears = NULL,
   deterministicF = FALSE,
@@ -41,49 +43,71 @@
   useNonLinearityCorrection = (nosim > 0 && !deterministicF),
   ncores = 1,
   overwriteBioProcessModel = FALSE,
+  useManagementLag = FALSE,
+  assessmentErrorMean_F = 0,
+  assessmentErrorRho_F = 0,
+  assessmentErrorSigma_F = 0,
+  assessmentErrorMean_N = 0,
+  assessmentErrorRho_N = 0,
+  assessmentErrorSigma_N = 0,
+  assessmentErrorMean_M = 0,
+  assessmentErrorRho_M = 0,
+  assessmentErrorSigma_M = 0,
+  assessmentErrorMean_Mat = 0,
+  assessmentErrorRho_Mat = 0,
+  assessmentErrorSigma_Mat = 0,
+  assessmentErrorMean_SW = 0,
+  assessmentErrorRho_SW = 0,
+  assessmentErrorSigma_SW = 0,
+  assessmentErrorMean_CW = 0,
+  assessmentErrorRho_CW = 0,
+  assessmentErrorSigma_CW = 0,
+  implementationErrorRho_F = 0,
   ...
 )
 }
 \arguments{
-\item{fit}{}
+\item{fit}{...}
 
-\item{fscale}{}
+\item{fscale}{...}
 
-\item{catchval}{}
+\item{catchval}{...}
 
-\item{fval}{}
+\item{fval}{...}
 
-\item{nextssb}{}
+\item{nextssb}{...}
 
-\item{landval}{}
+\item{landval}{...}
 
-\item{nosim}{}
+\item{nosim}{...}
 
-\item{year.base}{}
+\item{year.base}{...}
 
-\item{ave.years}{}
+\item{ave.years}{...}
 
-\item{rec.years}{}
+\item{rec.years}{...}
 
-\item{label}{}
+\item{label}{...}
 
-\item{overwriteSelYears}{}
+\item{overwriteSelYears}{...}
 
-\item{deterministicF}{}
+\item{deterministicF}{...}
 
-\item{processNoiseF}{}
+\item{processNoiseF}{...}
 
-\item{customSel}{}
+\item{customSel}{...}
 
-\item{lagR}{}
+\item{lagR}{...}
 
-\item{splitLD}{}
+\item{splitLD}{...}
 
-\item{addTSB}{}
+\item{addTSB}{...}
 
-\item{biasCorrect}{}
+\item{biasCorrect}{...}
 
-\item{returnAllYears}{}
+\item{returnAllYears}{...}
+
+\item{...}{...}
 }
 \value{
 msamforecast

@@ -209,6 +209,9 @@ multisam.fit <- function(x,
         genetics_keyContamination <- matrix(-1,0,maxAgeAll-minAgeAll+1)
         nContStocks = 0
     }
+    if(shared_data$hasSharedObs)
+        if(is.null(shared_data$natMor))
+            shared_data$natMor <- array(0,dim=c(0,0))
     
     dat <- list(sam = dat0,
                 sharedObs = shared_data,
@@ -497,41 +500,66 @@ multisam.fit <- function(x,
                  "keyStockWeightMean","keyStockWeightObsVar","phiSW","procSdSW",
                  "keyCatchWeightMean","keyCatchWeightObsVar","phiCW","procSdCW",
                  "keyMatureMean","sdMO","phiMO","procSdMO",
-                 "keyMortalityMean","keyMortalityObsVar","phiNM","procSdNM",
+                 "keyMortalityMean","keyMortalityObsVar","phiNM","procSdNM","keyMortalityCovariate",
                  "keyLogFmu","keyLogFrho","seasonMu","seasonRho","seasonSd",
                  "sigmaObsParUS",
                  "rec_transphi",
                  "predVarObsLink",
                  "keyXtraSd",
-                 "keyLogFbound_tau","keyLogFbound_kappa","keyLogFbound_alpha")
+                 "keyLogFbound_tau","keyLogFbound_kappa","keyLogFbound_alpha",
+                 "totalObs",
+                 "keyCompRisk")
     parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist",
                  "meanLogSW","logSdLogSW","logPhiSW","logSdProcLogSW",
                  "meanLogCW","logSdLogCW","logPhiCW","logSdProcLogCW",
                  "meanLogitMO","logSdMO","logPhiMO","logSdProcLogitMO",
-                 "meanLogNM","logSdLogNM","logPhiNM","logSdProcLogNM",
+                 "meanLogNM","logSdLogNM","logPhiNM","logSdProcLogNM","Mbeta",
                  "muF","trans_rho_F","seasonMu","seasonLogitRho","seasonLogSd",
                  "sigmaObsParUS",
                  "rec_transphi",
                  "predVarObs",
                  "logXtraSd",
-                 "boundF_tau","boundF_kappa","boundF_alpha")
+                 "boundF_tau","boundF_kappa","boundF_alpha",
+                 "logSdLogTotalObs",
+                 NA)
     if(any(!(shared_keys %in% keyName)))
         stop(sprintf("shared keys not valid: %s",paste(shared_keys[!(shared_keys %in% keyName)],collapse=", ")))
-    for(nm in shared_keys)
-        if(!is.na(match(nm,names(dat$sam[[1]])))){
-            map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
-                xx <- sort(unique(as.numeric(x[[nm]])))
-                xx[xx >= 0]
-            })))
-        }else{            
+    for(nm in shared_keys){
+        pnm <- parName[match(nm,keyName)]
+        if(is.na(pnm)){
+            if(nm == "keyCompRisk"){
+                for(ppx in c("cp_m","cp_logk","cp_loga","cp_logb")){
+                    mTmp <- factor(unlist(lapply(splitParameter(pars[[ppx]]),seq_along)))
+                    if(ppx %in% names(map0)){
+                        mTmp[is.na(map0[[ppx]])] <- NA
+                    }
+                    map0[[ppx]] <- factor(mTmp)   
+                }
+            }
+        }else if(parName[match(nm,keyName)] %in% names(map0) && length(pnm) == 0){
+            map0[[nm]] <- NULL            
+        }else if(nm == "keyMortalityCovariate"){
             pnm <- parName[match(nm,keyName)]
             mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
             if(parName[match(nm,keyName)] %in% names(map0)){
                 mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
             }
-            map0[[parName[match(nm,keyName)]]] <- mTmp
+            map0[[parName[match(nm,keyName)]]] <- factor(mTmp)
+        }else if(!is.na(match(nm,names(dat$sam[[1]])))){
+            map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
+                xx <- sort(unique(as.numeric(x[[nm]])))
+                xx[xx >= 0]
+            })))      
+        }else{
+            pnm <- parName[match(nm,keyName)]
+            mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
+            if(parName[match(nm,keyName)] %in% names(map0)){
+                mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
+            }
+            map0[[parName[match(nm,keyName)]]] <- factor(mTmp)
             
         }
+    }
     if(shared_stockrecruitment){
         sr <- sapply(dat$sam,function(x)x$stockRecruitmentModelCode)
         srvd <- attr(pars$rec_pars,"vdim")
@@ -809,3 +837,81 @@ multisam.fit <- function(x,
     class(res) <- c("msam","samset")
     return(res)
 }
+
+
+.checkFullDerived_msam <- function(fit) all(attr(fit,"m_obj")$env$data$reportingLevel == 1)
+
+##' Update multi-stock sam fit with additional derived values
+##'
+##' @param fit multi-stock sam fit returned by multisam.fit
+##' @return Updated sam fit
+##' @importFrom stockassessment getAllDerivedValues
+##' @method getAllDerivedValues msam
+##' @export
+getAllDerivedValues.msam <- function(fit){
+    if(.checkFullDerived_msam(fit))
+        return(fit)
+    obj0 <- attr(fit,"m_obj")
+    ddd2 <- as.list(obj0$env)[formalArgs(TMB::MakeADFun)[formalArgs(TMB::MakeADFun) != "..."]]
+    ddd2$data$reportingLevel <- 1
+    obj0$fn(attr(fit,"m_opt")$par)
+    ddd2$parameters <- obj0$env$parList(par=obj0$env$last.par)
+    obj <- do.call(TMB::MakeADFun,ddd2)
+    obj$fn(attr(fit,"m_opt")$par)
+
+
+       ## Get report and sdreport
+    rep <- obj$report(obj$env$last.par.best)
+    doSdreport <- !(length(attr(fit,"m_sdrep")) == 1 && is.na(attr(fit,"m_sdrep")))
+    if(doSdreport){
+        sdrep <- TMB::sdreport(obj,attr(fit,"m_opt")$par, attr(fit,"m_opt")$he)
+        ssdrep <- summary(sdrep)
+    }else{
+        sdrep <- NA
+        ssdrep <- NA
+    }
+
+    ## Do as in stockassessment package
+                                        # Last two states
+    if(doSdreport){
+        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)),
+                 grep("_lastLogSW$",names(sdrep$value)),grep("_lastLogCW$",names(sdrep$value)),
+                 grep("_lastLogitMO$",names(sdrep$value)),grep("_lastLogNM$",names(sdrep$value)))
+        sdrep$estY <- sdrep$value[idxL]
+        sdrep$covY <- sdrep$cov[idxL,idxL]
+
+        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)),
+                 grep("_beforeLastLogSW$",names(sdrep$value)),grep("_beforeLastLogCW$",names(sdrep$value)),
+                 grep("_beforeLastLogitMO$",names(sdrep$value)),grep("_beforeLastLogNM$",names(sdrep$value)))
+        sdrep$estYm1 <- sdrep$value[idxBL]
+        sdrep$covYm1 <- sdrep$cov[idxBL,idxBL]
+
+        sdrep$estYYm1 <- sdrep$value[c(idxL,idxBL)]
+        sdrep$covYYm1 <- sdrep$cov[c(idxL,idxBL),c(idxL,idxBL)]
+
+        ## covRecPars
+        idx <- grep("_rec_pars$",names(sdrep$value))
+        sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
+        colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+    }
+    ## parList
+    if(doSdreport){
+        pl <- as.list(sdrep,"Est")
+        plsd <- as.list(sdrep,"Std")
+    }else{
+        pl <- obj$env$parList(par = obj$env$last.par.best)
+        plsd <- NA
+    }
+
+    if(doSdreport){
+        sdrep$cov<-NULL # save memory
+    }
+
+    attr(fit,"m_obj") <- obj
+    attr(fit,"m_rep") <- rep
+    attr(fit,"m_sdrep") <- sdrep
+   
+    return(fit)
+
+}
+

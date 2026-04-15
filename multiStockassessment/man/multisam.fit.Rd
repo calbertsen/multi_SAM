@@ -27,12 +27,15 @@ multisam.fit(
   shared_fleetParameters = c(),
   shared_proportionalHazard = NULL,
   shared_phmap = NULL,
+  shared_fecundityScaling = FALSE,
+  shared_recVarScalePar = FALSE,
   skip_stock_observations = FALSE,
   stockAreas = matrix(1, 1, length(x)),
   genetics_data = prepareGenetics(),
   genetics_dirichlet = FALSE,
   genetics_spatialAge = TRUE,
   genetics_independentStocks = TRUE,
+  genetics_keyContamination,
   initN = 0,
   initF = FALSE,
   parlist = NULL,
@@ -42,6 +45,8 @@ multisam.fit(
   mohn = FALSE,
   doSdreport = TRUE,
   skip.hessian = FALSE,
+  hessian.method = "optimHess",
+  forcePDHess = FALSE,
   ...
 )
 }

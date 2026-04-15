@@ -10,6 +10,8 @@
   seed = NULL,
   full.data = TRUE,
   ready.to.fit = FALSE,
+  simFlag,
+  sim.keepRec,
   ...
 )
 }
