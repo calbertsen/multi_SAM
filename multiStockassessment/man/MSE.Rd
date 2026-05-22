@@ -17,9 +17,7 @@ MSE(
   intermediateFleets = numeric(0),
   OMselectivityFixed = FALSE,
   managementToPopulation = function(x, OM) {
-     v <- tail(catchtable(OM),
-    1)[(seq_len(length(OM) * 3) - 1)\%\%3 == 0]
-     sum(x) * v/sum(v)
+     splitCatch(x, OM, "KeepF", 1)
  },
   adviceToManagement = function(advice, adviceLast) advice,
   adviceMethod = c("Basic", "ICES", "Empirical"),

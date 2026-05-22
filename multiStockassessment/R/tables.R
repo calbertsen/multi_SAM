@@ -100,6 +100,27 @@ ssbtable.msam <- function(fit,...){
     return(ret)
 }
 
+
+
+##' Effective reproductive biomass Table
+##'
+##' Table of estimated effective reproductive biomass
+##' 
+##' @title SSB Table
+##' @param fit msam object
+##' @param ... Other parameters 
+##' @return A matrix of estimates and confidence intervals
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment erbtable
+##' @method erbtable msam
+##' @export
+erbtable.msam <- function(fit,...){
+    ret <- tableit(fit,"logerb", trans=exp,...)
+    return(ret)
+}
+
+
+
 ##' Life expectancy Table
 ##'
 ##' Table of estimated life expectancy.

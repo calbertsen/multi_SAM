@@ -6,8 +6,19 @@
 \usage{
 \method{srplot}{msam}(
   fit,
+  stock,
   textcol = "red",
+  linetype = "l",
+  linecol = "black",
+  polycol = sapply(.plotcols.crp(length(fit)), function(cc) do.call("rgb",
+    c(as.list(col2rgb(cc)[, 1]), list(alpha = 0.1)))),
+  polyborder = sapply(.plotcols.crp(length(fit)), function(cc) do.call("rgb",
+    c(as.list(col2rgb(cc)[, 1]), list(alpha = 0.3)))),
+  polylty = 3,
+  polylwd = 1,
   add = FALSE,
+  CIlevel = 0.95,
+  addCurve = TRUE,
   col = .plotcols.crp(length(fit)),
   ...
 )

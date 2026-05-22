@@ -360,6 +360,18 @@ ssbplot.msam_hcr <- function(fit, ...){
     ssbplot(fit$forecast, ...)
 }
 
+##' ERB plot
+##'
+##' @param fit msam object
+##' @param ... extra arguments for plotting
+##' @author Christoffer Moesgaard Albertsen
+##' @importFrom stockassessment erbplot
+##' @method erbplot msam
+##' @export
+erbplot.msam <- function(fit, ...){
+    plotit(fit, "logerb", ylab="Effective reproductive biomass", trans = exp, ...)
+}
+
 
 
 ##' Life expectancy plot
@@ -639,23 +651,72 @@ parplot.msamset <- function(fit, cor.report.limit=0.95, ...){
 ##' @importFrom stockassessment srplot
 ##' @method srplot msam
 ##' @export
-srplot.msam <- function(fit,textcol="red",add=FALSE,
+srplot.msam <- function(fit,stock,textcol="red",
+                        linetype="l",
+                        linecol="black",
+                        polycol = sapply(.plotcols.crp(length(fit)), function(cc) do.call("rgb",c(as.list(col2rgb(cc)[,1]/255),list(alpha=.1)))),
+                        polyborder =  sapply(.plotcols.crp(length(fit)), function(cc) do.call("rgb",c(as.list(col2rgb(cc)[,1]/255),list(alpha=.3)))),
+                        polylty = 3,
+                        polylwd = 1,
+                        add=FALSE,
+                        CIlevel = 0.95,
+                        addCurve = TRUE,
                         col = .plotcols.crp(length(fit)), ...){
     ns <- length(fit)
+    if(missing(stock))
+        stock <- 1:ns
     X <- summary(fit, returnList = TRUE)
+    RB <- erbtable(fit, returnList = TRUE)
     n <- lapply(X,nrow)
     lag <- lapply(attr(fit,"m_data")$sam,function(x)x$minAge)
-    R <- sapply(1:ns,function(i)X[[i]][(lag[[i]]+1):n[[i]],1],simplify=FALSE)
-    SSB <- sapply(1:ns,function(i)X[[i]][(lag[[i]]+1):n[[i]],4],simplify=FALSE)
+    idxR <- lapply(1:ns, function(s) (lag[[s]]+1):n[[s]])
+    idxS <- lapply(1:ns, function(s) 1:(n[[s]]-lag[[s]]))
+    R <- sapply(1:ns,function(i)X[[i]][idxR[[i]],1],simplify=FALSE)
+    ##SSB <- sapply(1:ns,function(i)X[[i]][(lag[[i]]+1):n[[i]],4],simplify=FALSE)
+    S <- sapply(1:ns,function(i)RB[[i]][idxS[[i]],1],simplify=FALSE)
     y <- lapply(X,rownames)
-    plot(NA,NA,xlab="SSB",ylab="R",type="n",
-         xlim=range(0,max(unlist(SSB))),
-         ylim=range(0,max(unlist(R))),...)    
-    for(i in 1:length(fit)){
-        lines(SSB[[i]],R[[i]], lwd=1, col=col[i], ...)
-        text(SSB[[i]],R[[i]],labels=y[[i]][(lag[[i]]+1):n[[i]]],cex=.7,col=col[i])
+    Snam <- "SSB"
+    ## CI polygons ##
+    makeCIpolygon <- function(i,s){
+        mu <- c(log(S[[s]])[i],log(R[[s]])[i])
+        jS <- grep(sprintf("SAM_%d_logerb",s),rownames(fit$sdr$covSRpairs))[idxS[[s]][i]]
+        jR <- grep(sprintf("SAM_%d_logR",s),rownames(fit$sdr$covSRpairs))[idxR[[s]][i]]
+        ## Sig <- fit$sdr$covSRpairs[c(idxS[i], n + idxR[i]),
+        ##                           c(idxS[i], n + idxR[i])]
+        Sig <- attr(fit,"m_sdrep")$covSRpairs[c(jS,jR),c(jS,jR)]
+        Cor <- cov2cor(Sig)
+        if(!all(is.finite(Cor))){
+            return(list(x=mu[1],y=mu[2],col=NA,border=NA))
+        }
+        r <- ellipse::ellipse(Sig,centre=mu, level = CIlevel)
+        list(x = exp(r[,1]), y = exp(r[,2]), col = polycol,border=NA)
+    }    
+    pols <- lapply(1:ns, function(s){
+        v <- lapply(seq_along(idxR), makeCIpolygon,s=s)
+        if(any(sapply(v, function(x) is.na(x$col))))
+            warning("Some recruitment pairs had non-finite elements in their covariance matrix")
+        v
+    })
+
+#################
+    if(any(is.na(sapply(fit,function(x)x$conf$fecundityScaling))) || any(sapply(fit,function(x)x$conf$fecundityScaling != 1)))
+        Snam <- "Effective reproductive biomass"
+    if(!add){
+        plot(NA,NA,xlab=Snam,ylab="R",type="n",
+             xlim=range(0,max(unlist(S))),
+             ylim=range(0,max(unlist(R))),...)
     }
-    stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit))))
+    for(i in stock){
+        invisible(lapply(pols[[i]],function(pp) do.call(polygon,pp)))
+        invisible(lapply(pols[[i]],function(pp) lines(pp$x,pp$y,col=polyborder,lwd=polylwd,lty=polylty)))
+    }
+    if(addCurve)
+        suppressWarnings({addRecruitmentCurve(fit)})
+    for(i in stock){
+        lines(S[[i]],R[[i]], lwd=1, col=col[i], ...)
+        text(S[[i]],R[[i]],labels=y[[i]][(lag[[i]]+1):n[[i]]],cex=.7,col=col[i])
+    }
+    stocknames <- as.expression(parse(text=gsub("[[:space:]]","~",getStockNames(fit)[stock])))
     legend("bottom",legend=stocknames, lwd=3, col=col, ncol=min(length(fit),5), bty="n", merge=TRUE)
 }
 

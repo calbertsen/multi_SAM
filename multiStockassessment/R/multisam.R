@@ -6,7 +6,7 @@ forcePosDef <- function(x, doit = FALSE){
         if(any(!is.finite(x) & row(x) != col(x)))
             x[!is.finite(x) & row(x) != col(x)] <- 0
     }
-    v <- svd(X)
+    v <- svd(x)
     v$u %*% diag(pmax(v$d,1e-8)) %*% t(v$v)
 }
 
@@ -508,6 +508,7 @@ multisam.fit <- function(x,
                  "keyXtraSd",
                  "keyLogFbound_tau","keyLogFbound_kappa","keyLogFbound_alpha",
                  "totalObs",
+                 "logFecundityScaling",
                  "keyCompRisk")
     parName <- c("logFpar","logQpow","logSdLogFsta","logSdLogN","logSdLogObs","transfIRARdist",
                  "meanLogSW","logSdLogSW","logPhiSW","logSdProcLogSW",
@@ -521,11 +522,13 @@ multisam.fit <- function(x,
                  "logXtraSd",
                  "boundF_tau","boundF_kappa","boundF_alpha",
                  "logSdLogTotalObs",
+                 "logFecundityScaling",
                  NA)
     if(any(!(shared_keys %in% keyName)))
         stop(sprintf("shared keys not valid: %s",paste(shared_keys[!(shared_keys %in% keyName)],collapse=", ")))
     for(nm in shared_keys){
         pnm <- parName[match(nm,keyName)]
+        ##cat(nm,pnm,"\n")
         if(is.na(pnm)){
             if(nm == "keyCompRisk"){
                 for(ppx in c("cp_m","cp_logk","cp_loga","cp_logb")){
@@ -536,26 +539,37 @@ multisam.fit <- function(x,
                     map0[[ppx]] <- factor(mTmp)   
                 }
             }
-        }else if(parName[match(nm,keyName)] %in% names(map0) && length(pnm) == 0){
-            map0[[nm]] <- NULL            
-        }else if(nm == "keyMortalityCovariate"){
+        }else if(parName[match(nm,keyName)] %in% names(map0)){
+            ##cat("A\n")
             pnm <- parName[match(nm,keyName)]
             mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
             if(parName[match(nm,keyName)] %in% names(map0)){
                 mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
             }
             map0[[parName[match(nm,keyName)]]] <- factor(mTmp)
-        }else if(!is.na(match(nm,names(dat$sam[[1]])))){
-            map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
-                xx <- sort(unique(as.numeric(x[[nm]])))
-                xx[xx >= 0]
-            })))      
-        }else{
+        ##     map0[[nm]] <- NULL            
+        }else if(nm == "keyMortalityCovariate"){
+            ##cat("B\n")
             pnm <- parName[match(nm,keyName)]
             mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
             if(parName[match(nm,keyName)] %in% names(map0)){
                 mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
             }
+            map0[[parName[match(nm,keyName)]]] <- factor(mTmp)
+        }else if(!is.na(match(nm,names(dat$sam[[1]])))){ ## key is in conf
+            ##cat("C\n")
+            map0[[parName[match(nm,keyName)]]] <- factor(unlist(lapply(dat$sam,function(x){
+                xx <- sort(unique(as.numeric(x[[nm]])))
+                xx[xx >= 0]
+            })))      
+        }else{
+            ##cat("D\n")
+            pnm <- parName[match(nm,keyName)]
+            mTmp <- factor(unlist(lapply(splitParameter(pars[[pnm]]),seq_along)))
+            ##cat(nm, pnm, mTmp,"\n")
+            ## if(parName[match(nm,keyName)] %in% names(map0)){
+            ##     mTmp[is.na(map0[[parName[match(nm,keyName)]]])] <- NA
+            ## }
             map0[[parName[match(nm,keyName)]]] <- factor(mTmp)
             
         }
@@ -779,6 +793,12 @@ multisam.fit <- function(x,
         idx <- grep("_rec_pars$",names(sdrep$value))
         sdrep$covRecPars <- sdrep$cov[idx,idx, drop = FALSE]
         colnames(sdrep$covRecPars) <- rownames(sdrep$covRecPars) <- names(sdrep$value)[idx]
+
+        ## names(sdrep$value)%in%c("logerb","logR")
+        idx <- grep("_(logerb|logR)$",names(sdrep$value)) 
+        sdrep$covSRpairs <- sdrep$cov[idx,idx, drop = FALSE]
+        colnames(sdrep$covSRpairs) <- rownames(sdrep$covSRpairs) <- names(sdrep$value)[idx]
+
     }
     ## parList
     if(doSdreport){

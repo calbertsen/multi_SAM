@@ -12,6 +12,7 @@
   ready.to.fit = FALSE,
   simFlag,
   sim.keepRec,
+  pl,
   ...
 )
 }

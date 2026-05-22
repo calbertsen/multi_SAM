@@ -8,9 +8,11 @@
   fit,
   nojit = 10,
   par = NULL,
-  sd = 0.25,
+  sd = NULL,
+  pct = NULL,
   ncores = parallel::detectCores() - 1,
-  silent = TRUE
+  silent = TRUE,
+  newtonsteps = NULL
 )
 }
 \arguments{

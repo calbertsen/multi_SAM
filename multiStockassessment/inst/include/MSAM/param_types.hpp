@@ -7,6 +7,8 @@ HEADER(
 	 int size_;
 	 int ncol_;
 
+	 vector<int> offset;
+
 	 cmoe_vector(SEXP x);
 	 cmoe_vector(vector<vector<Type> > x);
 
@@ -48,8 +50,11 @@ SOURCE(
 	 ncol_ = nv;
 	 dat = vector<vector<Type> >(ncol_);
 	 int indx = 0;
+	 offset = vector<int>(ncol_+1);
+	 offset(0) = 0;
 	 for(int i = 0; i < nv; ++i){
 	   int n = INTEGER(dimsS)[i];
+	   offset(i+1) = offset(i) + n;
 	   //) = vector<Type>(n);
 	   vector<Type> tmp(n);
 	   for(int j = 0; j < n; ++j){
@@ -109,19 +114,25 @@ SOURCE(
        }
        )
 
-// This can probably be done in a better way!
+// Use binary search
 SOURCE(
        template<class Type>
        Type& cmoe_vector<Type>::operator[](int i){
-	 int dim;
-	 for(int q = 0; q < ncol_; ++q){
-	   dim = dat(q).size();
-	   if(i < dim){
-	     return(dat(q)(i));
+	 int L = 0;
+	 int H = offset.size()-1;
+	 if(i < 0 || i > size_)
+	   Rf_error("Index out of bounds");
+	 while(L < H){
+	   int m = L + ((H-L)/2); // integer division rounds down
+	   if(i < offset(m)){ // index is below lower end of "column", reduce upper
+	     H = m;
+	   }else if(i >= offset(m+1)){ // index is above upper end of "column", increase lower
+	     L = m + 1;
+	   }else{ // index is in m column
+	     return dat(m)(i - offset(m));
 	   }
-	   i -= dim;
 	 }
-	 return dat(-1)(0);		// Not a pretty solution
+	 Rf_error("Error in index to cmoe_vector");
        });
 
 // Addition with scalars
@@ -221,6 +232,7 @@ HEADER(
 	 vector<matrix<Type> > dat;
 	 int size_;
 	 int ncol_;
+	 vector<int> offset;
 
 	 cmoe_matrix(SEXP x);
 	 cmoe_matrix(vector<matrix<Type> > x);
@@ -263,9 +275,12 @@ SOURCE(
 	 ncol_ = nv;
 	 dat = vector<matrix<Type> >(ncol_);
 	 int indx = 0;
-	 for(int i = 0; i < nv; ++i){
+	 offset = vector<int>(ncol_+1);
+	 offset(0) = 0;
+	 for(int i = 0; i < nv; ++i){	   
 	   int nr = INTEGER(dimrS)[i];
 	   int nc = INTEGER(dimcS)[i];
+	   offset(i+1) = offset(i) + nr * nc;
 	   //) = vector<Type>(n);
 	   matrix<Type> tmp(nr,nc);
 	   for(int k = 0; k < nc; ++k)
@@ -298,7 +313,8 @@ SOURCE(
        template<class Type>
        cmoe_matrix<Type>::cmoe_matrix(const cmoe_matrix<Type>& x) : dat(x.dat),
        size_(x.size()),
-       ncol_(x.cols()) {}
+       ncol_(x.cols()),
+       offset(x.offset) {}
        );
 
 SOURCE(
@@ -340,18 +356,23 @@ SOURCE(
        );
 
 SOURCE(
-       template<class Type>
-       // This can probably be done in a better way!
+       template<class Type>       
        Type& cmoe_matrix<Type>::operator[](int i){
-	 int dim;
-	 for(int q = 0; q < ncol_; ++q){
-	   dim = dat(q).size();
-	   if(i < dim){
-	     return(dat(q)(i));
+	 int L = 0;
+	 int H = offset.size()-1;
+	 if(i < 0 || i > size_)
+	   Rf_error("Index out of bounds");
+	 while(L < H){
+	   int m = L + ((H-L)/2); // integer division rounds down
+	   if(i < offset(m)){ // index is below lower end of "column", reduce upper
+	     H = m;
+	   }else if(i >= offset(m+1)){ // index is above upper end of "column", increase lower
+	     L = m + 1;
+	   }else{ // index is in m column
+	     return dat(m)(i - offset(m));
 	   }
-	   i -= dim;
 	 }
-	 return dat(-1)(0);		// Not a pretty solution
+	 Rf_error("Error in index to cmoe_vector");
        }
        );
 
@@ -469,7 +490,8 @@ struct cmoe_3darray{
   vector<array<Type> > dat;
   int size_;
   int ncol_;
-
+  vector<int> offset;
+  
   cmoe_3darray(SEXP x);
   cmoe_3darray(vector<array<Type> > x);
 
@@ -514,10 +536,13 @@ SOURCE(
 	 ncol_ = nv;
 	 dat = vector<array<Type> >(ncol_);
 	 int indx = 0;
+	 offset = vector<int>(ncol_+1);
+	 offset(0) = 0;
 	 for(int i = 0; i < nv; ++i){
 	   int nr = INTEGER(dimrS)[i];
 	   int nc = INTEGER(dimcS)[i];
 	   int na = INTEGER(dimaS)[i];
+	   offset(i+1) = offset(i) + nr*nc*na;
 	   //) = vector<Type>(n);
 	   array<Type> tmp(nr,nc,na);
 	   tmp.setZero();
@@ -591,19 +616,24 @@ SOURCE(
        )
 
 
-// This can probably be done in a better way!
 SOURCE(
        template<class Type>
        Type& cmoe_3darray<Type>::operator[](int i){
-	 int dim;
-	 for(int q = 0; q < ncol_; ++q){
-	   dim = dat(q).size();
-	   if(i < dim){
-	     return(dat(q)(i));
+	 int L = 0;
+	 int H = offset.size()-1;
+	 if(i < 0 || i > size_)
+	   Rf_error("Index out of bounds");
+	 while(L < H){
+	   int m = L + ((H-L)/2); // integer division rounds down
+	   if(i < offset(m)){ // index is below lower end of "column", reduce upper
+	     H = m;
+	   }else if(i >= offset(m+1)){ // index is above upper end of "column", increase lower
+	     L = m + 1;
+	   }else{ // index is in m column
+	     return dat(m)(i - offset(m));
 	   }
-	   i -= dim;
 	 }
-	 return dat(-1)(0);		// Not a pretty solution
+	 Rf_error("Error in index to cmoe_vector");
        }
        )
 

@@ -107,6 +107,7 @@ modelforecast.msam <- function(fit,
                           assessmentErrorRho_CW = 0,
                           assessmentErrorSigma_CW = 0,
                           implementationErrorRho_F = 0,
+                          pivot = FALSE,
                           ...){
    
     dots <- list(...)
@@ -617,7 +618,7 @@ modelforecast.msam <- function(fit,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
                                             FdeviationCov = diag(1,nrow(splitMatrices(pl$logF)[[i]]),nrow(splitMatrices(pl$logF)[[i]])),
                                             FEstCov = makePosDef(FEstCov[[i]]),
-                                            useModelLastN = (useModelLastN && !baseIsLast[i]),
+                                            useModelLastN = useModelLastN, ##(useModelLastN && !baseIsLast[i]),
                                             useAssessmentError = useAssessmentError,
                                             assessmentErrorDeviation_F = matrix(0,0,0),#assessmentErrorDeviance_F,
                                             assessmentErrorDeviation_N = matrix(0,0,0),#assessmentErrorDeviance_N,
@@ -866,9 +867,106 @@ modelforecast.msam <- function(fit,
         ##return(list(args=args,pl=pl))
         map <- args$map ##obj$env$map ##attr(fit,"m_obj")$env$map
         plMap <- useMapOnPl(pl, map)
+        p0 <- unlist(plMap)
+        names(p0) <- rep(names(plMap), times = sapply(plMap,length))
         sniii <- 1
         parameterSigma <- svd_solve(attr(fit,"m_opt")$he)
         objX <- attr(fit,"m_obj")
+        ## Pre-calculate chols
+        L <- NULL
+        if(isTRUE(resampleFirst)){
+            L <- matrix(0, nrow(cov), ncol(cov))
+            idx <- diag(cov) > .Machine$double.xmin
+            if(any(idx)){
+                L0 <- chol(cov[idx,idx], pivot = pivot)
+                if(pivot)
+                    L0[, order(attr(L0, "pivot"))]
+                L[idx,idx] <- L0
+            }
+        }
+        parameterL <- NULL
+        if(isTRUE(resampleParameters)){
+            parameterL <- matrix(0,nrow(parameterSigma), ncol(parameterSigma))
+            idx <- diag(paramterSigma) > .Machine$double.xmin
+            if(any(idx)){
+                parameterL0 <- chol(parameterSigma[idx,idx], pivot = pivot)
+                if(pivot)
+                    parameterL0[, order(attr(parameterL0, "pivot"))]
+                parameterL[idx,idx] <- parameterL0
+            }
+        }
+        ## Pre-calculate indices
+        ## Only works when year.base is last assessment year
+        indxN <- local({
+            ii <- which(names(p0) %in% "logN")
+            attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
+            indxS <- splitMatrices(ii)
+            unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0Bio[i]]))
+        })
+        indxF <- local({
+            ii <- which(names(p0) %in% "logF")
+            ## if(any(names(map) %in% "logF")){
+            ##     ii2 <- attr(obj$env$parameters$logF,"map")+1
+            ##     ii2[ii2>0] <- ii[ii2[ii2>0]+1]
+            ##     attr(ii2,"cdim") <- attr(attr(obj$env$parameters$logF,"shape"),"cdim")
+            ##     attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
+            ##     indxS <- splitMatrices(ii2)
+            ## }else{
+            attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
+            indxS <- splitMatrices(ii)                    
+            ## }
+            unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0F[i]]))
+        })
+        indxSW <- local({
+            ii <- which(names(p0) %in% "logSW")
+            attr(ii,"cdim") <- attr(obj$env$parameters$logSW,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logSW,"rdim")
+            indxS <- splitMatrices(ii)
+            unlist(sapply(seq_len(nStocks), function(i){
+                if(nrow(indxS[[i]]) == 0)
+                    return(numeric(0))
+                indxS[[i]][i0Bio[i],]
+            }))
+        })
+        indxCW <- local({
+            ii <- which(names(p0) %in% "logCW")
+            attr(ii,"cdim") <- attr(obj$env$parameters$logCW,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logCW,"rdim")
+            indxS <- splitMatrices(ii)
+            unlist(sapply(seq_len(nStocks), function(i){
+                if(nrow(indxS[[i]]) == 0)
+                    return(numeric(0))
+                indxS[[i]][i0Bio[i],]
+            }))
+        })
+        indxMO <- local({
+            ii <- which(names(p0) %in% "logitMO")
+            attr(ii,"cdim") <- attr(obj$env$parameters$logitMO,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logitMO,"rdim")
+            indxS <- splitMatrices(ii)
+            unlist(sapply(seq_len(nStocks), function(i){
+                if(nrow(indxS[[i]]) == 0)
+                    return(numeric(0))
+                indxS[[i]][i0Bio[i],]
+            }))
+        })
+        indxNM <- local({
+            ii <- which(names(p0) %in% "logNM")
+            attr(ii,"cdim") <- attr(obj$env$parameters$logNM,"cdim")
+            attr(ii,"rdim") <- attr(obj$env$parameters$logNM,"rdim")
+            indxS <- splitMatrices(ii)
+            unlist(sapply(seq_len(nStocks), function(i){
+                if(nrow(indxS[[i]]) == 0)
+                    return(numeric(0))
+                indxS[[i]][i0Bio[i],]
+            }))
+        })
+        fdv_idx <- lapply(seq_len(nStocks), function(i){
+            as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)
+        })
+        
         doSim <- function(re_constraint = NULL, re_pl = NULL){
             obj2 <- obj
             if(!is.null(re_constraint)){
@@ -893,7 +991,7 @@ modelforecast.msam <- function(fit,
             }
             sim0 <- 0*est
             if(resampleFirst)
-                sim0 <- rmvnorm(1, mu=0*est, Sigma=cov + diag(1e-6,length(est)))
+                sim0 <- rmvnorm(1, mu=0*est, L=L)
             ## update N & F before forecast
             dList0 <- split(as.vector(sim0), nfSplit)
             ##estList0 <- split(as.vector(sim0+est), nfSplit)          
@@ -912,7 +1010,7 @@ modelforecast.msam <- function(fit,
             }else{
                 if(resampleParameters){
                     p0 <- obj2$par
-                    pfix <- rmvnorm(1, p0, Sigma = parameterSigma + diag(1e-6,length(p0)))
+                    pfix <- rmvnorm(1, p0, L = parameterL)
                     ## Update random effects
                     capture.output(objX$fn(pfix))
                     ## Insert into plMap
@@ -930,108 +1028,45 @@ modelforecast.msam <- function(fit,
                     p <- unlist(plMap)
                     names(p) <- rep(names(plMap), times = sapply(plMap,length))
                 }
-            }
-            ## Only works when year.base is last assessment year
-            indxN <- local({
-                ii <- which(names(p) %in% "logN")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
-                indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0Bio[i]]))
-            })
-            p[indxN] <- p[indxN] + dList0$LogN
-            indxF <- local({
-                ii <- which(names(p) %in% "logF")
-                ## if(any(names(map) %in% "logF")){
-                ##     ii2 <- attr(obj$env$parameters$logF,"map")+1
-                ##     ii2[ii2>0] <- ii[ii2[ii2>0]+1]
-                ##     attr(ii2,"cdim") <- attr(attr(obj$env$parameters$logF,"shape"),"cdim")
-                ##     attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
-                ##     indxS <- splitMatrices(ii2)
-                ## }else{
-                attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
-                indxS <- splitMatrices(ii)                    
-                ## }
-                unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0F[i]]))
-            })
-            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]            
-            indxSW <- local({
-                ii <- which(names(p) %in% "logSW")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logSW,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logSW,"rdim")
-                indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i){
-                    if(nrow(indxS[[i]]) == 0)
-                        return(numeric(0))
-                    indxS[[i]][i0Bio[i],]
-                }))
-            })
-            p[indxSW] <- p[indxSW] + dList0$LogSW
-            indxCW <- local({
-                ii <- which(names(p) %in% "logCW")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logCW,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logCW,"rdim")
-                indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i){
-                    if(nrow(indxS[[i]]) == 0)
-                        return(numeric(0))
-                    indxS[[i]][i0Bio[i],]
-                }))
-            })
-            p[indxCW] <- p[indxCW] + dList0$LogCW
-            indxMO <- local({
-                ii <- which(names(p) %in% "logitMO")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logitMO,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logitMO,"rdim")
-                indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i){
-                    if(nrow(indxS[[i]]) == 0)
-                        return(numeric(0))
-                    indxS[[i]][i0Bio[i],]
-                }))
-            })
-            p[indxMO] <- p[indxMO] + dList0$LogitMO
-            indxNM <- local({
-                ii <- which(names(p) %in% "logNM")
-                attr(ii,"cdim") <- attr(obj$env$parameters$logNM,"cdim")
-                attr(ii,"rdim") <- attr(obj$env$parameters$logNM,"rdim")
-                indxS <- splitMatrices(ii)
-                unlist(sapply(seq_len(nStocks), function(i){
-                    if(nrow(indxS[[i]]) == 0)
-                        return(numeric(0))
-                    indxS[[i]][i0Bio[i],]
-                }))
-            })
-            p[indxNM] <- p[indxNM] + dList0$LogNM
+            }           
+            p[indxN] <- p[indxN] + dList0$LogN           
+            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]
+            if(length(indxSW) > 0)
+                p[indxSW] <- p[indxSW] + dList0$LogSW           
+            if(length(indxCW) > 0)
+                p[indxCW] <- p[indxCW] + dList0$LogCW
+            if(length(indxMO) > 0)
+                p[indxMO] <- p[indxMO] + dList0$LogitMO
+            if(length(indxNM) > 0)
+                p[indxNM] <- p[indxNM] + dList0$LogNM
             
             fdvAll <- dList0$LogF ## - mean(dList0$LogF)
+            fc <- obj2$env$data$sam[[i]]$forecast
             for(i in 1:nStocks){
-                fdv <- fdvAll[as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)]
+                fdv <- fdvAll[fdv_idx[[i]]]
                 if(length(fdv) > 0){
-                    obj2$env$data$sam[[i]]$forecast$Fdeviation[] <- fdv
+                    fc$Fdeviation[] <- fdv
                     cindx <- nfSplit == "LogF" & stockSplit == (i-1)
-                    obj2$env$data$sam[[i]]$forecast$FdeviationCov <- makePosDef(cov[cindx,cindx])
+                    fc$FdeviationCov <- cov[cindx,cindx]
                 }
-            }
-            if(useAssessmentError){
-                for(i in 1:nStocks){
+                if(useAssessmentError){
                     ## Simulate assessment error
-                    ny <- length(obj2$env$data$sam[[i]]$forecast$forecastYear)
+                    ny <- length(fc$forecastYear)
                     nage <- obj2$env$data$sam[[i]]$maxAge - obj2$env$data$sam[[i]]$minAge + 1 ##nrow(pl$logN)
                     nflt <- dim(obj2$env$data$sam[[i]]$catchMeanWeight)[3]
                     toMatr <- function(x, n){
                         if(is.matrix(x)) return(x)
                         diag(rep(x, length.out=n),n,n)
                     }
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_F = simVAR(ny,attr(pl$logF,"rdim")[i],assessmentErrorMean_F[[i]],assessmentErrorRho_F[[i]],toMatr(assessmentErrorSigma_F[[i]],attr(pl$logF,"rdim")[i]))
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_N = simVAR(ny,nage,assessmentErrorMean_N[[i]],assessmentErrorRho_N[[i]],toMatr(assessmentErrorSigma_N[[i]],nage))
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_M = simVAR(ny,nage,assessmentErrorMean_M[[i]],assessmentErrorRho_M[[i]],toMatr(assessmentErrorSigma_M[[i]],nage))
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_Mat = simVAR(ny,nage,assessmentErrorMean_Mat[[i]],assessmentErrorRho_Mat[[i]],toMatr(assessmentErrorSigma_Mat[[i]],nage))
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_SW = simVAR(ny,nage,assessmentErrorMean_SW[[i]],assessmentErrorRho_SW,toMatr(assessmentErrorSigma_SW[[i]],nage))
-                    obj2$env$data$sam[[i]]$forecast$assessmentErrorDeviation_CW = simplify2array(replicate(nflt,simVAR(ny,nage,assessmentErrorMean_CW[[i]],assessmentErrorRho_CW[[i]],toMatr(assessmentErrorSigma_CW[[i]],nage)),FALSE))
+                    fc$assessmentErrorDeviation_F = simVAR(ny,attr(pl$logF,"rdim")[i],assessmentErrorMean_F[[i]],assessmentErrorRho_F[[i]],toMatr(assessmentErrorSigma_F[[i]],attr(pl$logF,"rdim")[i]))
+                    fc$assessmentErrorDeviation_N = simVAR(ny,nage,assessmentErrorMean_N[[i]],assessmentErrorRho_N[[i]],toMatr(assessmentErrorSigma_N[[i]],nage))
+                    fc$assessmentErrorDeviation_M = simVAR(ny,nage,assessmentErrorMean_M[[i]],assessmentErrorRho_M[[i]],toMatr(assessmentErrorSigma_M[[i]],nage))
+                    fc$assessmentErrorDeviation_Mat = simVAR(ny,nage,assessmentErrorMean_Mat[[i]],assessmentErrorRho_Mat[[i]],toMatr(assessmentErrorSigma_Mat[[i]],nage))
+                    fc$assessmentErrorDeviation_SW = simVAR(ny,nage,assessmentErrorMean_SW[[i]],assessmentErrorRho_SW,toMatr(assessmentErrorSigma_SW[[i]],nage))
+                    fc$assessmentErrorDeviation_CW = simplify2array(replicate(nflt,simVAR(ny,nage,assessmentErrorMean_CW[[i]],assessmentErrorRho_CW[[i]],toMatr(assessmentErrorSigma_CW[[i]],nage)),FALSE))
                 }
             }
+            obj2$env$data$sam[[i]]$forecast <- fc
             
             v <- obj2$simulate(par = p)
             ##set.seed(NULL)

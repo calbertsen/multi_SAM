@@ -36,14 +36,24 @@
 //"../inst/include/multiSAM.hpp"
 
 
+// template<class Type>
+// tmbutils::array<Type> toArray(matrix<Type> x){
+//   vector<int> ardi(2);
+//   ardi << x.rows(), x.cols();
+//   vector<Type> a = x.vec();
+//   array<Type> y(a,ardi);
+//   return y;
+// }
+
 template<class Type>
 tmbutils::array<Type> toArray(matrix<Type> x){
-  vector<int> ardi(2);
-  ardi << x.rows(), x.cols();
-  vector<Type> a = x.vec();
-  array<Type> y(a,ardi);
+  array<Type> y(x.rows(), x.cols());
+  y = x;
   return y;
 }
+
+
+
 
 
 // template<class Type>
@@ -194,6 +204,9 @@ Type objective_function<Type>::operator() ()
 	keep(fake_stock(i))(fake_indx(i)) = fake_keep(i);
     }
   }
+
+    
+  
   PARAMETER_CMOE_VECTOR(logFpar);
   PARAMETER_CMOE_VECTOR(logQpow);
   PARAMETER_CMOE_VECTOR(logSdLogFsta);
@@ -252,12 +265,12 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(cp_logk);
   PARAMETER_CMOE_VECTOR(cp_loga);
   PARAMETER_CMOE_VECTOR(cp_logb);
-  
+
 
   PARAMETER_CMOE_MATRIX(seasonMu);
   PARAMETER_CMOE_VECTOR(seasonLogitRho);
   PARAMETER_CMOE_VECTOR(seasonLogSd);
-  
+
   // Forecast FMSY
   PARAMETER_VECTOR(logFScaleMSY);
   PARAMETER_VECTOR(implicitFunctionDelta);
@@ -291,7 +304,7 @@ Type objective_function<Type>::operator() ()
   
   PARAMETER_CMOE_VECTOR(missing);
 
- 
+
    
   ////////////////////////////////////////
   ////////// Multi SAM specific //////////
@@ -319,6 +332,7 @@ Type objective_function<Type>::operator() ()
   int nStocks = logF.cols();
 
   vector<paraSet<Type> > paraSets(nStocks);
+
 
   
   for(int s = 0; s < nStocks; ++s){
@@ -420,6 +434,8 @@ Type objective_function<Type>::operator() ()
 
   PARAMETER_CMOE_VECTOR(logitArea);
 
+
+  
   matrix<Type> Parea(stockAreas.rows(), stockAreas.cols());
   Parea.setZero();
   for(int s = 0; s < Parea.cols(); ++s){
@@ -499,6 +515,8 @@ Type objective_function<Type>::operator() ()
 
   }
 
+
+  
   ////////////////////////////////////
   /////////// Missing Obs ///////////
   //////////////////////////////////
@@ -552,20 +570,6 @@ Type objective_function<Type>::operator() ()
     recruits(s) = makeRecruitmentFunction(sam.dataSets(s), sam.confSets(s), paraSets(s));
   }
 
-  ////////////////////////////////////////
-  /////////// Prepare forecast //////////
-  //////////////////////////////////////
-
-  for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of(this->do_simulate);
-    // Calculate forecast
-    array<Type> logNa = getArray(logN, s);
-    array<Type> logFa = getArray(logF, s);
-    // Resize arrays
-    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s), &of);
-    ofAll.addToReport(of.report,s);
-    moveADREPORT(&of,this,s);
-  }
 
 
   /////////////////////////////////////
@@ -653,15 +657,31 @@ Type objective_function<Type>::operator() ()
     moveADREPORT(&of,this,s);
   }
 
-  // Calculate forecast ahead of time
+  ////////////////////////////////////////
+  /////////// Prepare forecast //////////
+  //////////////////////////////////////
+
   for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);
     // Calculate forecast
     array<Type> logNa = getArray(logN, s);
     array<Type> logFa = getArray(logF, s);
-    array<Type> logitFSa = getArray(logitFseason, s);
     // Resize arrays
-    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+    prepareForForecast(sam.forecastSets(s), sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, logNa, recruits(s), &of);
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
   }
+
+  
+  // // Calculate forecast ahead of time
+  // for(int s = 0; s < nStocks; ++s){
+  //   // Calculate forecast
+  //   array<Type> logNa = getArray(logN, s);
+  //   array<Type> logFa = getArray(logF, s);
+  //   array<Type> logitFSa = getArray(logitFseason, s);
+  //   // Resize arrays
+  //   sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+  // }
   
   // Overwrite keyLogFsta for observations
   if(sharedObs.hasSharedObs){
@@ -730,7 +750,7 @@ Type objective_function<Type>::operator() ()
 
     }
   }
-  
+
   // bool overwriteF = false;
   for(int s = 1; s < nStocks; ++s){ // First F is always an RW process
     oftmp<Type> of(this->do_simulate);
@@ -979,16 +999,16 @@ Type objective_function<Type>::operator() ()
   //////////////////////////////////////
 
    // Update calculated forecast
-  for(int s = 0; s < nStocks; ++s){
-    // Calculate forecast
-    array<Type> logNa = getArray(logN, s);
-    array<Type> logFa = getArray(logF, s);
-    array<Type> logitFSa = getArray(logitFseason, s);
-    // Resize arrays
-    sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
-  }
+   for(int s = 0; s < nStocks; ++s){
+     // Calculate forecast
+     array<Type> logNa = getArray(logN, s);
+     array<Type> logFa = getArray(logF, s);
+     array<Type> logitFSa = getArray(logitFseason, s);
+     // Resize arrays
+     sam.forecastSets(s).calculateForecast(logFa,logNa, logitFSa, sam.dataSets(s), sam.confSets(s), paraSets(s), recruits(s), mortalities(s));
+   }
 
-
+ 
   ////////////////////////////////
   ////////// F PROCESS //////////
   //////////////////////////////
@@ -1140,7 +1160,7 @@ Type objective_function<Type>::operator() ()
      }
    }
 
- 
+
   ////////////////////////////////
   ////////// N PROCESS //////////
   //////////////////////////////
@@ -1260,6 +1280,19 @@ Type objective_function<Type>::operator() ()
 
    density::MVNORM_t<Type> neg_log_densityN(ncov);
 
+
+   vector<MVMIX_t<Type> > neg_log_densityF(nAreas);
+   for(int s = 0; s < nAreas; ++s){
+     array<Type> logFa = getArray(logF, s);
+     dataSet<Type> ds = sam.dataSets(s);
+     confSet cs = sam.confSets(s);
+     paraSet<Type> ps = paraSets(s);     
+     matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
+     if(sam.forecastSets(s).FEstCov.cols() > 0)
+       fvar = sam.forecastSets(s).FEstCov;
+     neg_log_densityF(s) = MVMIX_t<Type>(fvar,Type(cs.fracMixF));
+   }
+
    // Loop over time
    for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
      // Handle simulation of F for forecast and HCR
@@ -1280,10 +1313,10 @@ Type objective_function<Type>::operator() ()
 	   if(sam.forecastSets(s).preYears > 0)
 	     fcOffset = ds.noYears - sam.forecastSets(s).preYears;
 	   if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears - fcOffset){
-	     matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
-	     if(sam.forecastSets(s).FEstCov.cols() > 0)
-	       fvar = sam.forecastSets(s).FEstCov;
-	     MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
+	     // matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
+	     // if(sam.forecastSets(s).FEstCov.cols() > 0)
+	     //   fvar = sam.forecastSets(s).FEstCov;
+	     // MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
 	     //int nYears = sam.forecastSets(s).nYears;
 	     // int fi = y - sam.forecastSets(s).preYears;
 	     int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
@@ -1299,7 +1332,7 @@ Type objective_function<Type>::operator() ()
 		 if(sam.forecastSets(s).fsdTimeScaleModel(fi) == sam.forecastSets(s).fixedDeviation){
 		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi);
 		 }else{
-		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi) + neg_log_densityF.simulate() * timeScale;
+		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi) + neg_log_densityF(s).simulate() * timeScale;
 		 }
 		 logF.col(s).col(y) = logFa.col(y);
 		 mortalities(s).updateYear(ds, cs, ps, logFa, logitFSa,y);
@@ -1324,10 +1357,10 @@ Type objective_function<Type>::operator() ()
 	   if(sam.forecastSets(s).preYears > 0)
 	     fcOffset = ds.noYears - sam.forecastSets(s).preYears;
 	   if(y > 0 && y < ds.noYears + sam.forecastSets(s).nYears - fcOffset){
-	     matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
-	     if(sam.forecastSets(s).FEstCov.cols() > 0)
-	       fvar = sam.forecastSets(s).FEstCov;
-	     MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
+	     // matrix<Type> fvar = get_fvar(ds, cs, ps, logFa);
+	     // if(sam.forecastSets(s).FEstCov.cols() > 0)
+	     //   fvar = sam.forecastSets(s).FEstCov;
+	     // MVMIX_t<Type> neg_log_densityF(fvar,Type(cs.fracMixF));
 	     //int nYears = sam.forecastSets(s).nYears;
 	     // int fi = y - sam.forecastSets(s).preYears;
 	     int fi = CppAD::Integer(sam.forecastSets(s).forecastYear(y)) - 1;
@@ -1341,7 +1374,7 @@ Type objective_function<Type>::operator() ()
 	       //  F contribution
 	       // int forecastIndex = CppAD::Integer(dat.forecast.forecastYear(i))-1;
 	       Type timeScale = exp(sam.forecastSets(s).forecastCalculatedLogSdCorrection(fi));
-	       ans += neg_log_densityF((logFa.col(y) - (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi)) / timeScale) + log(timeScale) * Type(logFa.dim[0]);
+	       ans += neg_log_densityF(s)((logFa.col(y) - (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi)) / timeScale) + log(timeScale) * Type(logFa.dim[0]);
 	     }	 
 	   }
 	 }
@@ -1532,7 +1565,68 @@ Type objective_function<Type>::operator() ()
 	int nAll = ncovSim.cols();
 	int nNotCond = notCondOn.sum();
 	int nCond = nAll - nNotCond;
-	if(nNotCond > 0){ // Only do this if there are any not conditional
+	if(nCond == 0){ // Simulate all stocks
+	  vector<Type> noiseN = density::MVNORM(ncovSim).simulate();
+	  vector<Type> simRes = predN + noiseN;
+	  REPORT(noiseN);
+	  // Insert into logN
+	  int k1 = 0;
+	  for(int i = 0; i < simRes.size(); ++i){	    
+	    if(notCondOn(i) == 1){
+	      int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+	      // Age index = age - minAge
+	      int a = i % nages;
+	      int ageOffset = sam.confSets(s).minAge - minAgeAll;
+	      int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	      Type logRec = logN.col(s)(0,y);
+	      logN.col(s)(a - ageOffset,y) = simRes(k1++);
+	      if(a - ageOffset == 0 && sam.confSets(s).simKeepRec){// && isForecast)
+		logN.col(s)(a - ageOffset,y) = logRec;
+	      }
+	    }
+	  }
+	  // Handle age zero recruitment
+	    bool hasZeroRec = false;
+	  k1 = 0; int k2 = 0;
+	  for(int i = 0; i < notCondOn.size(); ++i){
+	    int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+	    // Age index = age - minAge
+	    int a = i % nages;
+	    int ageOffset = sam.confSets(s).minAge - minAgeAll;
+	    int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+	    if(sam.confSets(s).minAge == 0 &&
+	       sam.forecastSets(s).recModel(CppAD::Integer(sam.forecastSets(s).forecastYear(y))-1) == sam.forecastSets(s).asRecModel ){
+	      hasZeroRec = true;
+	      array<Type> logNa = getArray(logN, s);
+	      array<Type> logFa = getArray(logF, s);
+	      dataSet<Type> ds = sam.dataSets(s);
+	      confSet cs = sam.confSets(s);
+	      paraSet<Type> ps = paraSets(s);
+	      // Overwrite (only) recruitment
+	      if(a - ageOffset == 0)
+		predN(i) = predNFun(ds, cs, ps, logNa, logFa, recruits(s), mortalities(s), (int)y)(0);	     
+	    }
+	  }
+	  // Update simres and insert
+	  if(hasZeroRec){
+	    simRes = predN + noiseN;
+	    k1 = 0;
+	    for(int i = 0; i < notCondOn.size(); ++i){
+	      if(notCondOn(i) == 1){
+		int s = (int)i / (int)nages; // must be integer division: A.rows() = nages * nAreas
+		// Age index = age - minAge
+		int a = i % nages;
+		int ageOffset = sam.confSets(s).minAge - minAgeAll;
+		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
+		logN.col(s)(a - ageOffset,y) = simRes(k1++);
+		Type logRec = logN.col(s)(0,y);
+		if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast){
+		  logN.col(s)(a - ageOffset,y) = logRec;
+		}
+	      }
+	    }
+	  }
+	}else if(nNotCond > 0){ // Only do this if there are any not conditional
 	  vector<int> ccond(nNotCond);
 	  vector<int> cond(nCond);
 	  int k1 = 0; int k2 = 0;
@@ -1568,7 +1662,7 @@ Type objective_function<Type>::operator() ()
 	      Sigma_CN(i,j) = ncovSim(cond(i),ccond(j));
 
 	  matrix<Type> newSigma = Sigma_NN - (matrix<Type>)(meanCorrectionMat * Sigma_CN);
-
+	  
 	  // 3) Simulate marginal distribution
 	  vector<Type> avec(nCond);
 	  vector<Type> muNew(nNotCond);
@@ -1587,8 +1681,8 @@ Type objective_function<Type>::operator() ()
 	      }
 	    }else{
 	      muNew(k2++) = predN(i);
-	    }
-	  }	  
+	    }	  	  
+	  }	 
 	  vector<Type> noiseN = density::MVNORM(newSigma).simulate();
 	  vector<Type> simRes = muNew + (vector<Type>)(meanCorrectionMat * avec) + noiseN;
 	  REPORT(noiseN)
@@ -1660,7 +1754,7 @@ Type objective_function<Type>::operator() ()
 	      }
 	    }
 	  }	    
-	}	  
+	} // End if(nCond==0){ }else if(nNotCond > 0){  }	  
       }// End doSim
     } // End simulate
    } // End year loop
@@ -1694,7 +1788,7 @@ Type objective_function<Type>::operator() ()
      }
    }
 
-   
+
   for(int s = 0; s < nStocks; ++s){
     oftmp<Type> of(this->do_simulate);
     array<Type> logNa = getArray(logN, s);
