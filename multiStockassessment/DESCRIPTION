@@ -10,13 +10,14 @@ Maintainer: Christoffer Moesgaard Albertsen <cmoe@aqua.dtu.dk>
 Description: Fitting multiple SAM models.
 License: GPL-2
 Copyright: Technical University of Denmark
-Depends: stockassessment (>= 0.12.2)
+Depends: stockassessment (>= 0.12.5.9001)
 Imports: TMB (>= 1.9.1), stockassessment (>= 0.12.5.9001), grDevices, graphics, methods, stats, Matrix (>= 1.6-3)
 LinkingTo: TMB (>= 1.9.1), RcppEigen, stockassessment (>= 0.12.5.9001)
 Suggests: parallel
 URL: https://github.com/calbertsen/multi_SAM
 LazyData: TRUE
 Encoding: UTF-8
+SystemRequirements: GNU make C++17
 BugReports: https://github.com/calbertsen/multi_SAM/issues
-Remotes: github::fishfollower/SAM/stockassessment@refpoint
+Remotes: github::fishfollower/SAM/stockassessment@F_TAC
 RoxygenNote: 7.3.2

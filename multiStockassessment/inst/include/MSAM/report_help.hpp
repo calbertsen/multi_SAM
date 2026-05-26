@@ -2,7 +2,6 @@
 #include <string>
 #include <sstream>
 
-
 SEXP MSAM_R_ls(SEXP env, Rboolean all) SOURCE({
   SEXP c = PROTECT(lang4(Rf_install("ls"),
 			 env,
@@ -17,7 +16,43 @@ SEXP MSAM_R_ls(SEXP env, Rboolean all) SOURCE({
   SEXP r = PROTECT(Rf_eval(c, R_GlobalEnv));
   UNPROTECT(2);
   return r;
-  })
+  });
+
+#if R_VERSION >= R_Version(4,5,0)
+SEXP MSAM_R_findVar(SEXP env, SEXP name) SOURCE({    
+    // No need to test with R_existsVarInFrame, R_getVar will give an error if not found
+    // WRONG: we do need to test because the code after expects R_UnboundValue if it wasn't found
+    SEXP sym;
+    if (TYPEOF(name) == SYMSXP) {
+      sym = name;
+    } else {
+      sym = Rf_install(CHAR(Rf_asChar(name)));
+    }
+    if(!R_existsVarInFrame(env,sym))
+      return R_UnboundValue;
+    return R_getVar(sym, env, FALSE);
+  });
+#else
+SEXP MSAM_R_findVar(SEXP env, SEXP name) SOURCE({
+    SEXP sym;
+    if (TYPEOF(name) == SYMSXP) {
+      sym = name;
+    } else {
+      sym = Rf_install(CHAR(Rf_asChar(name)));
+    }
+    return Rf_findVarInFrame(env, sym);
+  });
+#endif
+
+#if R_VERSION >= R_Version(4,1,0)
+SEXP MSAM_R_NewEnv() SOURCE({
+    return R_NewEnv(R_GlobalEnv, FALSE, 0);
+  });
+#else
+SEXP MSAM_R_NewEnv() SOURCE({
+    return eval(lang1(Rf_install("new.env")), R_GlobalEnv);
+  });
+#endif
 
 void moveREPORT(SEXP to, SEXP from)SOURCE({
     SEXP names = PROTECT(MSAM_R_ls(from, FALSE));
@@ -28,8 +63,14 @@ void moveREPORT(SEXP to, SEXP from)SOURCE({
     SEXP name = PROTECT(STRING_ELT(names,i));
     // SEXP val = PROTECT(Rf_findVarInFrame(to, Rf_install(CHAR(name))));
     // if (val == R_UnboundValue) {
-    SEXP valfrom = PROTECT(Rf_findVarInFrame(from, Rf_install(CHAR(name))));
-    Rf_defineVar(Rf_install(CHAR(name)),valfrom,to);
+    SEXP sym;
+    if (TYPEOF(name) == SYMSXP) {
+      sym = name;
+    } else {
+      sym = Rf_install(CHAR(Rf_asChar(name)));
+    }
+    SEXP valfrom = PROTECT(MSAM_R_findVar(from, sym));
+    Rf_defineVar(sym,valfrom,to);
     //UNPROTECT(1);
     //}
     UNPROTECT(2);
@@ -93,7 +134,7 @@ SOURCE(
        oftmp<Type>::oftmp() :
        objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
 				PROTECT(Rf_allocVector(VECSXP,0)),
-				PROTECT(allocSExp(ENVSXP)))
+				PROTECT(MSAM_R_NewEnv()))
        {};
        );
 
@@ -102,7 +143,7 @@ SOURCE(
        oftmp<Type>::oftmp(bool do_simulate):
        objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
 				PROTECT(Rf_allocVector(VECSXP,0)),
-				PROTECT(allocSExp(ENVSXP)))
+				PROTECT(MSAM_R_NewEnv()))
        {
 	 this->set_simulate(do_simulate);
        };
@@ -146,7 +187,7 @@ SOURCE(
        ofall<Type>::ofall(int nStocks_) :
        objective_function<Type>(PROTECT(Rf_allocVector(VECSXP,0)),
 				PROTECT(Rf_allocVector(VECSXP,0)),
-				PROTECT(allocSExp(ENVSXP))),
+				PROTECT(MSAM_R_NewEnv())),
        nStocks(nStocks_)
        {};
        );
@@ -175,19 +216,26 @@ SOURCE(
 	 }
 	 for(int i = 0; i < Rf_length(names); ++i){
 	   SEXP name = PROTECT(STRING_ELT(names,i));
-	   SEXP val = PROTECT(Rf_findVarInFrame(this->report, Rf_install(CHAR(name))));
+	   SEXP sym;
+	   if (TYPEOF(name) == SYMSXP) {
+	     sym = PROTECT(name);
+	   } else {
+	     sym = PROTECT(Rf_install(CHAR(Rf_asChar(name))));
+	   }
+
+	   SEXP val = PROTECT(MSAM_R_findVar(this->report, sym));
 	   if (val == R_UnboundValue) {
 	     SEXP vec = PROTECT(Rf_allocVector(VECSXP,nStocks));
-	     SEXP newval = PROTECT(Rf_findVarInFrame(rep,Rf_install(CHAR(name))));
+	     SEXP newval = PROTECT(MSAM_R_findVar(rep,sym));
 	     SET_VECTOR_ELT(vec,stock,newval);
-	     Rf_defineVar(Rf_install(CHAR(name)),vec,this->report);
+	     Rf_defineVar(sym,vec,this->report);
 	     UNPROTECT(2);
 	   }else{
-	     SEXP newval = PROTECT(Rf_findVarInFrame(rep,Rf_install(CHAR(name))));
+	     SEXP newval = PROTECT(MSAM_R_findVar(rep,sym));
 	     SET_VECTOR_ELT(val,stock,newval);
 	     UNPROTECT(1);
 	   }
-	   UNPROTECT(2);
+	   UNPROTECT(3);
 	 }
 	 UNPROTECT(1);
 	 return;
