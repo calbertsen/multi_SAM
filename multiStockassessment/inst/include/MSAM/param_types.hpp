@@ -1,4 +1,3 @@
-SAM_DEPENDS(Rint)
 
 HEADER(
        template<class Type>
