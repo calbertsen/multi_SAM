@@ -1,3 +1,4 @@
+SAM_DEPENDS(Rint)
 
 HEADER(
        template<class Type>
@@ -38,6 +39,11 @@ HEADER(
 	 cmoe_vector<Type>& operator /=(const Type& rhs);
 	 cmoe_vector<Type> operator/(const Type& rhs);
 
+	 template<class T>
+	 inline cmoe_vector<T> cast() const {
+	   return cmoe_vector<T>(asSEXP(*this));
+	 }	 
+
        };
        )
 
@@ -67,6 +73,7 @@ SOURCE(
 	 size_ = indx;
 	 UNPROTECT(1);
        });
+
 
 SOURCE(
        template<class Type>
@@ -212,6 +219,13 @@ cmoe_vector<Type> asCmoeVector(SEXP x)SOURCE({
     return cmoe_vector<Type>(x);
   });
 
+
+template<>
+inline cmoe_vector<int> asCmoeVector(SEXP x)SOURCE({
+  return asCmoeVector<Rint>(x).cast<int>();
+  })
+
+
 MSM_SPECIALIZATION(cmoe_vector<double> asCmoeVector(SEXP));
 MSM_SPECIALIZATION(cmoe_vector<TMBad::ad_aug> asCmoeVector(SEXP));
 
@@ -263,6 +277,13 @@ HEADER(
 	 // Division with scalars
 	 cmoe_matrix<Type>& operator /=(const Type& rhs);
 	 cmoe_matrix<Type> operator/(const Type& rhs);
+
+	 
+	 template<class T>
+	 inline cmoe_matrix<T> cast() const {
+	   return cmoe_matrix<T>(asSEXP(*this));
+	 }	 
+
        };
        )
 
@@ -521,9 +542,16 @@ struct cmoe_3darray{
   // Division with scalars
   cmoe_3darray<Type>& operator /=(const Type& rhs);
   cmoe_3darray<Type> operator/(const Type& rhs);
+
+
+  template<class T>
+  inline cmoe_3darray<T> cast() const {
+    return cmoe_3darray<T>(asSEXP(*this));
+  }
   
 };
        )
+
 
 
 SOURCE(
@@ -766,3 +794,4 @@ vector<vector<Type> > exp(cmoe_vector<Type> x)SOURCE({
 
 MSM_SPECIALIZATION(vector<vector<double> > exp(const cmoe_vector<double>));
 MSM_SPECIALIZATION(vector<vector<TMBad::ad_aug> > exp(const cmoe_vector<TMBad::ad_aug>));
+
