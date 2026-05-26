@@ -2,8 +2,25 @@
 #include <string>
 #include <sstream>
 
+
+SEXP MSAM_R_ls(SEXP env, Rboolean all) SOURCE({
+  SEXP c = PROTECT(lang4(Rf_install("ls"),
+			 env,
+			 Rf_ScalarLogical(all),
+			 Rf_ScalarLogical(TRUE)
+			 ));
+  
+  SET_TAG(CDR(c),    Rf_install("envir"));
+  SET_TAG(CDDR(c),   Rf_install("all.names"));
+  SET_TAG(CDDDR(c),   Rf_install("sorted"));
+
+  SEXP r = PROTECT(Rf_eval(c, R_GlobalEnv));
+  UNPROTECT(2);
+  return r;
+  })
+
 void moveREPORT(SEXP to, SEXP from)SOURCE({
-   SEXP names = PROTECT(R_lsInternal(from, FALSE));
+    SEXP names = PROTECT(MSAM_R_ls(from, FALSE));
     if(names == NILSXP){
       return;
     }
@@ -152,7 +169,7 @@ SOURCE(
        template<class Type>
        void ofall<Type>::addToReport(SEXP rep, int stock){
 	 if(!isDouble<Type>::value) return;
-	 SEXP names = PROTECT(R_lsInternal(rep, FALSE));
+	 SEXP names = PROTECT(MSAM_R_ls(rep, FALSE));
 	 if(names == NILSXP){
 	   return;
 	 }
