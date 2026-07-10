@@ -959,6 +959,7 @@ mohn_sim_CI.samset <- function(fit, nsim, type = c("Full","Gauss","GaussF","Tail
             pl[with.map] <- sapply(with.map, applyMap, simplify = FALSE)
             est <- unlist(pl)
             sval <- obj$simulate(est)
+            set.seed(NULL)
             ret <- fit$data
             nms <- intersect(names(ret), names(sval))
             ret[nms] <- sval[nms]

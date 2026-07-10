@@ -18,6 +18,8 @@ library(multiStockassessment)
 cs <- suggestCorStructure(fitSim,nAgeClose=0)
 obj <- multisam.fit(fitSim,~factor(Index), cs)
 
+drp <- deterministicReferencepoints(obj,"0.45SPR")
+
 fbarplot(obj)
 ssbplot(obj)
 tsbplot(obj)

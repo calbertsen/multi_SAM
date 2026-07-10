@@ -24,6 +24,7 @@ deterministicReferencepoints.msam <- function(fit,
                                               selYears = lapply(fit,function(x)max(x$data$years)),
                                               biasCorrect = FALSE,
                                               newton.control = list(),
+                                              addSequence = FALSE,
                                               ...){
 
     .checkInput <- function(x, checkFun = identity){
@@ -67,6 +68,8 @@ deterministicReferencepoints.msam <- function(fit,
     fayTabs <- faytable(fit,returnList=TRUE)
     fbarTabs <- fbartable(fit,returnList=TRUE)
 
+    ntabList <- ntable(fit,returnList=TRUE)
+    
     .makeOneRpArgs <- function(i){
         ## Parse input reference points
         fS <- fit[[i]]
@@ -76,20 +79,25 @@ deterministicReferencepoints.msam <- function(fit,
         pli <- lapply(mplL,function(x) x[[i]])        
         fS$pl <- pli
         rpArgs <- Reduce(.refpointMergerS,
-                         lapply(referencepoints[[i]], .refpointParserS, nYears = nYears[[i]], aveYears = aveYears[[i]], selYears = selYears[[i]], logCustomSel = numeric(0), catchType = catchType[[i]] - 1),
+                         lapply(referencepoints[[i]], .refpointParserS, nYears = nYears[[i]], aveYears = aveYears[[i]], selYears = selYears[[i]], logCustomSel = numeric(0), catchType = catchType[[i]] - 1, logNFY = log(ntabList[[i]][1,])),
                          list())
         ## Add starting values    
         rpArgs <- lapply(seq_along(rpArgs), function(j).refpointStartingValueS(rpArgs[[j]], fit = fS, Fsequence = Fsequence[[i]][Fsequence[[i]]>0], fay = fayTabs[[i]], fbar = fbarTabs[[i]][,1], checkValidity=FALSE))
         ## Add Fsequence
-        rp0 <- list(rpType = -1,
-                    xVal = log(Fsequence[[i]]),
-                    nYears = nYears[[i]],
-                    aveYears = aveYears[[i]],
-                    selYears = selYears[[i]],
-                    logCustomSel = numeric(0),
-                    catchType = catchType[[i]] - 1,
-                    logF0 = log(Fsequence[[i]]))
-        r <- c(list(rp0), rpArgs)
+        if(addSequence){
+            rp0 <- list(rpType = -1,
+                        xVal = log(Fsequence[[i]]),
+                        nYears = nYears[[i]],
+                        aveYears = aveYears[[i]],
+                        selYears = selYears[[i]],
+                        logCustomSel = numeric(0),
+                        catchType = catchType[[i]] - 1,
+                        logNFY = log(ntabList[[i]][1,]),
+                        logF0 = log(Fsequence[[i]]))
+            r <- c(list(rp0), rpArgs)
+        }else{
+            r <- rpArgs
+        }
         attr(r,"newton_config") <- newton.control
         r
     }
@@ -121,7 +129,7 @@ deterministicReferencepoints.msam <- function(fit,
     for(i in seq_along(res)){
         ssdrR <- ssdr[grepl(sprintf("SAM_%d_referencepoint",i-1),rownames(ssdr)),]
         if(nrow(ssdrR) > 0){            
-            res[[i]] <- .refpointOutput(ssdrR,rpArgs[[i]][-1], fit[[i]], biasCorrect, aveYearsIn[[i]], selYearsIn[[i]], Fsequence[[i]], referencepoints[[1]])
+            res[[i]] <- .refpointOutput(ssdrR,rpArgs[[i]][-1], fit[[i]], biasCorrect, aveYearsIn[[i]], selYearsIn[[i]], if(addSequence){Fsequence[[i]]}else{c()}, referencepoints[[1]])
         }
     }
     names(res) <- getStockNames(fit)

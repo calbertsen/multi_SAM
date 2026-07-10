@@ -102,7 +102,7 @@ simulate.msam <- function(object,
     }else{
         if(ready.to.fit)
             warning("ready.to.fit is ignored when full.data is false")
-  	ret <- replicate(nsim, {a <- obj$simulate(par); set.seed(NULL); a}, simplify=FALSE)
+  	ret <- replicate(nsim, {a <- obj$simulate(par = par); a}, simplify=FALSE)
     }
     attr(ret,".Random.seed") <- rngSeed
     attr(ret,"m_fit") <- object

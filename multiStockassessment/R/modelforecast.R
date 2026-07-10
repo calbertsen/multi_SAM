@@ -56,7 +56,7 @@ modelforecast.msam <- function(fit,
                           ## findMSY = NULL,
                           ## hcr = NULL,
                           nosim = 1000,
-                          year.base = unlist(min(sapply(fit,function(x)max(x$data$years)))),
+                          year.base = "lastCatchYear", #unlist(min(sapply(fit,function(x)max(x$data$years)))),
                           ave.years = lapply(fit,function(x)max(x$data$years)+(-9:0)),
                           rec.years = lapply(fit,function(x)numeric(0)),
                           rec.fixval = lapply(fit,function(x)numeric(0)),
@@ -69,7 +69,7 @@ modelforecast.msam <- function(fit,
                           useFHessian = FALSE,
                           resampleFirst = !is.null(nosim) && nosim > 0,
                           resampleParameters = FALSE,
-                          useModelLastN = TRUE,
+                          useModelLastN = max(year.base) < max(sapply(fit,function(x)max(x$data$years))) ,
                           fixFirstN = FALSE,
                           customSel = NULL,
                           lagR = FALSE,
@@ -86,7 +86,8 @@ modelforecast.msam <- function(fit,
                           custom_pl = NULL,
                           useNonLinearityCorrection = (nosim > 0 && !deterministicF),
                           ncores = 1,
-                          overwriteBioProcessModel = FALSE,
+                          ##overwriteBioProcessModel = FALSE,
+                          useRecPool = FALSE,
                           useManagementLag = FALSE,
                           assessmentErrorMean_F = 0,
                           assessmentErrorRho_F = 0,
@@ -108,6 +109,14 @@ modelforecast.msam <- function(fit,
                           assessmentErrorSigma_CW = 0,
                           implementationErrorRho_F = 0,
                           pivot = FALSE,
+                          forceAvg_SW = FALSE,
+                          forceAvg_CW = FALSE,
+                          forceAvg_MO = FALSE,
+                          forceAvg_NM = FALSE,
+                          custom_SW = NULL,
+                          custom_CW = NULL,
+                          custom_MO = NULL,
+                          custom_NM = NULL,
                           ...){
    
     dots <- list(...)
@@ -310,12 +319,16 @@ modelforecast.msam <- function(fit,
     }
 
     cstr <- lapply(seq_len(nStocks), function(s){
-        v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
+        v <- replicate(nYears[s], list(.forecastDefault()), simplify = FALSE)
         v[!is.na(constraints[[s]])] <- .parseForecast(removeBound(constraints[[s]][!is.na(constraints[[s]])]), fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+        v
     })
     ubcstr <- lapply(seq_len(nStocks), function(s){
-        v <- replicate(nYears[s], .forecastDefault(), simplify = FALSE)
-        v[!is.na(constraints[[s]])] <- .parseForecast(getBound(constraints[[s]][!is.na(constraints[[s]])]), fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection)
+        v <- replicate(nYears[s], list(.forecastDefault()), simplify = FALSE)
+        ub <- getBound(constraints[[s]][!is.na(constraints[[s]])])
+        has_ub <- which(nchar(ub) > 0)
+        v[!is.na(constraints[[s]])][has_ub] <- .parseForecast(ub[has_ub], fit[[s]]$conf$fbarRange, fit[[s]]$data$fleetTypes, c(fit[[s]]$conf$minAge,fit[[s]]$conf$maxAge), useNonLinearityCorrection, isUpper = TRUE)
+        v
     })
     
     ## Use custom selectivity?
@@ -339,8 +352,11 @@ modelforecast.msam <- function(fit,
     }
 
     ## Get recruitment model
-    if(!is.list(rec.years) && is.numeric(rec.years))
+    if(!is.list(rec.years) && is.numeric(rec.years)){
         rec.years <- replicate(nStocks,rec.years, simplify=FALSE)
+    }else if(!is.list(rec.years) && is.character(rec.years)){
+        rec.years <- lapply(fit,function(x) tail(x$data$years,as.numeric(rec.years)))
+    }    
    if(!is.list(rec.fixval) && is.numeric(rec.fixval))
         rec.fixval <- replicate(nStocks,rec.fixval, simplify=FALSE)
     if(!is.list(rec.fixvalVar) && is.numeric(rec.fixvalVar))
@@ -348,6 +364,11 @@ modelforecast.msam <- function(fit,
  
     recList <- replicate(nStocks,list(), FALSE)
     recTabAll <- rectable(fit,returnList = TRUE)
+    recpool <- lapply(1:nStocks,function(i) recTabAll[[i]][rownames(recTabAll[[i]])%in%rec.years[[i]],1])
+    useRecPool <- rep(useRecPool, length.out = nStocks)
+    for(i in 1:nStocks)
+        if(useRecPool[i] && length(recpool[[i]])==0)
+            stop("rec.years should be given when useRecPool=TRUE")
     for(i in 1:nStocks){
         if(length(rec.fixval[[i]]) > 0){
             recList[[i]]$recModel <- rep(1,nYears[i])
@@ -358,11 +379,15 @@ modelforecast.msam <- function(fit,
             recList[[i]]$logRecruitmentMedian <- rep(NA_real_,length.out = nYears[i])
             recList[[i]]$logRecruitmentVar <- rep(NA_real_,length.out = nYears[i])
         }else{
-            rectab <- recTabAll[[i]]
-            recpool <- rectab[rownames(rectab)%in%rec.years[[i]],1]
             recList[[i]]$recModel <- rep(1,nYears[i])
-            recList[[i]]$logRecruitmentMedian <- rep(median(log(recpool)),nYears[i])
-            recList[[i]]$logRecruitmentVar <- rep(stats::var(log(recpool)),nYears[i])
+            if(useRecPool[i]){
+                recList[[i]]$recModel <- rep(1,nYears[i])
+                recList[[i]]$logRecruitmentMedian <- sample(x=log(recpool[[i]]),size=nYears[i],replace=TRUE)
+                recList[[i]]$logRecruitmentVar <- rep((1e-8)^2,nYears[i])
+            }else{
+                recList[[i]]$logRecruitmentMedian <- rep(median(log(recpool[[i]])),nYears[i])
+                recList[[i]]$logRecruitmentVar <- rep(stats::var(log(recpool[[i]])),nYears[i])
+            }
         }
     }
 
@@ -382,7 +407,10 @@ modelforecast.msam <- function(fit,
     
     
     ## Convert average years to indices
-    useModelBio <- TRUE  ##sapply(ave.years, function(aa) if(length(aa) == 0){ return(TRUE) }else{ return(FALSE)})
+    if(!is.list(ave.years))
+        ave.years <- replicate(nStocks, ave.years, FALSE)
+    ## useModelBio <- forceAvg_SW | forceAvg_CW | force_Avg_
+    ## cat("Using bio model to simulate:\n", paste(paste0("\t",paste0(getStockNames(fit),": ",useModelBio)),collapse="\n"),"\n")
     ave.yearsIn <- ave.years
     ## ave.years[useModelBio] <- lapply(fit[useModelBio],function(x) max(x$data$years)+(-4:0))
     ave.years <- lapply(as.list(1:nStocks),function(i)match(ave.years[[i]], fit[[i]]$data$years) - 1)
@@ -448,32 +476,89 @@ modelforecast.msam <- function(fit,
  
     ## if(any(useModelBio)){
     ## Update biopar processes
-    splitArray <- function(a){
-        nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
-        lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
-    }
-    extendBio <- function(x, useBio) rbind(x,matrix(x[nrow(x),],postYears,ncol(x), byrow=TRUE))
-    makeBio <- function(x, isArray = FALSE){
-        if(length(x) == 0) return(x)
-        if(isArray){
-            biox <- split3DArrays(x)
-        }else{                
-            biox <- splitMatrices(x)
+    hasCustomBio <- !c(is.null(custom_SW),is.null(custom_CW),is.null(custom_MO),is.null(custom_NM))
+    simBio <- all(!hasCustomBio)
+    if(any(hasCustomBio) && !all(hasCustomBio))
+        warning("No biological parameters will be simulated if custom values are given for at least one")   
+    forceAvg_SW <- rep(forceAvg_SW,length.out = nStocks)
+    forceAvg_CW <- rep(forceAvg_CW,length.out = nStocks)
+    forceAvg_MO <- rep(forceAvg_MO,length.out = nStocks)
+    forceAvg_NM <- rep(forceAvg_NM,length.out = nStocks)
+    if(simBio){
+        splitArray <- function(a){
+            nr <- dim(a)[1]; nc <- dim(a)[2]; na <- dim(a)[3]
+            lapply(split(a,rep(seq_len(na),each=nr*nc)), matrix, nrow = nr, ncol = nc)
         }
-        nr <- sapply(biox,nrow)
-        fn <- extendBio
-        if(isArray)
-            fn <- function(y) simplify2array(lapply(splitArray(y), extendBio))
-        biox[nr > 0 & useModelBio] <- lapply(biox[nr > 0 & useModelBio], fn)
-        if(isArray)
-            return(combine3DArrays(biox))
-        return(combineMatrices(biox))
+        extendBio <- function(x, useBio, s) rbind(x,matrix(x[nrow(x),],postYears[s],ncol(x), byrow=TRUE))
+        makeBio <- function(x, isArray = FALSE, useModelBio = TRUE){
+            if(length(x) == 0) return(x)
+            if(isArray){
+                biox <- split3DArrays(x)
+            }else{                
+                biox <- splitMatrices(x)
+            }
+            nr <- sapply(biox,nrow)
+            fn <- extendBio
+            if(isArray)
+                fn <- function(y,s) simplify2array(lapply(splitArray(y), extendBio,s=s))
+            biox[nr > 0 & useModelBio] <- lapply(which(nr > 0 & useModelBio),function(s) fn(biox[[s]],s))
+            if(isArray)
+                return(combine3DArrays(biox))
+            return(combineMatrices(biox))
+        }
+        pl$logitMO <- makeBio(pl$logitMO, useModelBio = !forceAvg_MO)
+        pl$logNM <- makeBio(pl$logNM, useModelBio = !forceAvg_NM)
+        pl$logSW <- makeBio(pl$logSW, useModelBio = !forceAvg_SW)
+        pl$logCW <- makeBio(pl$logCW, TRUE, useModelBio = !forceAvg_CW)
+        for(s in 1:nStocks){
+            nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
+            if(fit[[s]]$conf$stockWeightModel > 0 && !forceAvg_SW[s])
+                args$data$sam[[s]]$stockMeanWeight <- rbind(args$data$sam[[s]]$stockMeanWeight,matrix(NA_real_,postYears[s], nAges))
+            if(fit[[s]]$conf$matureModel > 0 && !forceAvg_MO[s])
+                args$data$sam[[s]]$propMat <- rbind(args$data$sam[[s]]$propMat,matrix(NA_real_,postYears[s], nAges))
+            if(fit[[s]]$conf$mortalityModel > 0 && !forceAvg_NM[s])
+                args$data$sam[[s]]$natMor <- rbind(args$data$sam[[s]]$natMor,matrix(NA_real_,postYears[s], nAges))
+            if(fit[[s]]$conf$catchWeightModel > 0 && !forceAvg_SW[s])
+                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(postYears[s] + length(fit[[s]]$data$years) - dim(fit[[s]]$data$catchMeanWeight)[1],dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
+        }
+    }else{
+        if(!is.null(custom_SW)){
+            if(!is.list(custom_SW))
+                custom_SW <- replicate(nStocks,custom_SW,FALSE)        
+            for(s in 1:nStocks){
+                nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
+                nval <- matrix(custom_SW[[s]],postYears[s], nAges, byrow=TRUE)
+                args$data$sam[[s]]$stockMeanWeight <- rbind(args$data$sam[[s]]$stockMeanWeight,nval)
+            }
+        }
+        if(!is.null(custom_MO)){
+            if(!is.list(custom_MO))
+                custom_MO <- replicate(nStocks,custom_MO,FALSE)        
+            for(s in 1:nStocks){
+                nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
+                nval <- matrix(custom_MO[[s]],postYears[s], nAges, byrow=TRUE)
+                args$data$sam[[s]]$propMat <- rbind(args$data$sam[[s]]$propMat,nval)
+            }
+        }
+        if(!is.null(custom_NM)){
+            if(!is.list(custom_NM))
+                custom_NM <- replicate(nStocks,custom_NM,FALSE)        
+            for(s in 1:nStocks){
+                nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
+                nval <- matrix(custom_NM[[s]],postYears[s], nAges, byrow=TRUE)
+                args$data$sam[[s]]$natMor <- rbind(args$data$sam[[s]]$natMor,nval)
+            }
+        }
+        if(!is.null(custom_CW)){
+            if(!is.list(custom_CW))
+                custom_CW <- replicate(nStocks,custom_CW,FALSE)        
+            for(s in 1:nStocks){
+                nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
+                nval <- aperm(array(custom_CW[[s]],dim = c(nAges,postYears[s] + length(fit[[s]]$data$years) - dim(fit[[s]]$data$catchMeanWeight)[1], dim(args$data$sam[[s]]$catchMeanWeight)[3] )),c(2,1,3))
+                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,nval,along=1),c(3,1,2))
+            }
+        }
     }
-    pl$logitMO <- makeBio(pl$logitMO)
-    pl$logNM <- makeBio(pl$logNM)
-    pl$logSW <- makeBio(pl$logSW)
-    pl$logCW <- makeBio(pl$logCW, TRUE)
-    ##}
     logitFSTmp <- split3DArrays(pl$logitFseason)
     pl$logitFseason <- combine3DArrays(lapply(as.list(1:length(logitFSTmp)),
                                               function(i){
@@ -482,7 +567,7 @@ modelforecast.msam <- function(fit,
                                                   lfsNew <- array(0, c(d0[1],postYears[i]+d0[2], d0[3]))
                                                   lfsNew[,1:d0[2],] <- lfsOld
                                                   lfsNew
-                                                  }))
+                                              }))
     
     ##args$random <- unique(names(obj0$env$par[obj0$env$random]))
     for(i in seq_along(args$data$sam))
@@ -521,6 +606,15 @@ modelforecast.msam <- function(fit,
                 args$data$sam[[s]]$RecruitClimate <- aperm(do.call(abind,c(arcL,replicate(nYears[[s]],arcL[[length(arcL)]],simplify=FALSE))),c(3,2,1))
             }
             rownames(args$data$sam[[s]]$TAC) <- rownames(args$data$sam[[s]]$RecruitClimate) <- yy
+            ## Biopar
+            if(fit[[s]]$conf$stockWeightModel > 0)
+                args$data$sam[[s]]$stockMeanWeight <- rbind(args$data$sam[[s]]$stockMeanWeight,NA_real_)
+            if(fit[[s]]$conf$matureModel > 0)
+                args$data$sam[[s]]$propMat <- rbind(args$data$sam[[s]]$propMat,NA_real_)
+            if(fit[[s]]$conf$mortalityModel > 0)
+                args$data$sam[[s]]$natMor <- rbind(args$data$sam[[s]]$natMor,NA_real_)
+            if(fit[[s]]$conf$catchWeightModel > 0)
+                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(1,dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
         }
         ## Handle shared data
         if(args$data$sharedObs$hasSharedObs){
@@ -612,7 +706,11 @@ modelforecast.msam <- function(fit,
                                             logRecruitmentVar = as.numeric(recList[[i]]$logRecruitmentVar),
                                             fsdTimeScaleModel = as.numeric(fsdTimeScaleModel[[i]]),
                                             ## logF, logN, obs, biopar
-                                            simFlag = c(0,0,0,as.numeric(overwriteBioProcessModel)),
+                                            simFlag = c(0,0,0,!simBio),#as.numeric(!useModelBio[i])),
+                                            forceAvg_SW = as.numeric(forceAvg_SW[s]),
+                                            forceAvg_CW = as.numeric(forceAvg_CW[s]),
+                                            forceAvg_MO = as.numeric(forceAvg_MO[s]),
+                                            forceAvg_NM = as.numeric(forceAvg_NM[s]),
                                             hcrConf = hcrConf[[i]],
                                             hcrCurrentSSB = hcrCurrentSSB,
                                             Fdeviation = rnorm(nrow(splitMatrices(pl$logF)[[i]])),
@@ -875,10 +973,11 @@ modelforecast.msam <- function(fit,
         ## Pre-calculate chols
         L <- NULL
         if(isTRUE(resampleFirst)){
+            cov <- makePosDef(cov)
             L <- matrix(0, nrow(cov), ncol(cov))
             idx <- diag(cov) > .Machine$double.xmin
             if(any(idx)){
-                L0 <- chol(cov[idx,idx], pivot = pivot)
+                L0 <- chol(makePosDef(cov[idx,idx]), pivot = pivot)
                 if(pivot)
                     L0[, order(attr(L0, "pivot"))]
                 L[idx,idx] <- L0
@@ -992,6 +1091,13 @@ modelforecast.msam <- function(fit,
             sim0 <- 0*est
             if(resampleFirst)
                 sim0 <- rmvnorm(1, mu=0*est, L=L)
+            for(i in 1:nStocks){
+                if(useRecPool[i]){
+                    obj2$env$data$sam[[i]]$forecast$logRecruitmentMedian <- sample(x=log(recpool[[i]]),size=nYears[i],replace=TRUE)
+                    obj2$env$data$sam[[i]]$forecast$logRecruitmentVar <- rep((1e-8)^2,nYears[i])
+                    ##obj2$retape() ## Is this needed??
+                }
+            }
             ## update N & F before forecast
             dList0 <- split(as.vector(sim0), nfSplit)
             ##estList0 <- split(as.vector(sim0+est), nfSplit)          
@@ -1095,6 +1201,7 @@ modelforecast.msam <- function(fit,
                                        fbar = sapply(simvals,function(x) exp(x$logfbar[[ss]][ii])),
                                        catch = sapply(simvals,function(x) exp(x$logCatch[[ss]][ii])),
                                        ssb = sapply(simvals,function(x) exp(x$logssb[[ss]][ii])),
+                                       erb = sapply(simvals,function(x) exp(x$logerb[[ss]][ii])),
                                        rec = sapply(simvals,function(x) exp(x$logN[[ss]][1,ii])),
                                        cwF = rep(NA_real_, nosim),
                                        catchatage = do.call("cbind",lapply(simvals,function(x) exp(x$logCatchAge[[ss]][,ii]))),
@@ -1108,12 +1215,14 @@ modelforecast.msam <- function(fit,
                                        logEmpiricalYPR_L  = sapply(simvals,function(x) (x$logEmpiricalYPR_L[[ss]][ii])),
                                        logEmpiricalYPR_D  = sapply(simvals,function(x) (x$logEmpiricalYPR_D[[ss]][ii])),
                                        bio_stockMeanWeight  = sapply(simvals,function(x) (x$bio_stockMeanWeight[[ss]][ii,])),
-                                       bio_catchMeanWeight  = sapply(simvals,function(x) (x$bio_catchMeanWeight[[ss]][ii,])),
+                                       bio_catchMeanWeight  = sapply(simvals,function(x) (x$bio_catchMeanWeight[[ss]][ii,,])),
                                        bio_natMor  = sapply(simvals,function(x) (x$bio_natMor[[ss]][ii,])),
                                        bio_propMat  = sapply(simvals,function(x) (x$bio_propMat[[ss]][ii,])),
                                        
                                        logHazard_F_breakpoints = simplify2array(lapply(simvals,function(x) (x$logHazard_F_breakpoints[[ss]][,ii,,,drop=FALSE]))),
                                        logHazard_M_breakpoints =  simplify2array(lapply(simvals,function(x) (x$logHazard_M_breakpoints[[ss]][,ii,,,drop=FALSE]))),
+                                       Fseason = simplify2array(lapply(simvals,function(x) (x$Fseason[[ss]][,ii,,drop=FALSE]))),
+                                       Effective_logF = simplify2array(lapply(simvals,function(x) (x$Effective_logF[[ss]][,ii]))),
                                        year=y)
                 rownames(simlist[[i+1]]$catchatage) <- seq(fit[[ss]]$conf$minAge,fit[[ss]]$conf$maxAge,1)
                 
@@ -1135,6 +1244,7 @@ modelforecast.msam <- function(fit,
             fbarL <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbarL))),3)  
             rec <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$rec))))
             ssb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$ssb))))
+            erb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$erb))))
             tsb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$tsb))))
             catch <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$catch))))
             land <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$land))))  
@@ -1194,7 +1304,7 @@ modelforecast.msam <- function(fit,
         obj$fn(attr(fit,"m_opt")$par)
         ## Get results
         ADIndex <- obj$env$ADreportIndex()
-        IndxKeep <- c("logfbar","logssb","logR","logCatch","logtsb","logLagR","logLand","logDis","loglandfbar","logdisfbar")[c(TRUE,TRUE,TRUE,TRUE,addTSB,lagR,splitLD,splitLD,splitLD,splitLD)]
+        IndxKeep <- c("logfbar","logssb","logerb","logR","logCatch","logtsb","logLagR","logLand","logDis","loglandfbar","logdisfbar")[c(TRUE,TRUE,TRUE,TRUE,TRUE,addTSB,lagR,splitLD,splitLD,splitLD,splitLD)]
         stockNames <- paste0("SAM_",0:(nStocks-1))
         ADIndexUse <- list()
         for(i in 1:nStocks){
@@ -1335,7 +1445,7 @@ modelforecast.msam <- function(fit,
 
 
 
-
+## Adds FMTC constraint, F-multiplier to total catch. Should be the same for all
 backcorrected_modelforecast.msam <- function(fit,
                                         constraints = NULL,
                                         fscale = NULL,
@@ -1354,10 +1464,10 @@ backcorrected_modelforecast.msam <- function(fit,
         stop("Please use the constraints argument")
 
     ## Helper functions
-    nStocks <- length(fit)
+    nStocks <- length(fit)    
     constraints <- targetToList(constraints, nStocks, character)    
     for(i in seq_along(constraints)){
-        if(!all(grepl("^(F|SSB|C)=",constraints[[i]])) && !any(!grepl("\\*",constraints[[i]])))
+        if(!all(grepl("^(F|SSB|C|FMTC)=",constraints[[i]])) && !any(!grepl("\\*",constraints[[i]])))
             stop("The back correction is currently only implemented for F, SSB, and C constraints without restrictions.")
         if(grepl("^SSB",tail(constraints[[i]],1)))
             stop("The last constraint cannot be for next years SSB. Please add an arbitrary constraint as the last")
@@ -1497,30 +1607,48 @@ backcorrected_modelforecast.msam <- function(fit,
         isRel <- grepl("\\*",cstr)
         bc_eta <- nlminb(numeric(nStocks), function(ee){
             v <- 0
-            for(s in seq_len(nStocks)){
-                if(grepl("^F=",cstr[s])){
-                    ## F constraint
-                    if(isRel[s]){
-                        v <- v + (median(getFbar(ee[s],s,y+1))/median(getFbar(0,s,y))-Target[s])^2
-                    }else{
-                        v <- v + (median(getFbar(ee[s],s,y+1))-Target[s])^2
-                    }
-                }else if(grepl("^SSB=",cstr[s])){
-                    ## SSB constraint
-                    if(isRel[s]){
-                        v <- v + (median(getNextSSB(ee[s],s,y+1))/median(getNextSSB(getFbar(0,s,y)))-Target[s])^2
-                    }else{
-                        v <- v + (median(getNextSSB(ee[s],s,y+1))-Target[s])^2
-                    }
-                }else if(grepl("^C=",cstr[s])){
-                    ## Catch constraint
-                    if(isRel[s]){
-                        v <- v + (median(getCatch(ee[s],s,y+1))/median(getCatch(0,s,y))-Target[s])^2
-                    }else{
-                        v <- v + (median(getCatch(ee[s],s,y+1))-Target[s])^2
-                    }
+            if(any(grepl("^FMTC=",cstr))){
+                if(!all(grepl("^FMTC=",cstr)) || length(unique(Target)) != 1)
+                    warning("When using FMTC targets, all stocks should use the same target! Only the first FMTC target will be used.")
+                sX <- min(which(grepl("^FMTC=",cstr)))
+                ## Sum of median catches, use first multiplier
+                ## Catch constraint
+                if(isRel[sX]){
+                    cOld <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(0,s,y))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[1],s,y+1))))
+                    v <- v + (cNew/cOld-Target[sX])^2
                 }else{
-                    stop("The constraint cannot currently be back corrected")
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[1],s,y+1))))
+                    v <- v + (cNew-Target[sX])^2
+                }
+                ## Force other multipliers to equal ee[1]
+                v <- v + sum((ee-ee[1])^2)
+            }else{
+                for(s in seq_len(nStocks)){
+                    if(grepl("^F=",cstr[s])){
+                        ## F constraint
+                        if(isRel[s]){
+                            v <- v + (median(getFbar(ee[s],s,y+1))/median(getFbar(0,s,y))-Target[s])^2
+                        }else{
+                            v <- v + (median(getFbar(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else if(grepl("^SSB=",cstr[s])){
+                        ## SSB constraint
+                        if(isRel[s]){
+                            v <- v + (median(getNextSSB(ee[s],s,y+1))/median(getNextSSB(getFbar(0,s,y)))-Target[s])^2
+                        }else{
+                            v <- v + (median(getNextSSB(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else if(grepl("^C=",cstr[s])){
+                        ## Catch constraint
+                        if(isRel[s]){
+                            v <- v + (median(getCatch(ee[s],s,y+1))/median(getCatch(0,s,y))-Target[s])^2
+                        }else{
+                            v <- v + (median(getCatch(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else{
+                        stop("The constraint cannot currently be back corrected")
+                    }
                 }
             }
             v

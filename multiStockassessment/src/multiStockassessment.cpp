@@ -239,6 +239,8 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_VECTOR(predVarObs);
   PARAMETER_CMOE_VECTOR(recVarScalePar);
   PARAMETER_VECTOR(logFecundityScaling);
+  PARAMETER_CMOE_VECTOR(logSpawningQuality);
+  PARAMETER_CMOE_VECTOR(Wsigma);
 
   PARAMETER_CMOE_VECTOR(logPhiSW);
   PARAMETER_CMOE_VECTOR(logSdProcLogSW);
@@ -368,6 +370,8 @@ Type objective_function<Type>::operator() ()
     paraSets(s).predVarObs = predVarObs.col(s);
     paraSets(s).recVarScalePar = recVarScalePar.col(s);
     paraSets(s).logFecundityScaling = logFecundityScaling(s);
+    paraSets(s).logSpawningQuality = logSpawningQuality.col(s);
+    paraSets(s).Wsigma = Wsigma.col(s);
     // Forecast FMSY
     paraSets(s).logFScaleMSY = logFScaleMSY(s);
     paraSets(s).implicitFunctionDelta = implicitFunctionDelta(s);
@@ -643,19 +647,6 @@ Type objective_function<Type>::operator() ()
   /////////////////////////////////////////
   ////////// F PRE-CALCULATIONS //////////
   ///////////////////////////////////////
-  // Update mortalities ahead of time
-  vector<MortalitySet<Type> > mortalities(nStocks);
-  for(int s = 0; s < nStocks; ++s){
-    oftmp<Type> of(this->do_simulate);     
-    array<Type> logFa = getArray(logF, s);
-    array<Type> lfs = getArray(logitFseason,s);
-    mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
-    // reportMort((MortalitySet<Type>)mortalities(s),&of);
-    MortalitySet<Type> mort = mortalities(s);
-    REPORT_F(mort, (&of));
-    ofAll.addToReport(of.report,s);
-    moveADREPORT(&of,this,s);
-  }
 
   ////////////////////////////////////////
   /////////// Prepare forecast //////////
@@ -671,6 +662,21 @@ Type objective_function<Type>::operator() ()
     ofAll.addToReport(of.report,s);
     moveADREPORT(&of,this,s);
   }
+
+  // Update mortalities ahead of time (but after prepare forecast)
+  vector<MortalitySet<Type> > mortalities(nStocks);
+  for(int s = 0; s < nStocks; ++s){
+    oftmp<Type> of(this->do_simulate);     
+    array<Type> logFa = getArray(logF, s);
+    array<Type> lfs = getArray(logitFseason,s);
+    mortalities(s) = MortalitySet<Type>(sam.dataSets(s), sam.confSets(s), paraSets(s), logFa, lfs);
+    // reportMort((MortalitySet<Type>)mortalities(s),&of);
+    MortalitySet<Type> mort = mortalities(s);
+    REPORT_F(mort, (&of));
+    ofAll.addToReport(of.report,s);
+    moveADREPORT(&of,this,s);
+  }
+
 
   
   // // Calculate forecast ahead of time
@@ -1047,8 +1053,9 @@ Type objective_function<Type>::operator() ()
       // }
       // Update other stocks if simulating historical values
       SIMULATE{
+	GetRNGstate();
 	if(cs.simFlag(0)==0){
-	  if(shared_F_type == 1){ // Scaling by vector AR(1)
+		  if(shared_F_type == 1){ // Scaling by vector AR(1)
 	    matrix<Type> logF0 = logF.col(0);
 	    matrix<Type> logFs = logF.col(s);
 	    for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
@@ -1134,6 +1141,7 @@ Type objective_function<Type>::operator() ()
 	    moveADREPORT(&of,this,s);
 	  }
 	}
+	PutRNGstate();
       }
     }
    }
@@ -1297,7 +1305,7 @@ Type objective_function<Type>::operator() ()
    for(int yall = 0; yall < maxYearAll - minYearAll + 1; ++yall){
      // Handle simulation of F for forecast and HCR
      SIMULATE{
-
+       GetRNGstate();
        // Simulate new F for forecast and HCR
        for(int s = 0; s < nAreas; ++s){
 	 array<Type> logNa = getArray(logN, s);
@@ -1341,7 +1349,7 @@ Type objective_function<Type>::operator() ()
 	   }
 	 }
        }
-
+       PutRNGstate();
      }else{
        // Get likelihood contribution of forecast for stock 2++
        for(int s = 1; s < nAreas; ++s){
@@ -1485,6 +1493,7 @@ Type objective_function<Type>::operator() ()
 	 3) Simulate from marginal distribution
 	 4) Insert into logN at the right places
       */
+      GetRNGstate();
       // 1) Check if any simFlags are 0
       matrix<Type> NscaleSim(Nscale.size(),Nscale.size());
       NscaleSim.setZero();
@@ -1618,8 +1627,8 @@ Type objective_function<Type>::operator() ()
 		int a = i % nages;
 		int ageOffset = sam.confSets(s).minAge - minAgeAll;
 		int y = yall - CppAD::Integer(sam.dataSets(s).years(0) - minYearAll);
-		logN.col(s)(a - ageOffset,y) = simRes(k1++);
 		Type logRec = logN.col(s)(0,y);
+		logN.col(s)(a - ageOffset,y) = simRes(k1++);
 		if(a - ageOffset == 0 && sam.confSets(s).simKeepRec && isForecast){
 		  logN.col(s)(a - ageOffset,y) = logRec;
 		}
@@ -1756,6 +1765,7 @@ Type objective_function<Type>::operator() ()
 	  }	    
 	} // End if(nCond==0){ }else if(nNotCond > 0){  }	  
       }// End doSim
+      PutRNGstate();
     } // End simulate
    } // End year loop
 
@@ -1767,6 +1777,7 @@ Type objective_function<Type>::operator() ()
 
    // REPORT F at this point as well to get simulated forecast for MSE
    SIMULATE{
+     GetRNGstate();
      for(int s = 0; s < logF.cols(); ++s){
        oftmp<Type> of(this->do_simulate);
        matrix<Type> logFs = logF.col(s);
@@ -1786,6 +1797,7 @@ Type objective_function<Type>::operator() ()
        ofAll.addToReport(of.report,s);
        moveADREPORT(&of,this,s);
      }
+     GetRNGstate();
    }
 
 
@@ -1901,9 +1913,9 @@ Type objective_function<Type>::operator() ()
 	    mohn,
 	    this);
 
-  // SIMULATE{
-  //   PutRNGstate();
-  // }
+  SIMULATE{
+    PutRNGstate();
+  }
 
 
   return ans;
