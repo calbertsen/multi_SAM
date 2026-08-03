@@ -116,6 +116,7 @@ addSimulatedYears.sam <- function(fit, constraints,resampleFirst=FALSE,trueSel=N
 ##' @export
 addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=NULL,refit=FALSE,silent=TRUE, resampleParameters = FALSE, deterministicF=TRUE, maxTrueF = 3.0, maxScaleF=1.5, ...){
     cat("Adding simulated year with constraints:\n")
+    cat("Model year range:",attr(fit,"m_data")$minYearAll,attr(fit,"m_data")$maxYearAll,"(",attr(fit,"m_data")$maxYearAll-attr(fit,"m_data")$minYearAll+1,")","\n")    
     cat(paste(paste0("\t",getStockNames(fit),": ",constraints),collapse="\n"),"\n")
     if(resampleParameters){
         cat("\tResampling parameters\n")
@@ -155,36 +156,48 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
         nms <- intersect(names(dat$sam[[i]]), names(v))
         for(nn in nms)
             dat$sam[[i]][[nn]] <- v[[nn]][[i]]
-        dat$sam[[i]]$years <- min(as.numeric(dat$sam[[i]]$aux[,"year"])):max(as.numeric(dat$sam[[i]]$aux[,"year"]))
+        dat$sam[[i]]$years <- min(as.numeric(dat$sam[[i]]$aux[,"year"])):(max(as.numeric(dat$sam[[i]]$aux[,"year"])))
         dat$sam[[i]]$noYears <- length(dat$sam[[i]]$years)
         ## Update names of biology
         dmnm <- list(dat$sam[[i]]$years, fit[[i]]$conf$minAge:fit[[i]]$conf$maxAge, dimnames(fit[[i]]$catchMeanWeight)[3])        
         ## Save observed biology
         if(!is.null(v[["obs_stockMeanWeight"]])){
-            dat$sam[[i]]$stockMeanWeight <- v[["obs_stockMeanWeight"]][[i]]
+            dat$sam[[i]]$stockMeanWeight <- v[["obs_stockMeanWeight"]][[i]][seq_along(dat$sam[[i]]$years),]
         }##else if(!is.null(v[["dat.stockMeanWeight"]])){
         ##     dat$sam[[i]]$stockMeanWeight <- v[["dat.stockMeanWeight"]][[i]]
         ## }
         dat$sam[[i]]$stockMeanWeight[1:nrow(tmpSW[[i]]),] <- tmpSW[[i]]
         if(!is.null(v[["obs_propMat"]])){
-            dat$sam[[i]]$propMat <- v[["obs_propMat"]][[i]]
+            dat$sam[[i]]$propMat <- v[["obs_propMat"]][[i]][seq_along(dat$sam[[i]]$years),]
         }## else if(!is.null(v[["dat.propMat"]])){
         ##     dat$sam[[i]]$propMat <- v[["dat.propMat"]][[i]]
         ## }
         dat$sam[[i]]$propMat[1:nrow(tmpPM[[i]]),] <- tmpPM[[i]]
         if(!is.null(v[["obs_natMor"]])){
-            dat$sam[[i]]$natMor <- v[["obs_natMor"]][[i]]
+            dat$sam[[i]]$natMor <- v[["obs_natMor"]][[i]][seq_along(dat$sam[[i]]$years),]
         }## else if(!is.null(v[["dat.natMor"]])){
         ##     dat$sam[[i]]$natMor <- v[["dat.natMor"]][[i]]
         ## }
         dat$sam[[i]]$natMor[1:nrow(tmpNM[[i]]),] <- tmpNM[[i]]        
         if(!is.null(v[["obs_catchMeanWeight"]])){
-            dat$sam[[i]]$catchMeanWeight <- v[["obs_catchMeanWeight"]][[i]]
+            dat$sam[[i]]$catchMeanWeight <- v[["obs_catchMeanWeight"]][[i]][seq_along(dat$sam[[i]]$years),,]
         }## else if(!is.null(v[["dat.catchMeanWeight"]])){
         ##     dat$sam[[i]]$catchMeanWeight <- v[["dat.catchMeanWeight"]][[i]]
         ## }
         dat$sam[[i]]$catchMeanWeight[1:nrow(tmpCW[[i]]),,] <- tmpCW[[i]]
-        dimnames(dat$sam[[i]]$propMat) <- dimnames(dat$sam[[i]]$stockMeanWeight) <- dimnames(dat$sam[[i]]$natMor) <- dimnames(dat$sam[[i]]$propM) <- dmnm[1:2]
+        ## Bio using averages
+        dat$sam[[i]]$propM <- v[["bio_propM"]][[i]]
+        dat$sam[[i]]$propF <- v[["bio_propF"]][[i]]
+        dat$sam[[i]]$landFrac <- v[["bio_landFrac"]][[i]]
+        ## Update dimnames
+        cat("propMat",dim(dat$sam[[i]]$propMat),length(dmnm[[1]]),length(dmnm[[2]]),"\n")
+        dimnames(dat$sam[[i]]$propMat) <- dmnm[1:2] #list(dmnm[[1]][nrow(dat$sam[[i]]$propMat)],dmnm[[2]])
+        cat("SW",dim(dat$sam[[i]]$stockMeanWeight),length(dmnm[[1]]),length(dmnm[[2]]),"\n")
+        dimnames(dat$sam[[i]]$stockMeanWeight) <- dmnm[1:2] #list(dmnm[[1]][nrow(dat$sam[[i]]$stockMeanWeight)],dmnm[[2]])
+        cat("natMor",dim(dat$sam[[i]]$natMor),length(dmnm[[1]]),length(dmnm[[2]]),"\n")
+dimnames(dat$sam[[i]]$natMor) <- dmnm[1:2] #list(dmnm[[1]][nrow(dat$sam[[i]]$natMor)],dmnm[[2]])
+        cat("propM",dim(dat$sam[[i]]$propM),length(dmnm[[1]]),length(dmnm[[2]]),"\n")
+        dimnames(dat$sam[[i]]$propM) <- dmnm[1:2] #list(dmnm[[1]][nrow(dat$sam[[i]]$propM)],dmnm[[2]])
         dimnames(dat$sam[[i]]$catchMeanWeight) <- dimnames(dat$sam[[i]]$landFrac) <- dimnames(dat$sam[[i]]$disMeanWeight) <- dimnames(dat$sam[[i]]$landMeanWeight) <- dimnames(dat$sam[[i]]$propF) <- dmnm
         ## nms <- intersect(names(dat$sam[[i]]), names(v))
         ## for(nn in nms){
@@ -440,6 +453,7 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
                                 sprintf("F=%f",EMReferencePoints$Ftarget),
                                 "F=1*")
     ##fcThisYear$fastFixedF <- TRUE
+    cat("nosim:",fcThisYear$nosim,"\n")
     adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
     afFTab <- attr(adviceForecast,"tab")
     tabLab <- attr(adviceForecast,"estimateLabel")
@@ -448,7 +462,8 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     redoForecast <- FALSE
     ## Check if SSB < MSY Btrigger at the "beginning of advice year"
     fcorr <- afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] / EMReferencePoints$Btrigger
-    cat(fcorr, cAdd(yr_tac,dySSBAR), sprintf("ssb:%s",tabLab), afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] , EMReferencePoints$Btrigger,"\n")
+    cat("\n\n",afFTab,"\n\n")
+    cat("fcorr:", fcorr, cAdd(yr_tac,dySSBAR), sprintf("ssb:%s",tabLab), afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] , EMReferencePoints$Btrigger,"\n")
     if(fcorr < 1){
         ## F = FMSY × SSB/MSY Btrigger when the stock is below MSY Btrigger and above Blim (or below Blim but forecasted SSB > Blim
         fcThisYear$constraints[length(fcThisYear$constraints)-1] <- sprintf("F=%f",EMReferencePoints$Ftarget * fcorr)

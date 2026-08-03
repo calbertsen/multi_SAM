@@ -1055,7 +1055,7 @@ Type objective_function<Type>::operator() ()
       SIMULATE{
 	GetRNGstate();
 	if(cs.simFlag(0)==0){
-		  if(shared_F_type == 1){ // Scaling by vector AR(1)
+	  if(shared_F_type == 1){ // Scaling by vector AR(1)
 	    matrix<Type> logF0 = logF.col(0);
 	    matrix<Type> logFs = logF.col(s);
 	    for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
@@ -1340,7 +1340,7 @@ Type objective_function<Type>::operator() ()
 		 if(sam.forecastSets(s).fsdTimeScaleModel(fi) == sam.forecastSets(s).fixedDeviation){
 		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi);
 		 }else{
-		   logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi) + neg_log_densityF(s).simulate() * timeScale;
+		     logFa.col(y) = (vector<Type>)sam.forecastSets(s).forecastCalculatedMedian.col(fi) + neg_log_densityF(s).simulate() * timeScale;
 		 }
 		 logF.col(s).col(y) = logFa.col(y);
 		 mortalities(s).updateYear(ds, cs, ps, logFa, logitFSa,y);
