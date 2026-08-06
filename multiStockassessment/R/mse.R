@@ -1322,7 +1322,7 @@ MSE <- function(OM,
         if(adviceMethod == "Basic"){
             if(backcorrected && is(EM,"sam")){
                 adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
-            }else if(backcorrected && is(EM,"msam"){
+            }else if(backcorrected && is(EM,"msam")){
                 adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
             }else{
                 adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
