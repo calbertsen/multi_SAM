@@ -519,7 +519,7 @@ modelforecast.msam <- function(fit,
             if(fit[[s]]$conf$mortalityModel > 0 && !forceAvg_NM[s])
                 args$data$sam[[s]]$natMor <- rbind(args$data$sam[[s]]$natMor,matrix(NA_real_,postYears[s], nAges))
             if(fit[[s]]$conf$catchWeightModel > 0 && !forceAvg_SW[s])
-                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(postYears[s] + length(fit[[s]]$data$years) - dim(fit[[s]]$data$catchMeanWeight)[1],dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
+                args$data$sam[[s]]$catchMeanWeight <- aperm(abind_msam(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(postYears[s] + length(fit[[s]]$data$years) - dim(fit[[s]]$data$catchMeanWeight)[1],dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
         }
     }else{
         if(!is.null(custom_SW)){
@@ -555,7 +555,7 @@ modelforecast.msam <- function(fit,
             for(s in 1:nStocks){
                 nAges <- fit[[s]]$conf$maxAge - fit[[s]]$conf$minAge + 1
                 nval <- aperm(array(custom_CW[[s]],dim = c(nAges,postYears[s] + length(fit[[s]]$data$years) - dim(fit[[s]]$data$catchMeanWeight)[1], dim(args$data$sam[[s]]$catchMeanWeight)[3] )),c(2,1,3))
-                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,nval,along=1),c(3,1,2))
+                args$data$sam[[s]]$catchMeanWeight <- aperm(abind_msam(args$data$sam[[s]]$catchMeanWeight,nval,along=1),c(3,1,2))
             }
         }
     }
@@ -603,7 +603,7 @@ modelforecast.msam <- function(fit,
                 args$data$sam[[s]]$RecruitClimate <- array(0,dim=c(dim(arc)[3]+nYears[[s]],0,0))
             }else{
                 arcL <- lapply(split(arc,slice.index(arc,3)),function(x) array(x,c(1,length(x),1)))
-                args$data$sam[[s]]$RecruitClimate <- aperm(do.call(abind,c(arcL,replicate(nYears[[s]],arcL[[length(arcL)]],simplify=FALSE))),c(3,2,1))
+                args$data$sam[[s]]$RecruitClimate <- aperm(do.call(abind_msam,c(arcL,replicate(nYears[[s]],arcL[[length(arcL)]],simplify=FALSE))),c(3,2,1))
             }
             rownames(args$data$sam[[s]]$TAC) <- rownames(args$data$sam[[s]]$RecruitClimate) <- yy
             ## Biopar
@@ -614,7 +614,7 @@ modelforecast.msam <- function(fit,
             if(fit[[s]]$conf$mortalityModel > 0)
                 args$data$sam[[s]]$natMor <- rbind(args$data$sam[[s]]$natMor,NA_real_)
             if(fit[[s]]$conf$catchWeightModel > 0)
-                args$data$sam[[s]]$catchMeanWeight <- aperm(multiStockassessment:::abind(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(1,dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
+                args$data$sam[[s]]$catchMeanWeight <- aperm(abind_msam(args$data$sam[[s]]$catchMeanWeight,array(NA,dim=c(1,dim(args$data$sam[[s]]$catchMeanWeight)[2:3])),along=1),c(3,1,2))
         }
         ## Handle shared data
         if(args$data$sharedObs$hasSharedObs){

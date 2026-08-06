@@ -422,7 +422,7 @@ ICESAdviceForecast <- function(EM, ...){
 
 
 
-ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules, yr,yr_tac, ...){
+ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules, yr,yr_tac,backcorrected = FALSE, ...){
     ## When to check SSB against MSYBtrigger and Blim
     dySSBAR <- NA_real_
     dySSBZC <- NA_real_
@@ -454,7 +454,11 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
                                 "F=1*")
     ##fcThisYear$fastFixedF <- TRUE
     cat("nosim:",fcThisYear$nosim,"\n")
-    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    if(backcorrected){
+        adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    }else{
+        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    }
     afFTab <- attr(adviceForecast,"tab")
     tabLab <- attr(adviceForecast,"estimateLabel")
     ## Check if SSB at beginning of advice year is < Btrigger
@@ -472,7 +476,11 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     }
     if(redoForecast){
         cat("\t\tICES forecast, below MSYBtrigger...\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- attr(adviceForecast,"tab")
         tabLab <- attr(adviceForecast,"estimateLabel")
     }
@@ -489,7 +497,11 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     }
     if(redoForecast){
         cat("\t\tICES forecast, below Blim...\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }        
         afFTab <- attr(adviceForecast,"tab")
         tabLab <- attr(adviceForecast,"estimateLabel")
     }
@@ -506,7 +518,11 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     }
     if(redoForecast){
         cat("\t\tICES forecast, Zero catch advice...\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- attr(adviceForecast,"tab")
         tabLab <- attr(adviceForecast,"estimateLabel")
     }    
@@ -518,7 +534,7 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
 
 
 
-ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules, yr,yr_tac, ...){
+ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules, yr,yr_tac,backcorrected=FALSE, ...){
     ## When to check SSB against MSYBtrigger and Blim
     dySSBAR <- rep(NA_real_,length(EM_update))
     dySSBZC <- rep(NA_real_,length(EM_update))
@@ -552,7 +568,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
                                          sprintf("F=%f",EMReferencePoints[[s]]$Ftarget),
                                          "F=1*")
     ##fcThisYear$fastFixedF <- TRUE
-    adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    if(backcorrected){
+        adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    }else{
+        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+    }
     afFTab <- lapply(adviceForecast,attr, which = "tab")
     tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     ## Check if SSB at beginning of advice year is < Btrigger
@@ -575,7 +595,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     if(redoForecast){
         cat("\t\tICES forecast, below MSYBtrigger...\n")
         cat("\t\tNew constraints: ",paste(fcThisYear$constraints,collapse=", "),"\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- lapply(adviceForecast,attr, which = "tab")
         tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     }
@@ -596,7 +620,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     if(redoForecast){
         cat("\t\tICES forecast, below Blim...\n")
         cat("\t\tNew constraints: ",paste(fcThisYear$constraints,collapse=", "),"\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- lapply(adviceForecast,attr, which = "tab")
         tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     }
@@ -617,7 +645,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     if(redoForecast){
         cat("\t\tICES forecast, Zero catch advice...\n")
         cat("\t\tNew constraints: ",paste(fcThisYear$constraints,collapse=", "),"\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- lapply(adviceForecast,attr, which = "tab")
         tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     }
@@ -669,7 +701,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
         cat("\t\tNew constraints: ",paste(fcThisYear$constraints,collapse=", "),"\n")
         for(xxx in 1:length(fcThisYear$constraints[[s]]))
             cat(fcThisYear$constraints[[xxx]],"\n")
-        adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        if(backcorrected){
+            adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }else{
+            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+        }
         afFTab <- lapply(adviceForecast,attr, which = "tab")
         tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     }
@@ -1021,6 +1057,7 @@ MSE <- function(OM,
                 maxTrueF = 3.0,
                 maxScaleF = 1.5,
                 inherentImplementationError = FALSE,
+                backcorrected = FALSE,
                 ...){
 
     cat("Setting up the MSE\n")
@@ -1283,7 +1320,13 @@ MSE <- function(OM,
             cat("FCC: ",fcThisYear$constraints,"\n")
         }
         if(adviceMethod == "Basic"){
-            adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+            if(backcorrected && is(EM,"sam")){
+                adviceForecast <- try({do.call(stockassessment:::backcorrected_modelforecast.sam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+            }else if(backcorrected && is(EM,"msam"){
+                adviceForecast <- try({do.call(multiStockassessment:::backcorrected_modelforecast.msam, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+            }else{
+                adviceForecast <- try({do.call(modelforecast, c(list(fit = EM_update, progress=FALSE), fcThisYear))})
+            }
             if(methods::is(adviceForecast,"try-error")){
                 msg <- "Advice forecast error"
                 break;
@@ -1295,7 +1338,7 @@ MSE <- function(OM,
             }
         }else if(adviceMethod == "ICES"){
             cat("\t\tICES type advice...\n")
-            tmp <- try({ICESAdviceForecast(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules,yr,yr_tac,...)})
+            tmp <- try({ICESAdviceForecast(EM_update,OM_update,fcThisYear,EMReferencePoints,adviceRules,yr,yr_tac,backcorrected,...)})
             if(is(tmp,"try-error")){
                 msg <- "Advice forecast error"
                 break;
@@ -1370,7 +1413,8 @@ MSE <- function(OM,
             cat("\tLast true data year",tail(rownames(fbartable(OM_update)),1),"\n")
             cat("\tLast observed data year",tail(rownames(fbartable(OM_update)),1),"\n")
             cat("\tAssessment year",yr[1],"\n")
-            capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag - i0,intermediateFleets)}))
+            ##capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag - i0,intermediateFleets)}))
+            capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag, intermediateFleets)}))
             if(methods::is(EM_update,"sam")){
                 msg <- "Assessment error"
                 break;
@@ -1417,6 +1461,7 @@ MSE <- function(OM,
          catch = catch,
          EMoutput = EMoutput,
          AFoutput = AFoutput,
+         adviceRules = adviceRules,
          msg = msg)
 
 }
