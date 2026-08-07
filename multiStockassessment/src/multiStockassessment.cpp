@@ -425,6 +425,25 @@ Type objective_function<Type>::operator() ()
   PARAMETER_VECTOR(gen_corparTrip); genParSet.corparTrip = gen_corparTrip;
   PARAMETER_VECTOR(gen_logSdTrip); genParSet.logSdTrip = gen_logSdTrip;
   PARAMETER_ARRAY(gen_alleleFreq); genParSet.alleleFreq = gen_alleleFreq;
+  PARAMETER_CMOE_MATRIX(gen_logitConfusionMatrix);
+  // Convert from (identifiable) logit to (full) log
+  if(gen_logitConfusionMatrix.size() > 0){
+    Rcout << "There is a confusion matrix!\n";
+    vector<matrix<Type>> logCM(gen_logitConfusionMatrix.cols());
+    for(int i = 0; i < logCM.size(); ++i){
+      // a column per genetic stock, a row per possible classification. Rows must sum to 1
+      matrix<Type> v0 = gen_logitConfusionMatrix.col(i);
+      matrix<Type> v1(v0.rows() + 1, v0.cols());
+      v1.setZero();
+      for(int s = 0; s < v1.cols(); ++i)
+	v1.col(s) = toLogProportionG((vector<Type>)v0.col(s));
+      logCM(i) = v1;
+    }
+    genParSet.logConfusionMatrix = logCM;
+  }else{
+    Rcout << "There is NO a confusion matrix!\n";
+    genParSet.logConfusionMatrix = vector<matrix<Type>>(0);
+  }
   PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
   PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
   PARAMETER_VECTOR(gen_avgProbPar); genParSet.avgProbPar = gen_avgProbPar;

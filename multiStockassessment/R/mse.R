@@ -576,7 +576,7 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     afFTab <- lapply(adviceForecast,attr, which = "tab")
     tabLab <- lapply(adviceForecast,attr, which = "estimateLabel")
     ## Check if SSB at beginning of advice year is < Btrigger
-    adviceRules[cAdd(yr_tac,0),seq_along(OM)] <- "ICES MSY"
+    adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] <- "ICES MSY"
     redoForecast <- FALSE
     for(s in seq_along(EM_update)){
         ## Check if SSB < MSY Btrigger at the "beginning of advice year"

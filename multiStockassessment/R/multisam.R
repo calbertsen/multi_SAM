@@ -342,12 +342,13 @@ multisam.fit <- function(x,
     pars$gen_logSdTrip <- numeric(pmax(0,nStockG-1))    
     ad <- attr(dat$geneticsData,"alleleDim")
     pars$gen_alleleFreq <- array(0, dim = c(pmax(ad[1]-1,0),ad[2],nStockG))
+    pars$gen_logitConfusionMatrix <- combineMatrices(list())
     if(length(dat$geneticsData) > 0){   # Get better starting values
         gen_samples <- dat$geneticsData$samples
         gStock <- sapply(gen_samples,function(x)x$keyStock)
         isBaseline <- !is.na(gStock)
         if(any(isBaseline)){
-            pars$gen_alleleFreq <- simplify2array(lapply(lapply(split(lapply(gen_samples[isBaseline],function(x)x$alleleCount),gStock[isBaseline]), Reduce, f="+"),function(x){
+            pars$gen_alleleFreq <- simplify2array(lapply(lapply(split(lapply(gen_samples[isBaseline],function(x)x$obs_alleleCount),gStock[isBaseline]), Reduce, f="+"),function(x){
                 x <- x+1
                 logP <- log(x / colSums(x)[col(x)])
                 logP[-nrow(x),,drop=FALSE] - matrix(logP[nrow(x),],nrow(x)-1,ncol(x), byrow=TRUE)

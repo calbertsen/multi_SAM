@@ -18,6 +18,11 @@ split3DArrays <- function(x){
 }
 
 combineVectors <- function(x){
+    if(length(x) == 0){
+        vec <- as.array(numeric(0))
+        attr(vec,"vdim") <- integer(0)
+        return(vec)
+    }
     vdim <- sapply(x,length)
     vec <- as.array(unlist(x))
     attr(vec,"vdim") <- as.integer(vdim)
@@ -25,6 +30,12 @@ combineVectors <- function(x){
 }
 
 combineMatrices <- function(x){
+    if(length(x) == 0){
+        vec <- as.array(numeric(0))
+        attr(vec,"cdim") <- integer(0)
+        attr(vec,"rdim") <- integer(0)
+        return(vec)
+    }
     cdim <- sapply(x,ncol)
     rdim <- sapply(x,nrow)
     vec <- as.array(unlist(x))
@@ -34,6 +45,13 @@ combineMatrices <- function(x){
 }
 
 combine3DArrays <- function(x){
+    if(length(x) == 0){
+        vec <- as.array(numeric(0))
+        attr(vec,"cdim") <- integer(0)
+        attr(vec,"rdim") <- integer(0)
+        attr(vec,"adim") <- integer(0)
+        return(vec)
+    }
     rdim <- sapply(x,function(a) dim(a)[1])
     cdim <- sapply(x,function(a) dim(a)[2])
     adim <- sapply(x,function(a) dim(a)[3])

@@ -91,7 +91,8 @@ struct genetic_sample {
   int year;
   int age;
   int fleet;
-  matrix<Type> alleleCount;	// Matrix of dim nAllele x nLoci
+  matrix<Type> obs_alleleCount;	// Matrix of dim nAllele x nLoci
+  vector<int> obs_classifications; // Vector of different classifiers indicating stock origin (e.g., genetic classification, stock separation function (herring), hatch month,...)
 
   // Constructors
   genetic_sample();
@@ -115,7 +116,12 @@ genetic_sample<Type>::genetic_sample(SEXP x){
     year = (int)*REAL(getListElement(x,"year"));
     age = (int)*REAL(getListElement(x,"age"));
     fleet = (int)*REAL(getListElement(x,"fleet"));
-    alleleCount = asMatrix<Type>(getListElement(x,"alleleCount"));      
+    obs_alleleCount = asMatrix<Type>(getListElement(x,"obs_alleleCount"));
+    obs_classifications = asVector<int>(getListElement(x,"obs_classifications"));
+      // obs_length
+      // obs_weight
+      // obs_morphometric
+      
   }
 	   )
 
@@ -182,11 +188,27 @@ HEADER(
 	 vector<Type> corparTrip;
 	 vector<Type> logSdTrip;
 	 array<Type> alleleFreq;// (nAllele-1) x nLoci x nStockGenetic
+	 vector<matrix<Type>> logConfusionMatrix; // (nClassifications x nStockGenetic) per classifier
 	 matrix<Type> dmScale;
 	 matrix<Type> muLogP;		// nAge x nStockGenetic
 	 vector<Type> avgProbPar;
+       
+	 inline genetic_parameters() :
+	   logKappaSpace(),
+	   logKappaTime(),
+	   corparST(),
+	   corparAge(),
+	   corparTrip(),
+	   logSdTrip(),
+	   alleleFreq(),
+	   logConfusionMatrix(0),
+	   dmScale(),
+	   muLogP(),
+	   avgProbPar()
+	 {};
        };
        )
+
 
 MSM_SPECIALIZATION(struct genetic_parameters<double>);
 MSM_SPECIALIZATION(struct genetic_parameters<TMBad::ad_aug>);
@@ -282,7 +304,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 		       noYearsLAI(s) = yearsPFun(confA(s),datA(s));
 		     }
       
-		     // nll for genetic samples
+		     // nll for samples (e.g. genetic)
 		     for(int i = 0; i < gendat.samples.size(); ++i){
 		       genetic_sample<Type> gs = gendat.samples(i);
 		       // Type llTmp = R_NegInf;
@@ -385,10 +407,20 @@ Type nllGenetics(shared_obs<Type>& obs,
 		       Type v1 = R_NegInf;
 		       Type v2 = R_NegInf;
 		       for(int s = 0; s < nStockGenetic; ++s){
-			 Type n0 = dAlleleCount(gs.alleleCount,
-						genpar.alleleFreq.col(s).matrix(),
-						(vector<Type>)genpar.dmScale.col(s),
-						true);
+			 Type n0 = 0;
+			 if(gs.obs_alleleCount.cols() > 0){
+			   n0 += dAlleleCount(gs.obs_alleleCount,
+					      genpar.alleleFreq.col(s).matrix(),
+					      (vector<Type>)genpar.dmScale.col(s),
+					      true);
+			 }
+			 if(gs.obs_classifications.size() > 0){
+			   // P(Classification = c | True Stock = s) = ConfusionMatrix[s,c] ; confusion matrix can be fixed or estimated
+			   for(int k = 0; k < gs.obs_classifications.size(); ++k){
+			     if(gs.obs_classifications(k) != R_NaInt)
+			       n0 += genpar.logConfusionMatrix(k)(gs.obs_classifications(k),s);
+			   }
+			 }
 			 Type v1_a = n0 + logP(s);
 			 v1 = logspace_add2(v1,v1_a);
 			 logPosteriorProbabilityIndividual(s,i) = v1_a;
