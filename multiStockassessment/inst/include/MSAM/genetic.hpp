@@ -201,7 +201,7 @@ HEADER(
 	   corparTrip(),
 	   logSdTrip(),
 	   alleleFreq(),
-	   logConfusionMatrix(0),
+	   logConfusionMatrix(),
 	   dmScale(),
 	   muLogP(),
 	   avgProbPar()

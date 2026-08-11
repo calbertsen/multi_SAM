@@ -1004,16 +1004,103 @@ updateAssessment <- function(OM, EM, knotRange, AdviceLag, intermediateFleets){
 
 splitCatch <- function(C,fit, Type = c("KeepF","KeepC"), nTail = 1){
     Type <- match.arg(Type)
-    if(Type == "KeepF"){
-        mort <- attr(fit,"m_rep")$mort
-        F <- lapply(mort, function(x) colMeans(tail(t(apply(exp(x$FullYear_logCumulativeIncidence_Fishing),1:2,sum)),nTail)))
-        M <- lapply(mort, function(x) colMeans(tail(t(apply(exp(x$FullYear_logCumulativeIncidence_Other),1:2,sum)),nTail)))
-        N1 <- lapply(ntable(fit,returnList=TRUE),function(x) head(tail(x,2),1))
-        N2 <- lapply(ntable(fit,returnList=TRUE),function(x) tail(x,1))
-        a_opt <- nlminb(0,function(a) (sum(sapply(seq_along(fit),function(s)(sum(F[[s]]*exp(a)/(F[[s]]*exp(a)+M[[s]])*(1-exp(-F[[s]]*exp(a)-M[[s]]))*N2[[s]]))))-sum(C))^2)
-        a <- a_opt$par
-        Csa <- sapply(seq_along(fit),function(s)(sum(F[[s]]*exp(a)/(F[[s]]*exp(a)+M[[s]])*(1-exp(-F[[s]]*exp(a)-M[[s]]))*N2[[s]])))
-        return(unname(sum(C) * Csa / sum(Csa)))
+    if(Type == "KeepF"){rep <- attr(fit,"m_rep")
+        pl <- attr(fit,"m_pl")
+        NN <- sapply(fit,function(s) s$conf$maxAge-s$conf$minAge+1)
+        logN <- lapply(ntable(fit,returnList=TRUE),log)
+        logF <- rep$logFs
+        if(!is.null(rep$catchMeanWeight)){
+            CW <- rep$catchMeanWeight
+        }else{
+            CW <- lapply(fit, function(x) x$data$catchMeanWeight)
+        }
+        logHazard_M_breakpoints <- lapply(rep$mort,function(x) x$logHazard_M_breakpoints)
+        logHazard_F_breakpoints <- lapply(rep$mort,function(x) x$logHazard_F_breakpoints)
+        activeHazard_F <- lapply(rep$mort, function(x) x$activeHazard_F)
+        activeHazard_breakpoints <- lapply(rep$mort, function(x) x$activeHazard_breakpoints)
+        sampleTimesStart <- lapply(fit, function(x) x$data$sampleTimesStart)
+        sampleTimesEnd <- lapply(fit, function(x) x$data$sampleTimesEnd)
+        activeHazardMap_risk <- lapply(rep$mort, function(x) x$activeHazardMap_risk)
+        logspace_add <- function(logx,logy){
+            r <- pmax(logx,logy)
+            ii <- is.finite(r)
+            r[ii] <- pmax(logx[ii],logy[ii]) + log1p(exp(-abs(logx[ii]-logy[ii])))
+            r
+        }
+        logspace_sum <- function(logx){
+            if(length(logx)<=1) return(logx)
+            if(length(logx)==2) return(logspace_add(logx[1],logx[2]))
+            Mx <- max(logx)
+            Mx + log(sum(exp(logx-Mx)))
+        }
+        logspace_1m <- function(logx) log1p(-exp(logx))
+        logspace_1p <- function(logx) log1p(exp(logx))
+        getFbar <- function(eta,s,y){
+            fr <- fit[[s]]$conf$fbarRange - fit[[s]]$conf$minAge + 1
+            rowMeans(exp(logF[[s]][[y]][,fr[1]:fr[2]] + eta))    
+        }
+        predCatch <- function(eta, s, y){
+            lN <- logN[[s]][y,]
+            lHM <- logHazard_M_breakpoints[[s]][,y,,,drop=FALSE] ## Age, Fleet, Season/brkpnt
+            dim(lHM) <- dim(lHM)[-2]
+            lHF <- logHazard_F_breakpoints[[s]][,y,,,drop=FALSE] + eta
+            dim(lHF) <- dim(lHF)[-2]
+                        
+            logHazard_breakpoints <- logspace_add(apply(lHM,c(1,3),logspace_sum), apply(lHF,c(1,3),logspace_sum))
+            logSurvBefore <- matrix(0,nrow(logHazard_breakpoints),dim(lHF)[2])
+            for(f in 1:ncol(logSurvBefore)){
+                t0 <- 0
+                t1 <- sampleTimesStart[[s]][f]
+                logS0 <- logSurvBefore[,f]
+                for(t in head(seq_along(activeHazard_breakpoints[[s]]),-1)){
+                    ## Skip interval if it ends before time interval
+                    if(activeHazard_breakpoints[[s]][t+1] <= t0)
+                        next;
+                    ## Break loop if interval starts after time interval
+                    if(activeHazard_breakpoints[[s]][t] >= t1)
+                        break;
+                    ## Otherwise, look at overlap between intervals	   
+                    Astart = pmax(activeHazard_breakpoints[[s]][t],t0)
+                    Aend = pmin(activeHazard_breakpoints[[s]][t+1],t1)
+                    ## Hazard is constant, so cumulative hazard is hazard times interval length
+                    logS0 = logS0 - exp(logHazard_breakpoints[,t]) * (Aend - Astart)
+                }
+                logSurvBefore[,f] <- logS0
+            }
+            logCIF <- matrix(-Inf,nrow(logHazard_breakpoints),dim(lHF)[2])
+            for(f in 1:ncol(logSurvBefore)){
+                t0 <- sampleTimesStart[[s]][f]
+                t1 <- sampleTimesEnd[[s]][f]
+                logS0 <- numeric(nrow(logCIF))
+                vlogCIF <- rep(-Inf,nrow(logCIF))
+                for(t in head(seq_along(activeHazard_breakpoints[[s]]),-1)){
+                    ## Skip interval if it ends before time interval
+                    if(activeHazard_breakpoints[[s]][t+1] <= t0)
+                        next;
+                    ## Break loop if interval starts after time interval
+                    if(activeHazard_breakpoints[[s]][t] >= t1)
+                        break;
+                    ## Otherwise, look at overlap between intervals	   
+                    ## Full interval
+                    Astart = pmax(activeHazard_breakpoints[[s]][t],t0)
+                    Aend = pmin(activeHazard_breakpoints[[s]][t+1],t1)
+                    lCIF_F_brk <- lHF[,f,t] - logHazard_breakpoints[,t] + logspace_1m(-exp(logHazard_breakpoints[,t])*(Aend-Astart))
+                    tmp <- logS0 + lCIF_F_brk
+                    vlogCIF = logspace_add(vlogCIF, tmp)
+                    logS0 <- logS0 - exp(logHazard_breakpoints[,t])*(Aend-Astart)
+                }
+                logCIF[,f] <- vlogCIF
+            }
+            ## Output catch, sum of all fleets
+            ## logN(a,y) + mort.logFleetSurvival_before(a,y,f-1) + mort.fleetLogCumulativeIncidence(a,y,f-1);
+            exp(logspace_sum(lN + logSurvBefore[,fit[[s]]$data$fleetTypes==0] + logCIF[,fit[[s]]$data$fleetTypes==0] + log(t(CW[[s]][y,,]))))      
+        }
+        a <- nlminb(0, function(a){
+            Ca <- sapply(seq_along(fit),function(s) predCatch(a,s,nrow(logN[[1]])))
+            (sum(C) - sum(Ca))^2
+        })
+        vv <- sapply(seq_along(fit),function(s) predCatch(a$par,s,nrow(logN[[1]])))
+        return(vv)
     }else{
         v <- colMeans(tail(catchtable(fit),nTail))[(seq_len(length(fit)*3)-1)%%3 == 0]
         return(unname(sum(C) * v / sum(v)))

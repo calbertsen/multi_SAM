@@ -348,12 +348,21 @@ multisam.fit <- function(x,
         gStock <- sapply(gen_samples,function(x)x$keyStock)
         isBaseline <- !is.na(gStock)
         if(any(isBaseline)){
-            pars$gen_alleleFreq <- simplify2array(lapply(lapply(split(lapply(gen_samples[isBaseline],function(x)x$obs_alleleCount),gStock[isBaseline]), Reduce, f="+"),function(x){
-                x <- x+1
-                logP <- log(x / colSums(x)[col(x)])
+            if(ad[2] > 0){
+                pars$gen_alleleFreq <- simplify2array(lapply(lapply(split(lapply(gen_samples[isBaseline],function(x)x$obs_alleleCount),gStock[isBaseline]), Reduce, f="+"),function(x){
+                    x <- x+1
+                    logP <- log(x / colSums(x)[col(x)])
                 logP[-nrow(x),,drop=FALSE] - matrix(logP[nrow(x),],nrow(x)-1,ncol(x), byrow=TRUE)
-            }))
+                }))
+            }
+            ## Estimate confusion if any classifications
+            clsobs <- do.call(rbind,lapply(gen_samples, function(x) x$obs_classifications))
+            nlvls <- sapply(lapply(split(clsobs,slice.index(clsobs,2)),factor),nlevels)
+            pars$gen_logitConfusionMatrix <- combineMatrices(lapply(nlvls,function(x) matrix(0,x,nrow(genDatC$stock2gen))))
+        }else{
+            ## Should not estimate confusion
         }
+        
     }
     pars$gen_dmScale <- matrix(0, nrow = ad[2], ncol = nStockG)
     pars$gen_muLogP <- matrix(0,dat$maxAgeAll-dat$minAgeAll+1,nStockG)

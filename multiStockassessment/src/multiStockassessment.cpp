@@ -428,7 +428,7 @@ Type objective_function<Type>::operator() ()
   PARAMETER_CMOE_MATRIX(gen_logitConfusionMatrix);
   // Convert from (identifiable) logit to (full) log
   if(gen_logitConfusionMatrix.size() > 0){
-    Rcout << "There is a confusion matrix!\n";
+    // Rcout << "There is a confusion matrix!\n";
     vector<matrix<Type>> logCM(gen_logitConfusionMatrix.cols());
     for(int i = 0; i < logCM.size(); ++i){
       // a column per genetic stock, a row per possible classification. Rows must sum to 1
@@ -441,7 +441,7 @@ Type objective_function<Type>::operator() ()
     }
     genParSet.logConfusionMatrix = logCM;
   }else{
-    Rcout << "There is NO a confusion matrix!\n";
+    // Rcout << "There is NOT a confusion matrix!\n";
     genParSet.logConfusionMatrix = vector<matrix<Type>>(0);
   }
   PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
