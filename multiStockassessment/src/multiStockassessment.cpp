@@ -429,13 +429,18 @@ Type objective_function<Type>::operator() ()
   // Convert from (identifiable) logit to (full) log
   if(gen_logitConfusionMatrix.size() > 0){
     // Rcout << "There is a confusion matrix!\n";
+    // Rcout << gen_logitConfusionMatrix.cols() << "\n";
     vector<matrix<Type>> logCM(gen_logitConfusionMatrix.cols());
+    // Rcout << logCM.size() << "\n";
     for(int i = 0; i < logCM.size(); ++i){
+      // Rcout << "\t" << i << "\n";
       // a column per genetic stock, a row per possible classification. Rows must sum to 1
       matrix<Type> v0 = gen_logitConfusionMatrix.col(i);
+      // Rcout << "\t" << v0.rows() << " x " << v0.cols() << "\n";
       matrix<Type> v1(v0.rows() + 1, v0.cols());
+      // Rcout << "\t" << v1.rows() << " x " << v1.cols() << "\n";
       v1.setZero();
-      for(int s = 0; s < v1.cols(); ++i)
+      for(int s = 0; s < v1.cols(); ++s)
 	v1.col(s) = toLogProportionG((vector<Type>)v0.col(s));
       logCM(i) = v1;
     }
@@ -444,6 +449,7 @@ Type objective_function<Type>::operator() ()
     // Rcout << "There is NOT a confusion matrix!\n";
     genParSet.logConfusionMatrix = vector<matrix<Type>>(0);
   }
+  REPORT(genParSet.logConfusionMatrix);
   PARAMETER_MATRIX(gen_dmScale); genParSet.dmScale = gen_dmScale;
   PARAMETER_MATRIX(gen_muLogP); genParSet.muLogP = gen_muLogP;
   PARAMETER_VECTOR(gen_avgProbPar); genParSet.avgProbPar = gen_avgProbPar;

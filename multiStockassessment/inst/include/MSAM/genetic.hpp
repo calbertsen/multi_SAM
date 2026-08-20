@@ -415,7 +415,7 @@ Type nllGenetics(shared_obs<Type>& obs,
 					      true);
 			 }
 			 if(gs.obs_classifications.size() > 0){
-			   // P(Classification = c | True Stock = s) = ConfusionMatrix[s,c] ; confusion matrix can be fixed or estimated
+			   // P(Classification = c | True Stock = s) = ConfusionMatrix[c,s] ; confusion matrix can be fixed or estimated
 			   for(int k = 0; k < gs.obs_classifications.size(); ++k){
 			     if(gs.obs_classifications(k) != R_NaInt)
 			       n0 += genpar.logConfusionMatrix(k)(gs.obs_classifications(k),s);

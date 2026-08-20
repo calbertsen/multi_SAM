@@ -358,7 +358,9 @@ multisam.fit <- function(x,
             ## Estimate confusion if any classifications
             clsobs <- do.call(rbind,lapply(gen_samples, function(x) x$obs_classifications))
             nlvls <- sapply(lapply(split(clsobs,slice.index(clsobs,2)),factor),nlevels)
-            pars$gen_logitConfusionMatrix <- combineMatrices(lapply(nlvls,function(x) matrix(0,x,nrow(genDatC$stock2gen))))
+            confPrior <- apply(clsobs,2,function(x) table(x,gStock),simplify=FALSE)
+            logitConfPrior <- lapply(confPrior, function(x){ v <-  (x+1) / colSums(x+1)[col(x)]; apply(v,2,function(y) log(y[-length(y)])-log(y[length(y)]))})
+            pars$gen_logitConfusionMatrix <- combineMatrices(logitConfPrior)
         }else{
             ## Should not estimate confusion
         }

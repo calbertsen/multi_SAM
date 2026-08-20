@@ -127,9 +127,10 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
     }else{
         pl0 <- NULL # attr(fit,"m_pl")
     }
-    if(!is.na(maxTrueF) & !is.na(maxScaleF))
+    if(!is.na(maxTrueF) || !is.na(maxScaleF))
         for(i in seq_along(constraints)){
-            constraints[[i]] <- paste0(constraints[[i]],sprintf("|F=%f & F=%f*",maxTrueF,maxScaleF))
+            str <- paste(c(sprintf("F=%f",maxTrueF),sprintf("F=%f*",maxScaleF))[c(!is.na(maxTrueF),!is.na(maxScaleF))],collapse=" & ")
+            constraints[[i]] <- paste0(constraints[[i]],str)
         }
     cat("\tUpdated constraints with maxTrueF\n")
     cat(paste(paste0("\t",getStockNames(fit),": ",constraints),collapse="\n"),"\n")
@@ -1542,6 +1543,151 @@ MSE <- function(OM,
     ## Return
     list(OM = OM_update,
          EM = EM_update,
+         ssb = ssb,
+         fbar = fbar,
+         rec = rec,
+         catch = catch,
+         EMoutput = EMoutput,
+         AFoutput = AFoutput,
+         adviceRules = adviceRules,
+         msg = msg)
+
+}
+
+
+
+MSE_FixedConstraint <- function(OM,
+                                constraint,
+                                nYears,
+                                AdviceYears = 1, ## These are to make sure the output is similar to F!=0
+                                AdviceLag = 1,
+                                initialAdvice = 0,
+                                inherentImplementationError = FALSE,                  
+                                ...){
+    attach(getNamespace("multiStockassessment"))
+    cat("Setting up the MSE\n")
+    ## Assume that OM is a multi stock model
+    if(!is(OM,"msam"))
+        stop("This is for multiStock OM")
+    nStocksOM <- length(OM)
+                                        #nStocksEM <- ifelse(is(EM,"msam"),length(EM),1)
+##### Check input #####
+    ## Operating model should have catch in the final year (i.e., no intermediate year)
+    catchInFinalYear <- sapply(OM,function(x) max(x$data$aux[x$data$aux[,"fleet"] %in% which(x$data$fleetTypes==0),"year"]) == max(x$data$years))
+    if(!all(catchInFinalYear))
+        stop("Operating model must have catches in the final year")
+    
+    ## AdviceLag should be non-negative
+    AdviceLag <- pmax(0, AdviceLag)
+
+    ## Selectivity in operating model
+    ## F=0, so selectivity does not matter
+
+##### Make sure number of years match AdviceYears #####
+    nYOld <- nYears
+    nYears <- max(seq(1,nYears + AdviceYears-1, by = AdviceYears)) + (AdviceYears - 1)
+    if(nYOld < nYears)
+        message(sprintf("nYears changed to %d to fit the AdviceYears increments.",nYears))
+
+##### Prepare for output #####
+    ssb <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    adviceRules <- matrix(NA_character_,nYears+AdviceLag,nStocksOM+1)
+    
+    dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
+                                                                                c(getStockNames(OM),"Total"),
+                                                                                c("Advice","True","Estimate","Low","High"))
+    dimnames(adviceRules) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
+                                  c(getStockNames(OM),"Total"))
+
+    EMoutput <- vector("list",nYears+AdviceLag)
+    AFoutput <- vector("list",nYears+AdviceLag)
+    names(EMoutput) <- names(AFoutput) <- seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag)
+
+##### Copy OM and EM for safe overwriting #####
+    OM_update <- OM
+    msg <- "OK"
+
+##### Insert initialAdvice in results table #####
+    if(!is.matrix(initialAdvice))
+        initialAdvice <- matrix(initialAdvice,AdviceLag,length(OM),byrow=TRUE)
+    for(s in seq_along(OM)){
+        catch[seq_len(AdviceLag),s,"Advice"] <- initialAdvice[,s]
+    }
+    ## Total
+    catch[seq_len(AdviceLag),"Total","Advice"] <- rowSums(initialAdvice)
+    adviceRules[seq_len(AdviceLag),seq_along(OM)] <- "Initial advice"
+    cat("Ready to start\n")
+    if(AdviceLag > 0){
+        cat("Update OM to handle advice lag\n")
+        ## Update OM
+        iy <- head(rownames(ssb),AdviceLag)
+        OM_update <- try({addSimulatedYears(OM_update, 
+                                            constraints = constraint,
+                                            deterministicF = !inherentImplementationError,
+                                            ## maxTrueF = maxTrueF,
+                                            ## maxScaleF = maxScaleF,
+                                            ...)})
+        ssb[iy,,"True"] <- ssbtable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
+        fbar[iy,,"True"] <- fbartable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
+        rec[iy,,"True"] <- rectable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
+        catch[iy,,"True"] <- catchtable(OM_update,addTotal=TRUE)[iy,seq(1,by=3,length.out=nStocksOM+1)]
+    }
+    cat("Starting assessment loop\n")      
+    ## Run assessment loop
+    for(i in seq(1,nYears-(AdviceYears-1), by = AdviceYears)){ # Index over assessment year
+        yr <- rownames(ssb)[seq(i,len=AdviceYears)]
+        yr_tac <- rownames(ssb)[seq(i+AdviceLag,len=AdviceYears)]
+        
+        cat("\n\n\nSimulation year",i,"\n")
+        cat("\tAdvice year",yr_tac,"\n")
+        cat("\tLast true data year",tail(rownames(fbartable(OM_update)),1),"\n")
+        cat("\tAssessment year",yr[1],"\n")
+        cat("\tCurrent SSB",ssb[tail(rownames(fbartable(OM_update)),1),,"True"],"\n")
+
+        cat("\t\tNot doing an assessment for F=0...\n")
+        cat("\t\tNo output to save...\n")
+        
+        cat("\t\tNo need for a forecast...\n")
+        adviceRules[yr_tac,] <- "F=0"
+        cat("\t\tSaving advice...\n")
+        ## Save advice
+        catch[yr_tac,,"Advice"] <- 0
+        fbar[yr_tac,,"Advice"] <- 0
+        ## ssb[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
+        ## rec[yr_tac,,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
+        ## Simulate next year (implement different rules for AdviceYears > 0)
+        cat("\t\tUpdate OM...\n")
+        capture.output(OM_update <- try({addSimulatedYears(OM_update, 
+                                                           constraints =  constraint,
+                                                           deterministicF = !inherentImplementationError,
+                                                           ## maxTrueF = maxTrueF,
+                                                           ## maxScaleF = maxScaleF,
+                                                          ...)}))
+        if(methods::is(OM_update,"try-error")){
+            msg <- "Adding simulated year error"
+            break;
+        }
+        cat("\t\tSaving output...\n")
+        tab <- ssbtable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            ssb[cAdd(yr,1),s,"True"] <- tab[[s]][cAdd(yr,1),1]
+        tab <- fbartable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            fbar[cAdd(yr,1),s,"True"] <- tab[[s]][cAdd(yr,1),1]
+        tab <- rectable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            rec[cAdd(yr,1),s,"True"] <- tab[[s]][cAdd(yr,1),1]
+        tab <- catchtable(OM_update,addTotal=TRUE,returnList=TRUE)
+        for(s in seq_along(tab))
+            catch[cAdd(yr,1),s,"True"] <- tab[[s]][cAdd(yr,1),1]     
+    }    
+
+    ## Return
+    list(OM = OM_update,
+         EM = NA,
          ssb = ssb,
          fbar = fbar,
          rec = rec,
