@@ -130,7 +130,7 @@ addSimulatedYears.msam <- function(fit, constraints,resampleFirst=FALSE,trueSel=
     if(!is.na(maxTrueF) || !is.na(maxScaleF))
         for(i in seq_along(constraints)){
             str <- paste(c(sprintf("F=%f",maxTrueF),sprintf("F=%f*",maxScaleF))[c(!is.na(maxTrueF),!is.na(maxScaleF))],collapse=" & ")
-            constraints[[i]] <- paste0(constraints[[i]]," | ",str)
+            constraints[[i]] <- paste0(constraints[[i]],"|",str)
         }
     cat("\tUpdated constraints with maxTrueF\n")
     cat(paste(paste0("\t",getStockNames(fit),": ",constraints),collapse="\n"),"\n")
