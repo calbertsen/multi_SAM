@@ -1457,7 +1457,7 @@ MSE <- function(OM,
             cat("\tAdvice",paste(yr_tac,afFTab[yr_tac,sprintf("catch:%s",tabLab)],sep=": ",collapse="; "),"\n\n\n")        
             catch[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("catch:%s",tabLab)]
             ## Apply management
-            catch[yr_tac,"Total","Management"] <- sum(adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Advice"]))
+            catch[yr_tac,"Total","Management"] <- sum(adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Management"]))
             fbar[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("fbar:%s",tabLab)]
             ssb[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("ssb:%s",tabLab)]
             rec[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("rec:%s",tabLab)]
@@ -1595,7 +1595,7 @@ MSE_FixedConstraint <- function(OM,
     
     dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
                                                                                 c(getStockNames(OM),"Total"),
-                                                                                c("Advice","True","Estimate","Low","High"))
+                                                                                c("Advice","Management","True","Estimate","Low","High"))
     dimnames(adviceRules) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
                                   c(getStockNames(OM),"Total"))
 
