@@ -968,7 +968,14 @@ modelforecast.msam <- function(fit,
         p0 <- unlist(plMap)
         names(p0) <- rep(names(plMap), times = sapply(plMap,length))
         sniii <- 1
-        parameterSigma <- svd_solve(attr(fit,"m_opt")$he)
+        ## Try to fix hessian if issues
+        parameterHe <- attr(fit,"m_opt")$he
+        if(any(!is.finite(parameterHe))){
+            cat("Recalculating some hessian columns...\n")
+            problemColumns <- sort(unique(which(!is.finite(parameterHe), arr.ind=TRUE)[,2]))
+            parameterHe[,problemColumns] <- stockassessment:::hessian(attr(fit,"m_obj")$fn,attr(fit,"m_opt")$par, columns = problemColumns)
+        }
+        parameterSigma <- svd_solve()
         objX <- attr(fit,"m_obj")
         ## Pre-calculate chols
         L <- NULL

@@ -1098,15 +1098,15 @@ splitCatch <- function(C,fit, Type = c("KeepF","KeepC"), nTail = 1){
         }
         a <- nlminb(0, function(a){
             Ca <- sapply(seq_along(fit),function(s) predCatch(a,s,nrow(logN[[1]])))
-            (sum(C) - sum(Ca))^2
+            (sum(C,na.rm=TRUE) - sum(Ca))^2
         })
         vv <- sapply(seq_along(fit),function(s) predCatch(a$par,s,nrow(logN[[1]])))
         return(vv)
     }else{
         v <- colMeans(tail(catchtable(fit),nTail))[(seq_len(length(fit)*3)-1)%%3 == 0]
-        return(unname(sum(C) * v / sum(v)))
+        return(unname(sum(C,na.rm=TRUE) * v / sum(v)))
     }
-    return(unname(C * rep(1/length(fit),length.out = length(fit))))
+    return(unname(sum(C,na.rm=TRUE) * rep(1/length(fit),length.out = length(fit))))
 }
 
 
@@ -1204,7 +1204,7 @@ MSE <- function(OM,
     
     dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
                                                                                 c(getStockNames(OM),"Total"),
-                                                                                c("Advice","True","Estimate","Low","High"))
+                                                                                c("Advice","Management","True","Estimate","Low","High"))
     dimnames(adviceRules) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
                                   c(getStockNames(OM),"Total"))
 
@@ -1225,34 +1225,26 @@ MSE <- function(OM,
             catch[seq_len(AdviceLag),s,"Advice"] <- initialAdvice[,s]
         }
         ## Total
-        catch[seq_len(AdviceLag),"Total","Advice"] <- rowSums(initialAdvice)
+        catch[seq_len(AdviceLag),"Total","Advice"] <- catch[seq_len(AdviceLag),"Total","Management"] <- rowSums(initialAdvice)
+        
         adviceRules[seq_len(AdviceLag),seq_along(OM)] <- "Initial advice"
     }else{
         ## v <- singleStockManagementToSubstock(rep(Reduce("+",initialAdvice),length.out = AdviceLag),OM)
         ## for(s in seq_along(EM)){
         ##     catch[seq_len(AdviceLag),s,"Advice"] <- v[s,]
         ## }
-        catch[seq_len(AdviceLag),"Total","Advice"] <- rep(initialAdvice,length.out = AdviceLag)
+        catch[seq_len(AdviceLag),"Total","Advice"] <- catch[seq_len(AdviceLag),"Total","Management"] <- rep(initialAdvice,length.out = AdviceLag)
         adviceRules[seq_len(AdviceLag),"Total"] <- "Initial advice"
     }
 
 ##### Helper function to convert advice (number) to forecast constraint for addSimulatedYears #####
     splitYears <- function(x) split(x,row(x))
-    AdviceToCatchConstraint <- function(x,xlast, OM){
-        cat("... in AdviceToCatchConstraint\n")
-        cat("x: ",x,"\n")
-        cat("xlast: ",xlast,"\n")
-        ## By year
-        xll <- splitYears(xlast)
+    AdviceToCatchConstraint <- function(x, OM){
+        ## Keep track of management separately
+        ## Input x is advice  + adviceToManagement
+         ## By year
         xl <- splitYears(x)
-        v <- vector("list",length(xl))
-        cat("a2m: ",adviceToManagement(xl[[1]],xll[[1]]),"\n")
-        cat("m2p: ", managementToPopulation(adviceToManagement(xl[[1]],xll[[1]]),OM),"\n")        
-        v[[1]] <- sprintf("C=%f",implementationError(managementToPopulation(adviceToManagement(xl[[1]],xll[[1]]),OM)))
-        cat("v[[1]]: ",v[[1]],"\n")
-        if(length(xl) > 1)
-            for(i in 2:length(xl))
-                v[[i]] <- sprintf("C=%f",implementationError(managementToPopulation(adviceToManagement(xl[[i]],xl[[i-1]]),OM)))
+        v <- lapply(xl, function(xxx) sprintf("C=%f",implementationError(managementToPopulation(xxx,OM))))
         ## By stock
         v2 <- do.call(rbind,v)
         r <- split(v2,col(v2))
@@ -1312,16 +1304,9 @@ MSE <- function(OM,
     if(AdviceLag > 0){
         cat("Update OM to handle advice lag\n")
         ## Update OM
-        iy <- head(rownames(ssb),AdviceLag)
-        if(methods::is(EM_update,"msam")){
-            prevC <- matrix(do.call(c,lapply(catchtable(EM_update,FALSE,addTotal=TRUE,returnList=TRUE),function(x){
-                x[as.character(min(as.numeric(iy))-1),1]
-            })),nrow=1)
-        }else{
-            prevC <- matrix(do.call(cbind,c(replicate(length(OM_update),NA,FALSE),tail(catchtable(EM_update,FALSE)[as.character(min(as.numeric(iy))-1),1],1))),nrow=1)
-        }
+        iy <- head(rownames(ssb),AdviceLag)       
         cat(prevC,"\n")
-        a2c <- AdviceToCatchConstraint(drop3D(catch[iy,,"Advice",drop=FALSE]),prevC,OM_update)
+        a2c <- AdviceToCatchConstraint(drop3D(catch[iy,,"Management",drop=FALSE]),OM_update)
         cat(unlist(a2c),"\n")
         cat("...run add simulated years \n")
         cat(class(OM_update),"\n")
@@ -1451,8 +1436,18 @@ MSE <- function(OM,
                 ssb[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
                 rec[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
             }
-            ## Total (Does this make sense?)
-            catch[yr_tac,"Total","Advice"] <- sum(adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Advice"]))
+            catch[yr_tac,"Total","Advice"] <- sum(catch[yr_tac,s,"Advice"])
+            ## Update management
+            a2mVal <- adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Management"])
+            if(length(a2mVal) == 1){ ## Only total
+                catch[yr_tac,"Total","Management"] <- a2mVal
+            }else if(length(a2mVal) == length(OM_update)){ ## Only populations
+                catch[yr_tac,,"Management"] <- c(a2mVal,sum(a2mVal))
+            }else if(length(a2mVal) == length(OM_update) + 1){
+                catch[yr_tac,,"Management"] <- a2mVal
+            }else{ ## Take the first
+                catch[yr_tac,,"Management"] <- a2mVal[1:(length(OM_update) + 1)]                
+            }
             #fbar[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("fbar:%s",tabLab[[s]])]
             #ssb[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
             #rec[yr_tac,"Total","Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
@@ -1461,15 +1456,17 @@ MSE <- function(OM,
             ## return(afFTab)
             cat("\tAdvice",paste(yr_tac,afFTab[yr_tac,sprintf("catch:%s",tabLab)],sep=": ",collapse="; "),"\n\n\n")        
             catch[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("catch:%s",tabLab)]
+            ## Apply management
+            catch[yr_tac,"Total","Management"] <- sum(adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Advice"]))
             fbar[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("fbar:%s",tabLab)]
             ssb[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("ssb:%s",tabLab)]
             rec[yr_tac,"Total","Advice"] <- afFTab[yr_tac,sprintf("rec:%s",tabLab)]
         }
         ## Simulate next year (implement different rules for AdviceYears > 0)
         cat("\t\tUpdate OM...\n")
-        cat("Catch constraints:\n",do.call(c,AdviceToCatchConstraint(drop3D(catch[yr_tac,,"Advice",drop=FALSE]),drop3D(catch[cAdd(yr_tac,-1),,"Advice",drop=FALSE]),OM_update)),"\n\n")
+        cat("Catch constraints:\n",do.call(c,AdviceToCatchConstraint(drop3D(catch[yr_tac,,"Management",drop=FALSE]),OM_update)),"\n\n")
         capture.output(OM_update <- try({addSimulatedYears(OM_update, 
-                                                           constraints = AdviceToCatchConstraint(drop3D(catch[yr_tac,,"Advice",drop=FALSE]),drop3D(catch[cAdd(yr_tac,-1),,"Advice",drop=FALSE]),OM_update),
+                                                           constraints = AdviceToCatchConstraint(drop3D(catch[yr_tac,,"Management",drop=FALSE]),OM_update),
                                                            deterministicF = !inherentImplementationError,
                                                            maxTrueF = maxTrueF,
                                                            maxScaleF = maxScaleF,
@@ -1503,7 +1500,7 @@ MSE <- function(OM,
             cat("\tAssessment year",yr[1],"\n")
             ##capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag - i0,intermediateFleets)}))
             capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag, intermediateFleets)}))
-            if(methods::is(EM_update,"sam")){
+            if(methods::is(EM_update,"try-error")){
                 msg <- "Assessment error"
                 break;
             }
