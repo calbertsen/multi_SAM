@@ -675,7 +675,7 @@ modelforecast.msam <- function(fit,
         ##     est <- attr(fit,"m_sdrep")$estYm1
         ##     cov <- attr(fit,"m_sdrep")$covYm1
         ## }
-        nfSplit <- gsub("(^.*[lL]ast)(.$)","\\2",names(est))
+        nfSplit <- gsub("(^.*[lL]ast)(.+$)","\\2",names(est))
         stockSplit <- gsub("(^SAM_)([[:digit:]]+)(.+$)","\\2",names(est))
         FEstCov <- vector("list",nStocks)
         for(i in 1:nStocks){
@@ -968,14 +968,6 @@ modelforecast.msam <- function(fit,
         p0 <- unlist(plMap)
         names(p0) <- rep(names(plMap), times = sapply(plMap,length))
         sniii <- 1
-        ## Try to fix hessian if issues
-        parameterHe <- attr(fit,"m_opt")$he
-        if(any(!is.finite(parameterHe))){
-            cat("Recalculating some hessian columns...\n")
-            problemColumns <- sort(unique(which(!is.finite(parameterHe), arr.ind=TRUE)[,2]))
-            parameterHe[,problemColumns] <- stockassessment:::hessian(attr(fit,"m_obj")$fn,attr(fit,"m_opt")$par, columns = problemColumns)
-        }
-        parameterSigma <- svd_solve()
         objX <- attr(fit,"m_obj")
         ## Pre-calculate chols
         L <- NULL
@@ -992,6 +984,14 @@ modelforecast.msam <- function(fit,
         }
         parameterL <- NULL
         if(isTRUE(resampleParameters)){
+            ## Try to fix hessian if issues
+            parameterHe <- attr(fit,"m_opt")$he
+            if(any(!is.finite(parameterHe))){
+                cat("Recalculating some hessian columns...\n")
+                problemColumns <- sort(unique(which(!is.finite(parameterHe), arr.ind=TRUE)[,2]))
+                parameterHe[,problemColumns] <- stockassessment:::hessian(attr(fit,"m_obj")$fn,attr(fit,"m_opt")$par, columns = problemColumns)
+            }
+            parameterSigma <- svd_solve(parameterHe)            
             parameterL <- matrix(0,nrow(parameterSigma), ncol(parameterSigma))
             idx <- diag(paramterSigma) > .Machine$double.xmin
             if(any(idx)){
