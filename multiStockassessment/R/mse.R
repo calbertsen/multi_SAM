@@ -1196,10 +1196,10 @@ MSE <- function(OM,
         message(sprintf("nYears changed to %d to fit the AdviceYears increments.",nYears))
 
 ##### Prepare for output #####
-    ssb <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    ssb <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
     adviceRules <- matrix(NA_character_,nYears+AdviceLag,nStocksOM+1)
     
     dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
@@ -1587,10 +1587,10 @@ MSE_FixedConstraint <- function(OM,
         message(sprintf("nYears changed to %d to fit the AdviceYears increments.",nYears))
 
 ##### Prepare for output #####
-    ssb <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
-    catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,5))
+    ssb <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    fbar <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    rec <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
+    catch <- array(NA,c(nYears+AdviceLag,nStocksOM+1,6))
     adviceRules <- matrix(NA_character_,nYears+AdviceLag,nStocksOM+1)
     
     dimnames(ssb) <- dimnames(fbar) <- dimnames(rec) <- dimnames(catch) <- list(seq(do.call(max,lapply(OM,function(x)x$data$years)) + 1,len = nYears + AdviceLag),
