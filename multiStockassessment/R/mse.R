@@ -1305,7 +1305,6 @@ MSE <- function(OM,
         cat("Update OM to handle advice lag\n")
         ## Update OM
         iy <- head(rownames(ssb),AdviceLag)       
-        cat(prevC,"\n")
         a2c <- AdviceToCatchConstraint(drop3D(catch[iy,,"Management",drop=FALSE]),OM_update)
         cat(unlist(a2c),"\n")
         cat("...run add simulated years \n")
