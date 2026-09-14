@@ -36,6 +36,7 @@
 //"../inst/include/multiSAM.hpp"
 
 
+
 // template<class Type>
 // tmbutils::array<Type> toArray(matrix<Type> x){
 //   vector<int> ardi(2);
@@ -800,7 +801,8 @@ Type objective_function<Type>::operator() ()
       matrix<Type> logF0 = logF.col(0);
       // Add fake likelihood contribution for unused random effects
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	if(fs.nYears == 0 || fs.forecastYear(i) == 0){
+	if(fs.nYears == 0 ||  (fs.forecastYear(i) == 0 && (fs.forecastYear(i+1) == 0 || fs.resamplingFirst == 0) )){
+	  // If forecasting and resampling first, do not overwrite base year!
 	  for(int j = 0; j < logFs.rows(); ++j){	  
 	    ans -= dnorm(logFs(j,i), Type(0.0), Type(1.0 / sqrt(2.0 * M_PI)), true);
 	    logFs(j,i) = logF0(j,i);
@@ -848,7 +850,8 @@ Type objective_function<Type>::operator() ()
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	if(fs.nYears == 0 || fs.forecastYear(i) == 0){
+	if(fs.nYears == 0 ||  (fs.forecastYear(i) == 0 && (fs.forecastYear(i+1) == 0 || fs.resamplingFirst == 0) )){
+	  // If forecasting and resampling first, do not overwrite base year!
 	  for(int a = 0; a < logF0.rows(); ++a){ // Loop over F ages
 	    Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
 	    Type mu = shared_lfsMean(a,s-1);
@@ -885,7 +888,8 @@ Type objective_function<Type>::operator() ()
       matrix<Type> logF0 = logF.col(0);
       matrix<Type> logFs = logF.col(s);      
       for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	if(fs.nYears == 0 || fs.forecastYear(i) == 0){
+	if(fs.nYears == 0 || (fs.forecastYear(i) == 0 && (fs.forecastYear(i+1) == 0 || fs.resamplingFirst == 0) )){
+	  // If forecasting and resampling first, do not overwrite base year!
 	  Type slfs = 0.0;
 	  if(shared_F_type != 3){	// If not pure parametric
 	    if(shared_F_type == 2 || shared_F_type == 4){ // AR in time
@@ -1084,7 +1088,8 @@ Type objective_function<Type>::operator() ()
 	    matrix<Type> logF0 = logF.col(0);
 	    matrix<Type> logFs = logF.col(s);
 	    for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	      if(sam.forecastSets(s).nYears == 0 || sam.forecastSets(s).forecastYear(i) == 0){
+	      if(sam.forecastSets(s).nYears == 0 || (sam.forecastSets(s).forecastYear(i) == 0 && (sam.forecastSets(s).forecastYear(i+1) == 0 || sam.forecastSets(s).resamplingFirst == 0) )){
+		// IF there is no forecast OR [there is forecast but we are not at the forecast years AND (it is not the last non-forecast year OR we are not resampling first)]
 		for(int a = 0; a < logF0.rows(); ++a){ // Loop over F ages
 		  Type rho = toInterval(shared_lfsRho(s-1),Type(0.0),Type(1.0),Type(2.0));
 		  Type mu = shared_lfsMean(a,s-1);
@@ -1108,7 +1113,7 @@ Type objective_function<Type>::operator() ()
 	    matrix<Type> logFs = logF.col(s);
 	    confSet cs0 = sam.confSets(0);
 	    for(int i = 0; i < logFs.cols(); ++i){ // Loop over time
-	      if(sam.forecastSets(s).nYears == 0 || sam.forecastSets(s).forecastYear(i) == 0){
+	      if(sam.forecastSets(s).nYears == 0 || (sam.forecastSets(s).forecastYear(i) == 0 && (sam.forecastSets(s).forecastYear(i+1) == 0 || sam.forecastSets(s).resamplingFirst == 0) )){
 		Type slfs = 0.0;
 		if(shared_F_type != 3){	// If not pure parametric
 		  if(shared_F_type == 2 || shared_F_type == 4){ // AR in time

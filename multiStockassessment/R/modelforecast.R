@@ -139,6 +139,13 @@ modelforecast.msam <- function(fit,
     if(!is.na(match("fastFixedF",names(dots))))
         fastFixedF <- dots[[match("fastFixedF",names(dots))]]
 
+    if(!is.na(match("resampleFcorrection",names(dots)))){
+        resampleFcorrection <- dots[[match("resampleFcorrection",names(dots))]]
+    }else{
+        resampleFcorrection <- 0
+    }
+    resampleFcorrection <- rep(resampleFcorrection, length.out = length(fit))
+    
    addDataYears <- FALSE
     if(!is.na(match("addDataYears",names(dots))))
         addDataYears <- dots[[match("addDataYears",names(dots))]]
@@ -383,7 +390,7 @@ modelforecast.msam <- function(fit,
             if(useRecPool[i]){
                 recList[[i]]$recModel <- rep(1,nYears[i])
                 recList[[i]]$logRecruitmentMedian <- sample(x=log(recpool[[i]]),size=nYears[i],replace=TRUE)
-                recList[[i]]$logRecruitmentVar <- rep((1e-8)^2,nYears[i])
+                recList[[i]]$logRecruitmentVar <- rep((1e-16)^2,nYears[i])
             }else{
                 recList[[i]]$logRecruitmentMedian <- rep(median(log(recpool[[i]])),nYears[i])
                 recList[[i]]$logRecruitmentVar <- rep(stats::var(log(recpool[[i]])),nYears[i])
@@ -724,7 +731,8 @@ modelforecast.msam <- function(fit,
                                             assessmentErrorDeviation_Mat = matrix(0,0,0),#assessmentErrorDeviance_Mat,
                                             assessmentErrorDeviation_SW = matrix(0,0,0),#assessmentErrorDeviance_CW)
                                             assessmentErrorDeviation_CW = matrix(0,0,0),
-                                            implementationErrorRho_F = implementationErrorRho_F[[i]]
+                                            implementationErrorRho_F = implementationErrorRho_F[[i]],
+                                            resamplingFirst = as.numeric(resampleFirst)
                                             )
     args$data$maxYearAll <- max(unlist(lapply(args$data$sam,function(x)max(x$years) + x$forecast$nYears)))
 
@@ -737,7 +745,7 @@ modelforecast.msam <- function(fit,
     }
 
     ## Correct maps for shared parameters
-    if(!is.null(attr(fit,"m_call")$shared_selectivity) && attr(fit,"m_call")$shared_selectivity != 0){
+    if(!is.null(attr(fit,"m_call")$shared_selectivity) && eval(attr(fit,"m_call")$shared_selectivity,attr(fit,"m_envir")) != 0){
         ## lfm0 <- lapply(splitParameter(args$parameters$logF),seq_along)
         ## lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
         ## args$map$logF <- factor(unlist(lfm0))
@@ -747,7 +755,7 @@ modelforecast.msam <- function(fit,
         args$map$itrans_rho <- factor(unlist(itr0))
     }
     mapLFStmp <- args$map$logitFseason
-    if(!is.null(attr(fit,"m_call")$shared_seasonality) && attr(fit,"m_call")$shared_seasonality != 0){
+    if(!is.null(attr(fit,"m_call")$shared_seasonality) && eval(attr(fit,"m_call")$shared_seasonality,attr(fit,"m_envir")) != 0){
         lfm0 <- lapply(splitParameter(args$parameters$logitFseason),seq_along)
         lfm0[-1] <- lapply(lfm0[-1],function(x) x*NA)
         args$map$logitFseason <- factor(unlist(lfm0))
@@ -1003,10 +1011,11 @@ modelforecast.msam <- function(fit,
         }
         ## Pre-calculate indices
         ## Only works when year.base is last assessment year
+        iPL <- obj$env$parList()
         indxN <- local({
             ii <- which(names(p0) %in% "logN")
-            attr(ii,"cdim") <- attr(obj$env$parameters$logN,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logN,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logN,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logN,"rdim")
             indxS <- splitMatrices(ii)
             unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0Bio[i]]))
         })
@@ -1019,16 +1028,35 @@ modelforecast.msam <- function(fit,
             ##     attr(ii2,"rdim") <- attr(attr(obj$env$parameters$logF,"shape"),"rdim")
             ##     indxS <- splitMatrices(ii2)
             ## }else{
-            attr(ii,"cdim") <- attr(obj$env$parameters$logF,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logF,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logF,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logF,"rdim")
             indxS <- splitMatrices(ii)                    
             ## }
             unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0F[i]]))
         })
+        indxFstock <- local({
+            ii <- which(names(p0) %in% "logF")
+            attr(ii,"cdim") <- attr(iPL$logF,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logF,"rdim")
+            indxS <- splitMatrices(ii)                    
+            unlist(sapply(seq_len(nStocks), function(i){
+                tmp <- indxS[[i]][,i0F[i]]
+                rep(i, length(tmp))
+            }))
+        })
+        indxLFS <- local({
+            ii <- which(names(p0) %in% "logitFseason")
+            attr(ii,"cdim") <- attr(iPL$logitFseason,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logitFseason,"rdim")
+            attr(ii,"adim") <- attr(iPL$logitFseason,"adim")
+            indxS <- split3DArrays(ii)                    
+            ## }
+            unlist(sapply(seq_len(nStocks), function(i) indxS[[i]][,i0F[i],]))
+        })
         indxSW <- local({
             ii <- which(names(p0) %in% "logSW")
-            attr(ii,"cdim") <- attr(obj$env$parameters$logSW,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logSW,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logSW,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logSW,"rdim")
             indxS <- splitMatrices(ii)
             unlist(sapply(seq_len(nStocks), function(i){
                 if(nrow(indxS[[i]]) == 0)
@@ -1038,8 +1066,8 @@ modelforecast.msam <- function(fit,
         })
         indxCW <- local({
             ii <- which(names(p0) %in% "logCW")
-            attr(ii,"cdim") <- attr(obj$env$parameters$logCW,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logCW,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logCW,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logCW,"rdim")
             indxS <- splitMatrices(ii)
             unlist(sapply(seq_len(nStocks), function(i){
                 if(nrow(indxS[[i]]) == 0)
@@ -1049,8 +1077,8 @@ modelforecast.msam <- function(fit,
         })
         indxMO <- local({
             ii <- which(names(p0) %in% "logitMO")
-            attr(ii,"cdim") <- attr(obj$env$parameters$logitMO,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logitMO,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logitMO,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logitMO,"rdim")
             indxS <- splitMatrices(ii)
             unlist(sapply(seq_len(nStocks), function(i){
                 if(nrow(indxS[[i]]) == 0)
@@ -1060,8 +1088,8 @@ modelforecast.msam <- function(fit,
         })
         indxNM <- local({
             ii <- which(names(p0) %in% "logNM")
-            attr(ii,"cdim") <- attr(obj$env$parameters$logNM,"cdim")
-            attr(ii,"rdim") <- attr(obj$env$parameters$logNM,"rdim")
+            attr(ii,"cdim") <- attr(iPL$logNM,"cdim")
+            attr(ii,"rdim") <- attr(iPL$logNM,"rdim")
             indxS <- splitMatrices(ii)
             unlist(sapply(seq_len(nStocks), function(i){
                 if(nrow(indxS[[i]]) == 0)
@@ -1072,6 +1100,10 @@ modelforecast.msam <- function(fit,
         fdv_idx <- lapply(seq_len(nStocks), function(i){
             as.numeric(stockSplit[nfSplit == "LogF"]) == (i-1)
         })
+        fbL <- fbartable(fit,returnList=TRUE)
+        logfbar0F <- sapply(seq_along(fbL),function(ii) fbL[[ii]][i0F[ii],1])
+        logfbar0Sd <- sapply(seq_along(fbL),function(ii) diff(fbL[[ii]][i0F[ii],2:3])/4)
+     
         
         doSim <- function(re_constraint = NULL, re_pl = NULL){
             obj2 <- obj
@@ -1142,8 +1174,10 @@ modelforecast.msam <- function(fit,
                     names(p) <- rep(names(plMap), times = sapply(plMap,length))
                 }
             }           
-            p[indxN] <- p[indxN] + dList0$LogN           
-            p[indxF] <- p[indxF] + dList0$LogF[indxF>0]
+            p[indxN] <- p[indxN] + dList0$LogN
+            p[indxF] <- p[indxF] + dList0$LogF[indxF>0] + resampleFcorrection[indxFstock]
+            if(length(indxLFS) > 0)
+                p[indxLFS] <- p[indxLFS] + dList0$LogitFseason
             if(length(indxSW) > 0)
                 p[indxSW] <- p[indxSW] + dList0$LogSW           
             if(length(indxCW) > 0)
@@ -1154,13 +1188,13 @@ modelforecast.msam <- function(fit,
                 p[indxNM] <- p[indxNM] + dList0$LogNM
             
             fdvAll <- dList0$LogF ## - mean(dList0$LogF)
-            fc <- obj2$env$data$sam[[i]]$forecast
             for(i in 1:nStocks){
+                fc <- obj2$env$data$sam[[i]]$forecast
                 fdv <- fdvAll[fdv_idx[[i]]]
                 if(length(fdv) > 0){
-                    fc$Fdeviation[] <- fdv
+                    fc$Fdeviation[] <- rnorm(1,0,logfbar0Sd[[i]]) #fdv
                     cindx <- nfSplit == "LogF" & stockSplit == (i-1)
-                    fc$FdeviationCov <- cov[cindx,cindx]
+                    fc$FdeviationCov <- cov[cindx,cindx] * 0 + 1e-8
                 }
                 if(useAssessmentError){
                     ## Simulate assessment error
@@ -1178,8 +1212,8 @@ modelforecast.msam <- function(fit,
                     fc$assessmentErrorDeviation_SW = simVAR(ny,nage,assessmentErrorMean_SW[[i]],assessmentErrorRho_SW,toMatr(assessmentErrorSigma_SW[[i]],nage))
                     fc$assessmentErrorDeviation_CW = simplify2array(replicate(nflt,simVAR(ny,nage,assessmentErrorMean_CW[[i]],assessmentErrorRho_CW[[i]],toMatr(assessmentErrorSigma_CW[[i]],nage)),FALSE))
                 }
+                obj2$env$data$sam[[i]]$forecast <- fc
             }
-            obj2$env$data$sam[[i]]$forecast <- fc
             
             v <- obj2$simulate(par = p)
             ##set.seed(NULL)
@@ -1488,9 +1522,23 @@ backcorrected_modelforecast.msam <- function(fit,
         c0
     })
     ##tmpCon[grepl("^F=.+\\*",constraints)] <- constraints[grepl("^F=.+\\*",constraints)]
+    cat("Initial forecast...\n")
     F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE,...)
     rep <- attr(fit,"m_rep")
 
+    ## Base year correction of fbar
+    fbarBY <- sapply(fbartable(fit,returnList=TRUE),function(x) tail(x[,1],1))
+    fbarRS <- sapply(F0, function(x) median(x[[1]]$fbar))
+    fbarCorrect <- log(fbarBY) - log(fbarRS)
+    cat("Correcting base year F...\n")
+    ## cat("F BY:",fbarBY,"\n")
+    ## cat("F RS:",fbarRS,"\n")
+    ## cat("log F correction:",log(fbarBY) - log(fbarRS),"\n")
+    set.seed(seed)
+    F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect, ...)
+    ## cat("Corrected F:",sapply(F0, function(x) median(x[[1]]$fbar)),"\n")
+    rep <- attr(fit,"m_rep")
+    
     for(y in seq_along(constraints[[1]])){
         ## Extract simulations
         NN <- sapply(fit,function(s) s$conf$maxAge-s$conf$minAge+1)
@@ -1642,7 +1690,7 @@ backcorrected_modelforecast.msam <- function(fit,
                     }else if(grepl("^SSB=",cstr[s])){
                         ## SSB constraint
                         if(isRel[s]){
-                            v <- v + (median(getNextSSB(ee[s],s,y+1))/median(getNextSSB(getFbar(0,s,y)))-Target[s])^2
+                            v <- v + (median(getNextSSB(ee[s],s,y+1))/median(getNextSSB(0,s,y))-Target[s])^2
                         }else{
                             v <- v + (median(getNextSSB(ee[s],s,y+1))-Target[s])^2
                         }
@@ -1660,10 +1708,11 @@ backcorrected_modelforecast.msam <- function(fit,
             }
             v
         })
+        cat(sprintf("Correcting forecast year %d...", y),"\n")
         for(s in seq_along(tmpCon))
             tmpCon[[s]][y] <- sprintf("F=%f",pmax(exp(bc_eta$par[s]) * Fdefault,1e-5))
         set.seed(seed)
-        F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE,...)
+        F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect,...)
     }
     F0    
 }

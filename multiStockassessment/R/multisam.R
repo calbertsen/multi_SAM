@@ -786,13 +786,13 @@ multisam.fit <- function(x,
     ## Do as in stockassessment package
                                         # Last two states
     if(doSdreport){
-        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)),
+        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)), grep("_lastLogitFseason$",names(sdrep$value)),
                  grep("_lastLogSW$",names(sdrep$value)),grep("_lastLogCW$",names(sdrep$value)),
                  grep("_lastLogitMO$",names(sdrep$value)),grep("_lastLogNM$",names(sdrep$value)))
         sdrep$estY <- sdrep$value[idxL]
         sdrep$covY <- sdrep$cov[idxL,idxL]
 
-        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)),
+        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)), grep("_beforeLastLogitFseason$",names(sdrep$value)),
                  grep("_beforeLastLogSW$",names(sdrep$value)),grep("_beforeLastLogCW$",names(sdrep$value)),
                  grep("_beforeLastLogitMO$",names(sdrep$value)),grep("_beforeLastLogNM$",names(sdrep$value)))
         sdrep$estYm1 <- sdrep$value[idxBL]
