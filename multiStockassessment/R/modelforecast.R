@@ -1538,7 +1538,7 @@ backcorrected_modelforecast.msam <- function(fit,
     F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect, ...)
     ## cat("Corrected F:",sapply(F0, function(x) median(x[[1]]$fbar)),"\n")
     rep <- attr(fit,"m_rep")
-    
+    bcList <- list()
     for(y in seq_along(constraints[[1]])){
         ## Extract simulations
         NN <- sapply(fit,function(s) s$conf$maxAge-s$conf$minAge+1)
@@ -1666,18 +1666,20 @@ backcorrected_modelforecast.msam <- function(fit,
                 if(!all(grepl("^FMTC=",cstr)) || length(unique(Target)) != 1)
                     warning("When using FMTC targets, all stocks should use the same target! Only the first FMTC target will be used.")
                 sX <- min(which(grepl("^FMTC=",cstr)))
-                ## Sum of median catches, use first multiplier
-                ## Catch constraint
+                ## Sum of median catches, use first multiplier - combine with constraint ensuring relative F change is the same for all 
+                ## Catch constraint               
                 if(isRel[sX]){
                     cOld <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(0,s,y))))
-                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[1],s,y+1))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[s],s,y+1))))
                     v <- v + (cNew/cOld-Target[sX])^2
                 }else{
-                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[1],s,y+1))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[s],s,y+1))))
                     v <- v + (cNew-Target[sX])^2
                 }
-                ## Force other multipliers to equal ee[1]
-                v <- v + sum((ee-ee[1])^2)
+                ## Force F multipliers to be equal (not the multiplier is relative to F=Fdefault
+                ## v <- v + sum((ee-ee[1])^2)
+                rf <- sapply(seq_len(nStocks), function(s) median(getFbar(ee[s],s,y+1))/median(getFbar(0,s,y)))
+                v <- v + sum((tail(rf,-1) - head(rf,1))^2) * Target[sX] * 100
             }else{
                 for(s in seq_len(nStocks)){
                     if(grepl("^F=",cstr[s])){
@@ -1707,13 +1709,16 @@ backcorrected_modelforecast.msam <- function(fit,
                 }
             }
             v
-        })
+        }, control=list(iter.max= 10000, eval.max=10000))
+        bcList[[y]] <- bc_eta
         cat(sprintf("Correcting forecast year %d...", y),"\n")
         for(s in seq_along(tmpCon))
             tmpCon[[s]][y] <- sprintf("F=%f",pmax(exp(bc_eta$par[s]) * Fdefault,1e-5))
         set.seed(seed)
         F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect,...)
     }
-    F0    
+    attr(F0,"bcOpt") <- bcList
+    attr(F0,"tmpCon") <- tmpCon
+    F0
 }
 
