@@ -117,6 +117,7 @@ modelforecast.msam <- function(fit,
                           custom_CW = NULL,
                           custom_MO = NULL,
                           custom_NM = NULL,
+                          SSBreference = NULL,
                           ...){
    
     dots <- list(...)
@@ -150,6 +151,9 @@ modelforecast.msam <- function(fit,
     if(!is.na(match("addDataYears",names(dots))))
         addDataYears <- dots[[match("addDataYears",names(dots))]]
 
+    if(!is.null(SSBreference))
+        if(!is.list(SSBreference))
+            SSBreference <- replicate(length(fit),SSBreference)
     
    if(!is.null(nosim) && nosim > 0){ 
         estimateLabel <- paste(deparse(substitute(estimate), 500L), collapse = " ")
@@ -1280,11 +1284,13 @@ modelforecast.msam <- function(fit,
                 names(v)  <- c(estimateLabel, "low","high")
                 v
             }
-
+        
             fbar <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbar))),3)
             fbarL <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$fbarL))),3)  
             rec <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$rec))))
             ssb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$ssb))))
+            if(!is.null(SSBreference))
+                ssbBelow <- round(do.call(rbind, lapply(simlist, function(xx) sapply(SSBreference[[ss]], function(yy) mean(xx$ssb < yy)))),4)
             erb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$erb))))
             tsb <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$tsb))))
             catch <- round(do.call(rbind, lapply(simlist, function(xx)collect(xx$catch))))
@@ -1302,6 +1308,9 @@ modelforecast.msam <- function(fit,
             if(addTSB){
                 tab<-cbind(tab,tsb)
             }
+            if(!is.null(SSBreference)){
+                tab <- cbind(tab, ssbBelow)
+            }
             ## if(!missing(customWeights)) tab <- cbind(tab,cwF=round(do.call(rbind, lapply(simlist, function(xx)collect(xx$cwF))),3))
             rownames(tab) <- unlist(lapply(simlist, function(xx)xx$year))
             nam <- c(estimateLabel,"low","high")
@@ -1312,10 +1321,18 @@ modelforecast.msam <- function(fit,
             if(addTSB){
                 basename<-c(basename,"tsb:")    
             }
+            basenameFull <- paste0(rep(basename, each=length(nam)), nam)
+            if(!is.null(SSBreference)){
+                if(!is.null(names(SSBreference[[ss]]))){
+                    basenameFull <- c(basenameFull, sprintf("P(SSB < %s)",names(SSBreference[[ss]])))
+                }else{
+                    basenameFull <- c(basenameFull, sprintf("P(SSB < %f)",SSBreference[[ss]]))
+                }
+            }
             ## if(!missing(customWeights)){
             ##     basename<-c(basename,"cwF:")    
             ## }
-            colnames(tab)<-paste0(rep(basename, each=length(nam)), nam)
+            try({colnames(tab) <- basenameFull})
             
             attr(simlist, "tab")<-tab
             shorttab<-t(tab[,grep(estimateLabel,colnames(tab))])
@@ -1495,7 +1512,8 @@ backcorrected_modelforecast.msam <- function(fit,
                                         nextssb = NULL,
                                         landval = NULL,
                                         nosim = 0,
-                                        ..., Fdefault = 0.1, seed = NULL){
+                                        ...,
+                                        Fdefault = 0.1, seed = NULL){
     if(is.null(seed)){
         set.seed(NULL)
         seed <- .Random.seed
@@ -1506,12 +1524,25 @@ backcorrected_modelforecast.msam <- function(fit,
 
     ## Helper functions
     nStocks <- length(fit)    
-    constraints <- targetToList(constraints, nStocks, character)    
+    constraintsOrig <- targetToList(constraints, nStocks, character)
+    stripEst <- function(cc){
+        gsub("(.+\\()(F|SSB|C|FMTC)([^=]+)(=.+)","\\2\\4",cc)
+    }
+    getEst <- function(cc){
+        ## Insert median if no method
+        hasNoEst <- grepl("^(F|SSB|C|FMTC)=",cc)
+        cc[hasNoEst] <- gsub("(F|SSB|C|FMTC)(=.+)","median(\\1)\\2",cc[hasNoEst])
+        parse(text=gsub("(.+\\()(F|SSB|C|FMTC)([^=]+)(=.+)","\\1vvx\\3",cc))
+    }
+    estMethod <- constraints <- vector("list",length(fit))
     for(i in seq_along(constraints)){
+        ## Check for estimation method
+        constraints[[i]] <- stripEst(constraintsOrig[[i]])
         if(!all(grepl("^(F|SSB|C|FMTC)=",constraints[[i]])) && !any(!grepl("\\*",constraints[[i]])))
             stop("The back correction is currently only implemented for F, SSB, and C constraints without restrictions.")
         if(grepl("^SSB",tail(constraints[[i]],1)))
             stop("The last constraint cannot be for next years SSB. Please add an arbitrary constraint as the last")
+        estMethod[[i]] <- getEst(constraintsOrig[[i]])
     }
     ## Check constraints have the same length!
 
@@ -1660,6 +1691,9 @@ backcorrected_modelforecast.msam <- function(fit,
 
         Target <- as.numeric(gsub("(.+=)([^\\*]+)(\\*?)","\\2",cstr))
         isRel <- grepl("\\*",cstr)
+        summarize <- function(s,y,v){
+            eval(estMethod[[s]][[y]], list(vvx = unname(v)))
+        }
         bc_eta <- nlminb(numeric(nStocks), function(ee){
             v <- 0
             if(any(grepl("^FMTC=",cstr))){
@@ -1669,39 +1703,39 @@ backcorrected_modelforecast.msam <- function(fit,
                 ## Sum of median catches, use first multiplier - combine with constraint ensuring relative F change is the same for all 
                 ## Catch constraint               
                 if(isRel[sX]){
-                    cOld <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(0,s,y))))
-                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[s],s,y+1))))
+                    cOld <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(0,s,y))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(ee[s],s,y+1))))
                     v <- v + (cNew/cOld-Target[sX])^2
                 }else{
-                    cNew <- sum(sapply(seq_len(nStocks), function(s) median(getCatch(ee[s],s,y+1))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(ee[s],s,y+1))))
                     v <- v + (cNew-Target[sX])^2
                 }
                 ## Force F multipliers to be equal (not the multiplier is relative to F=Fdefault
                 ## v <- v + sum((ee-ee[1])^2)
-                rf <- sapply(seq_len(nStocks), function(s) median(getFbar(ee[s],s,y+1))/median(getFbar(0,s,y)))
+                rf <- sapply(seq_len(nStocks), function(s) summarize(s,y,getFbar(ee[s],s,y+1))/summarize(s,y,getFbar(0,s,y)))
                 v <- v + sum((tail(rf,-1) - head(rf,1))^2) * Target[sX] * 100
             }else{
                 for(s in seq_len(nStocks)){
                     if(grepl("^F=",cstr[s])){
                         ## F constraint
                         if(isRel[s]){
-                            v <- v + (median(getFbar(ee[s],s,y+1))/median(getFbar(0,s,y))-Target[s])^2
+                            v <- v + (summarize(s,y,getFbar(ee[s],s,y+1))/summarize(s,y,getFbar(0,s,y))-Target[s])^2
                         }else{
-                            v <- v + (median(getFbar(ee[s],s,y+1))-Target[s])^2
+                            v <- v + (summarize(s,y,getFbar(ee[s],s,y+1))-Target[s])^2
                         }
                     }else if(grepl("^SSB=",cstr[s])){
                         ## SSB constraint
                         if(isRel[s]){
-                            v <- v + (median(getNextSSB(ee[s],s,y+1))/median(getNextSSB(0,s,y))-Target[s])^2
+                            v <- v + (summarize(s,y,getNextSSB(ee[s],s,y+1))/summarize(s,y,getNextSSB(0,s,y))-Target[s])^2
                         }else{
-                            v <- v + (median(getNextSSB(ee[s],s,y+1))-Target[s])^2
+                            v <- v + (summarize(s,y,getNextSSB(ee[s],s,y+1))-Target[s])^2
                         }
                     }else if(grepl("^C=",cstr[s])){
                         ## Catch constraint
                         if(isRel[s]){
-                            v <- v + (median(getCatch(ee[s],s,y+1))/median(getCatch(0,s,y))-Target[s])^2
+                            v <- v + (summarize(s,y,getCatch(ee[s],s,y+1))/summarize(s,y,getCatch(0,s,y))-Target[s])^2
                         }else{
-                            v <- v + (median(getCatch(ee[s],s,y+1))-Target[s])^2
+                            v <- v + (summarize(s,y,getCatch(ee[s],s,y+1))-Target[s])^2
                         }
                     }else{
                         stop("The constraint cannot currently be back corrected")
