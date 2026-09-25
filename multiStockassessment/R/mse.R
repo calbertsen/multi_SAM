@@ -665,10 +665,10 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
         lastF <- afFTab[[q]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
         newF <- afFTab[[q]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
         Fmsy <- EMReferencePoints[[s]]$Ftarget
-        newF / ifelse(lastF==0,Fmsy,lastF)
+        pmax(newF / ifelse(lastF==0,newF,lastF),1) ## if F is an increase, do not reduce by -%
     })
     FRedu[adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] == "ICES MSY"] <- Inf
-    maxRedu <- min(FRedu,na.rm=TRUE) ## NOTE: largest reduction is minimum fraction   
+    maxRedu <- min(pmax(FRedu,1),na.rm=TRUE) ## NOTE: largest reduction is minimum fraction (should not be >1, as that would be an increase!)  
     stockWithRedu <- which.min(FRedu)
     cat("maxRedu: ",maxRedu,"; stockWithRedu: ", stockWithRedu, "\n")
     redoForecast <- FALSE    
