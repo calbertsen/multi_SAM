@@ -96,12 +96,18 @@ addSimulatedYears.sam <- function(fit, constraints,resampleFirst=FALSE,trueSel=N
         sdv <- obj2$fn(p)
         sdrep <- list(value = sdv,
                       sd = rep(0,length(sdv)))
-        idx <- c(which(names(sdrep$value) == "lastLogN"), which(names(sdrep$value) == 
-                                                                "lastLogF"))
+        ## idx <- c(which(names(sdrep$value) == "lastLogN"), which(names(sdrep$value) == 
+        ##                                                         "lastLogF"))
+        idx <- c(which(names(sdrep$value)=="lastLogN"),which(names(sdrep$value)=="lastLogF"),which(names(sdrep$value)=="lastLogitFseason"),
+                 which(names(sdrep$value)=="lastLogSW"),which(names(sdrep$value)=="lastLogCW"),
+                 which(names(sdrep$value)=="lastLogitMO"),which(names(sdrep$value)=="lastLogNM"))
         sdrep$estY <- sdrep$value[idx]
         sdrep$covY <- matrix(0,length(idx),length(idx))
-        idx <- c(which(names(sdrep$value) == "beforeLastLogN"), which(names(sdrep$value) == 
-                                                                      "beforeLastLogF"))
+        ## idx <- c(which(names(sdrep$value) == "beforeLastLogN"), which(names(sdrep$value) == 
+        ##                                                               "beforeLastLogF"))
+        idx <- c(which(names(sdrep$value)=="beforeLastLogN"),which(names(sdrep$value)=="beforeLastLogF"),which(names(sdrep$value)=="beforeLastLogitFseason"),
+             which(names(sdrep$value)=="beforeLastLogSW"),which(names(sdrep$value)=="beforeLastLogCW"),
+             which(names(sdrep$value)=="beforeLastLogitMO"),which(names(sdrep$value)=="beforeLastLogNM"))
         sdrep$estYm1 <- sdrep$value[idx]
         sdrep$covYm1 <- matrix(0,length(idx),length(idx))
         newFit$sdrep <- sdrep
@@ -327,13 +333,13 @@ dimnames(dat$sam[[i]]$natMor) <- dmnm[1:2] #list(dmnm[[1]][nrow(dat$sam[[i]]$nat
         sdrep <- list(value = sdv,
                       sd = rep(0,length(sdv)))
         
-        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)),
+        idxL <- c(grep("_lastLogN$",names(sdrep$value)), grep("_lastLogF$",names(sdrep$value)), grep("_lastLogitFseason$",names(sdrep$value)),
                  grep("_lastLogSW$",names(sdrep$value)),grep("_lastLogCW$",names(sdrep$value)),
                  grep("_lastLogitMO$",names(sdrep$value)),grep("_lastLogNM$",names(sdrep$value)))
         sdrep$estY <- sdrep$value[idxL]
         sdrep$covY <- attr(fit,"m_sdrep")$covY
 
-        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)),
+        idxBL <- c(grep("_beforeLastLogN$",names(sdrep$value)), grep("_beforeLastLogF$",names(sdrep$value)), grep("_beforeLastLogitFseason$",names(sdrep$value)),
                  grep("_beforeLastLogSW$",names(sdrep$value)),grep("_beforeLastLogCW$",names(sdrep$value)),
                  grep("_beforeLastLogitMO$",names(sdrep$value)),grep("_beforeLastLogNM$",names(sdrep$value)))
         sdrep$estYm1 <- sdrep$value[idxBL]
