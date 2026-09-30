@@ -1524,7 +1524,7 @@ backcorrected_modelforecast.msam <- function(fit,
 
     ## Helper functions
     nStocks <- length(fit)    
-    constraintsOrig <- targetToList(constraints, nStocks, character)
+    constraintsOrig <- multiStockassessment:::targetToList(constraints, nStocks, character)
     stripEst <- function(cc){
         gsub("(.+\\()(F|SSB|C|FMTC)([^=]+)(=.+)","\\2\\4",cc)
     }
@@ -1558,7 +1558,8 @@ backcorrected_modelforecast.msam <- function(fit,
     rep <- attr(fit,"m_rep")
 
     ## Base year correction of fbar
-    fbarBY <- sapply(fbartable(fit,returnList=TRUE),function(x) tail(x[,1],1))
+    FBT <- fbartable(fit,returnList=TRUE)
+    fbarBY <- sapply(seq_along(fit),function(s) FBT[[s]][rownames(attr(F0[[s]],"tab"))[1],1])
     fbarRS <- sapply(F0, function(x) median(x[[1]]$fbar))
     fbarCorrect <- log(fbarBY) - log(fbarRS)
     cat("Correcting base year F...\n")

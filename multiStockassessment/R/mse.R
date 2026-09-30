@@ -668,7 +668,8 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     cat("hasZeroCA: ",hasZeroCA,"\n")
     cat("hasBelowTrigger: ",hasBelowTrigger,"\n")
     FRedu <- sapply(1:3,function(q){
-        lastF <- afFTab[[q]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
+        ## Reduction compared to last assessment data year F!
+        lastF <- afFTab[[q]][1,sprintf("fbar:%s",tabLab[[s]])]
         newF <- afFTab[[q]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
         Fmsy <- EMReferencePoints[[s]]$Ftarget
         pmin(newF / ifelse(lastF==0,newF,lastF),1) ## if F is an increase, do not reduce by -%
