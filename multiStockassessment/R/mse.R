@@ -670,12 +670,13 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     cat("hasBelowTrigger: ",hasBelowTrigger,"\n")
     FRedu <- sapply(seq_along(EM_update),function(q){
         ## Reduction compared to base year F!
+        lastF <- afFTab[[q]][1,sprintf("fbar:%s",tabLab[[s]])]
         if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
             lastF <- afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
         }else if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "baseYear"){
             lastF <- afFTab[[s]][1,sprintf("fbar:%s",tabLab[[s]])]                            
         }else if(EMReferencePoints[[s]]$PAcompare == "target"){
-            complastF <-  EMReferencePoints[[s]]$Ftarget
+            lastF <-  EMReferencePoints[[s]]$Ftarget
         }else{
             stop("PAcompare should be 'intermediateYear' or 'target'")
         }                    
