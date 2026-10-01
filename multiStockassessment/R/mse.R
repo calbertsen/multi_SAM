@@ -670,13 +670,22 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     cat("hasBelowTrigger: ",hasBelowTrigger,"\n")
     FRedu <- sapply(seq_along(EM_update),function(q){
         ## Reduction compared to base year F!
-        lastF <- afFTab[[q]][1,sprintf("fbar:%s",tabLab[[s]])]
+        if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
+            lastF <- afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
+        }else if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "baseYear"){
+            lastF <- afFTab[[s]][1,sprintf("fbar:%s",tabLab[[s]])]                            
+        }else if(EMReferencePoints[[s]]$PAcompare == "target"){
+            complastF <-  EMReferencePoints[[s]]$Ftarget
+        }else{
+            stop("PAcompare should be 'intermediateYear' or 'target'")
+        }                    
+        ##lastF <- afFTab[[q]][1,sprintf("fbar:%s",tabLab[[s]])]
         newF <- afFTab[[q]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
         Fmsy <- EMReferencePoints[[s]]$Ftarget
-        pmin(newF / ifelse(lastF==0,newF,lastF),1) ## if F is an increase, do not reduce by -%
+        newF / ifelse(lastF==0,newF,lastF) ## if F is an increase, do not reduce by -%
     })
     FRedu[adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] == "ICES MSY"] <- Inf 
-    maxRedu <- min(pmin(FRedu,1),na.rm=TRUE) ## NOTE: largest reduction is minimum fraction (should not be >1, as that would be an increase!)    
+    maxRedu <- min(FRedu,na.rm=TRUE) ## NOTE: largest reduction is minimum fraction (should not be >1, as that would be an increase!)    
     stockWithRedu <- which.min(FRedu)
     cat("FRedu:",FRedu,"maxRedu: ",maxRedu,"; stockWithRedu: ", stockWithRedu, "\n")
     redoForecast <- FALSE
@@ -697,18 +706,18 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
                         advF <- afFTab[[s]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
                         if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
                             compF <- afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
-                        }else if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "baseYear")
-                            compF <- afFTab[[s]][1,sprintf("fbar:%s",tabLab[[s]])]
-                            
+                        }else if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "baseYear"){
+                            compF <- afFTab[[s]][1,sprintf("fbar:%s",tabLab[[s]])]                            
                         }else if(EMReferencePoints[[s]]$PAcompare == "target"){
                             compF <-  EMReferencePoints[[s]]$Ftarget * maxRedu
                         }else{
                             stop("PAcompare should be 'intermediateYear' or 'target'")
                         }                    
-                    ## However, Precautionary reduction F should not be higher than ICES advice rule F
-                    fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(pmin(advF,compF * maxRedu),1e-4) )
-                    adviceRules[cAdd(yr_tac,0),s] <- sprintf("ICES Precautionary reduction (%.2f%%)",(1-maxRedu)*100)
-                    redoForecast <- TRUE
+                        ## However, Precautionary reduction F should not be higher than ICES advice rule F
+                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(pmin(advF,compF * maxRedu),1e-4) )
+                        adviceRules[cAdd(yr_tac,0),s] <- sprintf("ICES Precautionary reduction (%.2f%%)",(1-maxRedu)*100)
+                        redoForecast <- TRUE
+                    }
                 }
             }
         }
