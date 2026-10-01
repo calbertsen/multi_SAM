@@ -639,10 +639,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     redoForecast <- FALSE
     for(s in seq_along(EM_update)){
         nssb <- afFTab[[s]][cAdd(yr_tac,dySSBZC[s]),sprintf("ssb:%s",tabLab[[s]])]
+        advF <- afFTab[[s]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
         cat("Stock: ",s,"\n")
         cat("\tssb: ",nssb,"\n")
         cat("\tBlim: ", EMReferencePoints[[s]]$Blimit,"\n")
-        if(nssb < EMReferencePoints[[s]]$Blimit){
+        if(nssb < EMReferencePoints[[s]]$Blimit || advF < 1e-4){
             ## If SSB is below Blim, zero catch advice 
             fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",1e-4)
             redoForecast <- TRUE
@@ -667,37 +668,45 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
     hasBelowTrigger <- any(adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] != "ICES MSY")
     cat("hasZeroCA: ",hasZeroCA,"\n")
     cat("hasBelowTrigger: ",hasBelowTrigger,"\n")
-    FRedu <- sapply(1:3,function(q){
-        ## Reduction compared to last assessment data year F!
+    FRedu <- sapply(seq_along(EM_update),function(q){
+        ## Reduction compared to base year F!
         lastF <- afFTab[[q]][1,sprintf("fbar:%s",tabLab[[s]])]
         newF <- afFTab[[q]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
         Fmsy <- EMReferencePoints[[s]]$Ftarget
         pmin(newF / ifelse(lastF==0,newF,lastF),1) ## if F is an increase, do not reduce by -%
     })
-    ##FRedu[adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] == "ICES MSY"] <- Inf
-    maxRedu <- min(pmin(FRedu,1),na.rm=TRUE) ## NOTE: largest reduction is minimum fraction (should not be >1, as that would be an increase!)  
+    FRedu[adviceRules[cAdd(yr_tac,0),seq_along(EM_update)] == "ICES MSY"] <- Inf 
+    maxRedu <- min(pmin(FRedu,1),na.rm=TRUE) ## NOTE: largest reduction is minimum fraction (should not be >1, as that would be an increase!)    
     stockWithRedu <- which.min(FRedu)
-    cat("maxRedu: ",maxRedu,"; stockWithRedu: ", stockWithRedu, "\n")
-    redoForecast <- FALSE    
-    for(s in seq_along(EM_update)){
-        if(!is.null(EMReferencePoints[[s]]$PA) && EMReferencePoints[[s]]$PA){
-            if(hasZeroCA){ ## If one has zero catch advice, all gets zero catch advice
-                cat("\t\tStock ",s," precautionary reduction - zero catch...\n")
-                fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",1e-4)
-                if(adviceRules[cAdd(yr_tac,0),s] != "ICES MSY PA (Zero catch)"){
-                    adviceRules[cAdd(yr_tac,0),s] <- "ICES Precautionary reduction (Zero catch)"
-                }
-                redoForecast <- TRUE
-            }else if(hasBelowTrigger){ ## If one is below the trigger all get the same reduction in F                
-                if(s != stockWithRedu){
-                    cat("\t\tStock ",s," precautionary reduction - below Btrigger...\n")
-                    if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
-                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])] * maxRedu,1e-4) )
-                    }else if(EMReferencePoints[[s]]$PAcompare == "target"){
-                        fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(EMReferencePoints[[s]]$Ftarget * maxRedu,1e-4) )
-                    }else{
-                        stop("PAcompare should be 'intermediateYear' or 'target'")
+    cat("FRedu:",FRedu,"maxRedu: ",maxRedu,"; stockWithRedu: ", stockWithRedu, "\n")
+    redoForecast <- FALSE
+    ## Only if maxRedu < 1
+    if(maxRedu < 1){
+        for(s in seq_along(EM_update)){
+            if(!is.null(EMReferencePoints[[s]]$PA) && EMReferencePoints[[s]]$PA){
+                if(hasZeroCA){ ## If one has zero catch advice, all gets zero catch advice
+                    cat("\t\tStock ",s," precautionary reduction - zero catch...\n")
+                    fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",1e-4)
+                    if(adviceRules[cAdd(yr_tac,0),s] != "ICES MSY PA (Zero catch)"){
+                        adviceRules[cAdd(yr_tac,0),s] <- "ICES Precautionary reduction (Zero catch)"
                     }
+                    redoForecast <- TRUE
+                }else if(hasBelowTrigger){ ## If one is below the trigger all get the same reduction in F                
+                    if(s != stockWithRedu){
+                        cat("\t\tStock ",s," precautionary reduction - below Btrigger...\n")
+                        advF <- afFTab[[s]][cAdd(yr_tac,0),sprintf("fbar:%s",tabLab[[s]])]
+                        if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "intermediateYear"){
+                            compF <- afFTab[[s]][cAdd(yr_tac,-1),sprintf("fbar:%s",tabLab[[s]])]
+                        }else if(is.null(EMReferencePoints[[s]]$PAcompare) || EMReferencePoints[[s]]$PAcompare == "baseYear")
+                            compF <- afFTab[[s]][1,sprintf("fbar:%s",tabLab[[s]])]
+                            
+                        }else if(EMReferencePoints[[s]]$PAcompare == "target"){
+                            compF <-  EMReferencePoints[[s]]$Ftarget * maxRedu
+                        }else{
+                            stop("PAcompare should be 'intermediateYear' or 'target'")
+                        }                    
+                    ## However, Precautionary reduction F should not be higher than ICES advice rule F
+                    fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f", pmax(pmin(advF,compF * maxRedu),1e-4) )
                     adviceRules[cAdd(yr_tac,0),s] <- sprintf("ICES Precautionary reduction (%.2f%%)",(1-maxRedu)*100)
                     redoForecast <- TRUE
                 }
