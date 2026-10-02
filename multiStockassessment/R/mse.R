@@ -1461,7 +1461,8 @@ MSE <- function(OM,
                 ssb[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("ssb:%s",tabLab[[s]])]
                 rec[yr_tac,s,"Advice"] <- afFTab[[s]][yr_tac,sprintf("rec:%s",tabLab[[s]])]
             }
-            catch[yr_tac,"Total","Advice"] <- sum(catch[yr_tac,s,"Advice"])
+            ssb[yr_tac,"Total","Advice"] <- sum(ssb[yr_tac,seq_along(EM),"Advice"])
+            catch[yr_tac,"Total","Advice"] <- sum(catch[yr_tac,seq_along(EM),"Advice"])
             ## Update management
             a2mVal <- adviceToManagement(catch[yr_tac,,"Advice"],catch[cAdd(yr_tac,-1),,"Management"])
             if(length(a2mVal) == 1){ ## Only total
