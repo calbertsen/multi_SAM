@@ -1504,7 +1504,7 @@ modelforecast.msam <- function(fit,
 
 
 ## Adds FMTC constraint, F-multiplier to total catch. Should be the same for all
-backcorrected_modelforecast.msam <- function(fit,
+backcorrected_modelforecast_fullsample.msam <- function(fit,
                                         constraints = NULL,
                                         fscale = NULL,
                                         catchval = NULL,
@@ -1744,7 +1744,7 @@ backcorrected_modelforecast.msam <- function(fit,
                 }
             }
             v
-        }, control=list(iter.max= 10000, eval.max=10000))
+        }, control=list(iter.max= 10000, eval.max=10000,trace=1))
         bcList[[y]] <- bc_eta
         cat(sprintf("Correcting forecast year %d...", y),"\n")
         for(s in seq_along(tmpCon))
@@ -1758,3 +1758,343 @@ backcorrected_modelforecast.msam <- function(fit,
 }
 
 
+## Adds FMTC constraint, F-multiplier to total catch. Should be the same for all
+backcorrected_modelforecast.msam <- function(fit,
+                                             constraints = NULL,
+                                             fscale = NULL,
+                                             catchval = NULL,
+                                             fval = NULL,
+                                             nextssb = NULL,
+                                             landval = NULL,
+                                             nosim = 0,
+                                             year.base = "lastCatchYear",
+                                             useModelLastN = max(year.base) < max(sapply(fit, function(x) max(x$data$years))),
+                                             ...,
+                                             Fdefault = 0.1, seed = NULL){
+
+    if(is.null(seed)){
+        set.seed(NULL)
+        seed <- .Random.seed
+    }
+    if(nosim == 0) stop("Back correction is not needed for nosim=0")
+    if(any(!is.null(fscale) | !is.null(catchval) | !is.null(fval) | !is.null(nextssb) | !is.null(landval)))
+        stop("Please use the constraints argument")
+
+    ## Helper functions
+    nStocks <- length(fit)    
+    constraintsOrig <- multiStockassessment:::targetToList(constraints, nStocks, character)
+    stripEst <- function(cc){
+        gsub("(.+\\()(F|SSB|C|FMTC)([^=]+)(=.+)","\\2\\4",cc)
+    }
+    getEst <- function(cc){
+        ## Insert median if no method
+        hasNoEst <- grepl("^(F|SSB|C|FMTC)=",cc)
+        cc[hasNoEst] <- gsub("(F|SSB|C|FMTC)(=.+)","median(\\1)\\2",cc[hasNoEst])
+        parse(text=gsub("(.+\\()(F|SSB|C|FMTC)([^=]+)(=.+)","\\1vvx\\3",cc))
+    }
+    estMethod <- constraints <- vector("list",length(fit))
+    for(i in seq_along(constraints)){
+        ## Check for estimation method
+        constraints[[i]] <- stripEst(constraintsOrig[[i]])
+        if(!all(grepl("^(F|SSB|C|FMTC)=",constraints[[i]])) && !any(!grepl("\\*",constraints[[i]])))
+            stop("The back correction is currently only implemented for F, SSB, and C constraints without restrictions.")
+        if(grepl("^SSB",tail(constraints[[i]],1)))
+            stop("The last constraint cannot be for next years SSB. Please add an arbitrary constraint as the last")
+        estMethod[[i]] <- getEst(constraintsOrig[[i]])
+    }
+    ## Check constraints have the same length!
+
+    tmpCon <- lapply(constraints, function(x){
+        c0 <- rep(sprintf("F=%f",Fdefault),length(x))
+        c0[is.na(x)] <- NA
+        c0
+    })
+    ##tmpCon[grepl("^F=.+\\*",constraints)] <- constraints[grepl("^F=.+\\*",constraints)]
+    cat("Initial forecast...\n")
+    set.seed(seed)
+    F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, year.base=year.base, useModelLastN = useModelLastN,...)
+    F0Orig <- F0
+    rep <- attr(fit,"m_rep")
+
+
+    ## Base year correction of fbar
+    FBT <- fbartable(fit,returnList=TRUE)
+    fbarBY <- sapply(seq_along(fit),function(s) FBT[[s]][rownames(attr(F0[[s]],"tab"))[1],1])
+    fbarRS <- sapply(F0, function(x) median(x[[1]]$fbar))
+    fbarCorrect <- log(fbarBY) - log(fbarRS)
+    ## set.seed(seed)
+    ## F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect)
+    ## F0rfc <- F0
+
+
+    getLogNeps <- function(F0){
+        lapply(seq_along(F0), function(s){
+            x <- F0[[s]]
+            NN <- fit[[s]]$conf$maxAge-fit[[s]]$conf$minAge+1
+            logN <- lapply(x, function(y) y$sim[,1:NN])
+            logF <- lapply(x, function(y){
+                log(Reduce("+",lapply(split(fit[[s]]$conf$keyLogFsta,slice.index(fit[[s]]$conf$keyLogFsta,1)),function(ii){
+                    exp(y$sim[,-(1:NN)][,pmax(ii+1,1)]) * matrix(as.numeric(ii>=0),nrow(y$sim),length(ii),byrow=TRUE)
+                })))})
+            M <- lapply(x, function(y) (y$bio_natMor))
+            lapply(head(seq_along(x),-1),function(y){
+                R <- logN[[y+1]][,1]
+                logPredN0 <-  logN[[y]] - exp(logF[[y]]) - t(M[[y]])
+                logPredN0 <- cbind(R,logPredN0[,1:(ncol(logPredN0)-2)],log(rowSums(exp(logPredN0[,-(1:(ncol(logPredN0)-2))]))))
+                eps <- logN[[y+1]]-logPredN0
+                eps
+            })
+        })
+    }
+    logNeps <- getLogNeps(F0)
+    TmpStocks <- lapply(seq_along(F0), function(s){
+        x <- F0[[s]]
+        NN <- fit[[s]]$conf$maxAge-fit[[s]]$conf$minAge+1
+        sim <- lapply(x,function(y) y$sim)
+        logN <- lapply(sim, function(y) y[,1:NN])
+        logF <- lapply(x, function(y){
+            log(Reduce("+",lapply(split(fit[[s]]$conf$keyLogFsta,slice.index(fit[[s]]$conf$keyLogFsta,1)),function(ii){
+                exp(y$sim[,-(1:NN)][,pmax(ii+1,1)]) * matrix(as.numeric(ii>=0),nrow(y$sim),length(ii),byrow=TRUE)
+            })))})
+        M <- lapply(x, function(y) (y$bio_natMor))
+        PropMat <- lapply(x, function(y) (y$bio_propMat))
+        SW <- lapply(x, function(y) (y$bio_stockMeanWeight))
+        CW <- lapply(x, function(y) (y$bio_catchMeanWeight))
+        logHazard_M_breakpoints <- lapply(x, function(y) y$logHazard_M_breakpoints)
+        logHazard_F_breakpoints <- lapply(x, function(y) y$logHazard_F_breakpoints)
+        activeHazard_F <- rep$mort[[s]]$activeHazard_F
+        activeHazard_breakpoints <- rep$mort[[s]]$activeHazard_breakpoints
+        sampleTimesStart <- fit[[s]]$data$sampleTimesStart
+        sampleTimesEnd <- fit[[s]]$data$sampleTimesEnd
+        activeHazardMap_risk <- rep$mort[[s]]$activeHazardMap_risk
+        logNeps <- logNeps[[s]]
+        list(NN = NN,
+             logN = logN,
+             logF = logF,
+             M = M,
+             PropMat = PropMat,
+             SW = SW,
+             CW = CW,
+             logHazard_M_breakpoints = logHazard_M_breakpoints,
+             logHazard_F_breakpoints = logHazard_F_breakpoints,
+             activeHazard_F = activeHazard_F,
+             activeHazard_breakpoints =  activeHazard_breakpoints,
+             sampleTimesStart = sampleTimesStart,
+             sampleTimesEnd = sampleTimesEnd,
+             activeHazardMap_risk = activeHazardMap_risk,
+             logNeps = logNeps)
+    })
+    TmpStocksOrig <- TmpStocks
+
+    ## This is already done with 2x forecast  
+    cat("Correcting base year F...\n")
+    yup <- lapply(seq_along(fit), function(s){
+        yy <- head(seq_along(TmpStocks[[s]]$logN),-1)
+        if(useModelLastN)
+            yy <- tail(yy,-1)
+        yy
+    })
+    for(s in seq_along(TmpStocks)){
+        TmpStocks[[s]]$logF[[1]] <- TmpStocks[[s]]$logF[[1]] + fbarCorrect[s]
+        TmpStocks[[s]]$logHazard_F_breakpoints[[1]] <- TmpStocks[[s]]$logHazard_F_breakpoints[[1]] + fbarCorrect[s]
+        ## Update next logN all the way
+        for(y in yup[[s]]){
+            R <- TmpStocks[[s]]$logN[[y+1]][,1]
+            eps <- TmpStocks[[s]]$logNeps[[y]] ## No eps for first year, so y+1-1
+            logPredN <- TmpStocks[[s]]$logN[[y]] - exp(TmpStocks[[s]]$logF[[y]]) - t(TmpStocks[[s]]$M[[y]])
+            logPredN <- cbind(R,logPredN[,1:(ncol(logPredN)-2)],log(rowSums(exp(logPredN[,-(1:(ncol(logPredN)-2))])))) + eps
+            TmpStocks[[s]]$logN[[y+1]] <- logPredN
+        }
+    }
+
+    bcList <- list()
+    for(y in seq_along(constraints[[1]])){
+        cat("Year",y,"\n")
+        ## Constraint # y
+        ## Forecast index # y+1
+        logspace_add <- function(logx,logy){
+            r <- pmax(logx,logy)
+            ii <- is.finite(r)
+            r[ii] <- pmax(logx[ii],logy[ii]) + log1p(exp(-abs(logx[ii]-logy[ii])))
+            r
+        }
+        logspace_sum <- function(logx){
+            if(length(logx)<=1) return(logx)
+            if(length(logx)==2) return(logspace_add(logx[1],logx[2]))
+            Mx <- max(logx)
+            Mx + log(sum(exp(logx-Mx)))
+        }
+        logspace_1m <- function(logx) log1p(-exp(logx))
+        logspace_1p <- function(logx) log1p(exp(logx))
+        getFbar <- function(eta,s,y){
+            fr <- fit[[s]]$conf$fbarRange - fit[[s]]$conf$minAge + 1
+            rowMeans(exp(TmpStocks[[s]]$logF[[y]][,fr[1]:fr[2]] + eta))    
+        }
+        getNextSSB <- function(eta,s,y){
+            R <- TmpStocks[[s]]$logN[[y+1]][,1]
+            logPredN0 <-  TmpStocks[[s]]$logN[[y]] - exp(TmpStocks[[s]]$logF[[y]]) - t(TmpStocks[[s]]$M[[y]])
+            logPredN0 <- cbind(R,logPredN0[,1:(ncol(logPredN0)-2)],log(rowSums(exp(logPredN0[,-(1:(ncol(logPredN0)-2))]))))
+            eps <- TmpStocks[[s]]$logNeps[[y]] ## TmpStocks[[s]]$logN[[y+1]] - logPredN0 ##
+            logPredN <- TmpStocks[[s]]$logN[[y]] - exp(TmpStocks[[s]]$logF[[y]]+eta) - t(TmpStocks[[s]]$M[[y]])
+            logPredN <- cbind(R,logPredN[,1:(ncol(logPredN)-2)],log(rowSums(exp(logPredN[,-(1:(ncol(logPredN)-2))])))) + eps
+            ## Survival before SSB
+            if((sum(fit[[s]]$data$propM) + sum(fit[[s]]$data$propF)) > 0)
+                stop("Backcorrection of SSB targets are only available if SSB is calculated in the beginning of the year")
+            rowSums(exp(logPredN) * t(TmpStocks[[s]]$PropMat[[y+1]]) * t(TmpStocks[[s]]$SW[[y+1]]))
+        }
+        getCatch <- function(eta,s, y){
+            ## logN(a,y) + mort.logFleetSurvival_before(a,y,f-1) + mort.fleetLogCumulativeIncidence(a,y,f-1);
+            ## Need to report logHazard_M_breakpoints and logHazard_F_breakpoints
+            ## Apply eta to logHazard_F_breakpoints
+            ## Calculate survival + CIF
+            ## Need non-F hazards + seasonal effect + F
+            doOne <- function(i){
+                lN <- TmpStocks[[s]]$logN[[y]][i,]
+                lHM <- TmpStocks[[s]]$logHazard_M_breakpoints[[y]][,,,,i,drop=FALSE]
+                dim(lHM) <- head(dim(TmpStocks[[s]]$logHazard_M_breakpoints[[y]]),-1)
+                lHF <- TmpStocks[[s]]$logHazard_F_breakpoints[[y]][,,,,i,drop=FALSE] + eta
+                dim(lHF) <- head(dim(TmpStocks[[s]]$logHazard_F_breakpoints[[y]]),-1)
+
+                
+                logHazard_breakpoints <- logspace_add(apply(lHM,c(1,4),logspace_sum), apply(lHF,c(1,4),logspace_sum))
+                logSurvBefore <- matrix(0,nrow(logHazard_breakpoints),dim(lHF)[3])
+                for(f in 1:ncol(logSurvBefore)){
+                    t0 <- 0
+                    t1 <- TmpStocks[[s]]$sampleTimesStart[f]
+                    logS0 <- logSurvBefore[,f]
+                    for(t in head(seq_along(TmpStocks[[s]]$activeHazard_breakpoints),-1)){
+                        ## Skip interval if it ends before time interval
+                        if(TmpStocks[[s]]$activeHazard_breakpoints[t+1] <= t0)
+                            next;
+                        ## Break loop if interval starts after time interval
+                        if(TmpStocks[[s]]$activeHazard_breakpoints[t] >= t1)
+                            break;
+                        ## Otherwise, look at overlap between intervals	   
+                        Astart = pmax(TmpStocks[[s]]$activeHazard_breakpoints[t],t0)
+                        Aend = pmin(TmpStocks[[s]]$activeHazard_breakpoints[t+1],t1)
+                        ## Hazard is constant, so cumulative hazard is hazard times interval length
+                        logS0 = logS0 - exp(logHazard_breakpoints[,t]) * (Aend - Astart)
+                    }
+                    logSurvBefore[,f] <- logS0
+                }
+                logCIF <- matrix(-Inf,nrow(logHazard_breakpoints),dim(lHF)[3])
+                for(f in 1:ncol(logSurvBefore)){
+                    t0 <- TmpStocks[[s]]$sampleTimesStart[f]
+                    t1 <- TmpStocks[[s]]$sampleTimesEnd[f]
+                    logS0 <- numeric(nrow(logCIF))
+                    vlogCIF <- rep(-Inf,nrow(logCIF))
+                    for(t in head(seq_along(TmpStocks[[s]]$activeHazard_breakpoints),-1)){
+                        ## Skip interval if it ends before time interval
+                        if(TmpStocks[[s]]$activeHazard_breakpoints[t+1] <= t0)
+                            next;
+                        ## Break loop if interval starts after time interval
+                        if(TmpStocks[[s]]$activeHazard_breakpoints[t] >= t1)
+                            break;
+                        ## Otherwise, look at overlap between intervals	   
+                        ## Full interval
+                        Astart = pmax(TmpStocks[[s]]$activeHazard_breakpoints[t],t0)
+                        Aend = pmin(TmpStocks[[s]]$activeHazard_breakpoints[t+1],t1)
+                        lCIF_F_brk <- lHF[,1,f,t] - logHazard_breakpoints[,t] + logspace_1m(-exp(logHazard_breakpoints[,t])*(Aend-Astart))
+                        tmp <- logS0 + lCIF_F_brk
+                        vlogCIF = logspace_add(vlogCIF, tmp)
+                        logS0 <- logS0 - exp(logHazard_breakpoints[,t])*(Aend-Astart)
+                    }
+                    logCIF[,f] <- vlogCIF
+                }
+                ## Output catch, sum of all fleets
+                ## logN(a,y) + mort.logFleetSurvival_before(a,y,f-1) + mort.fleetLogCumulativeIncidence(a,y,f-1);
+                exp(logspace_sum(lN + logSurvBefore + logCIF + log(t(TmpStocks[[s]]$CW[[y]])[i,])))            
+            }
+            sapply(seq_len(nrow(TmpStocks[[s]]$logN[[y]])),doOne)
+        }
+
+        cstr <- sapply(constraints,function(x) x[y])
+
+        Target <- as.numeric(gsub("(.+=)([^\\*]+)(\\*?)","\\2",cstr))
+        isRel <- grepl("\\*",cstr)
+        summarize <- function(s,y,v){
+            eval(estMethod[[s]][[y]], list(vvx = unname(v)))
+        }
+        cat("\tbc_eta\n")
+        bc_eta <- nlminb(numeric(nStocks), function(ee){
+            v <- 0
+            if(any(grepl("^FMTC=",cstr))){
+                if(!all(grepl("^FMTC=",cstr)) || length(unique(Target)) != 1)
+                    warning("When using FMTC targets, all stocks should use the same target! Only the first FMTC target will be used.")
+                sX <- min(which(grepl("^FMTC=",cstr)))
+                ## Sum of median catches, use first multiplier - combine with constraint ensuring relative F change is the same for all 
+                ## Catch constraint               
+                if(isRel[sX]){
+                    cOld <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(0,s,y))))
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(ee[s],s,y+1))))
+                    v <- v + (cNew/cOld-Target[sX])^2
+                }else{
+                    cNew <- sum(sapply(seq_len(nStocks), function(s) summarize(s,y,getCatch(ee[s],s,y+1))))
+                    v <- v + (cNew-Target[sX])^2
+                }
+                ## Force F multipliers to be equal (not the multiplier is relative to F=Fdefault
+                ## v <- v + sum((ee-ee[1])^2)
+                rf <- sapply(seq_len(nStocks), function(s) summarize(s,y,getFbar(ee[s],s,y+1))/summarize(s,y,getFbar(0,s,y)))
+                v <- v + sum((tail(rf,-1) - head(rf,1))^2) * Target[sX] * 100
+            }else{
+                for(s in seq_len(nStocks)){
+                    if(grepl("^F=",cstr[s])){
+                        ## F constraint
+                        if(isRel[s]){
+                            v <- v + (summarize(s,y,getFbar(ee[s],s,y+1))/summarize(s,y,getFbar(0,s,y))-Target[s])^2
+                        }else{
+                            v <- v + (summarize(s,y,getFbar(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else if(grepl("^SSB=",cstr[s])){
+                        ## SSB constraint
+                        if(isRel[s]){
+                            v <- v + (summarize(s,y,getNextSSB(ee[s],s,y+1))/summarize(s,y,getNextSSB(0,s,y))-Target[s])^2
+                        }else{
+                            v <- v + (summarize(s,y,getNextSSB(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else if(grepl("^C=",cstr[s])){
+                        ## Catch constraint
+                        if(isRel[s]){
+                            v <- v + (summarize(s,y,getCatch(ee[s],s,y+1))/summarize(s,y,getCatch(0,s,y))-Target[s])^2
+                        }else{
+                            v <- v + (summarize(s,y,getCatch(ee[s],s,y+1))-Target[s])^2
+                        }
+                    }else{
+                        stop("The constraint cannot currently be back corrected")
+                    }
+                }
+            }
+            v
+        }, control=list(iter.max= 10000, eval.max=10000))
+        bcList[[y]] <- bc_eta
+        cat(sprintf("\tCorrecting forecast year %d...", y),"\n")
+        ## for(s in seq_along(tmpCon))
+        
+        ## set.seed(seed)
+        ## F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect,...)
+        ## Update F and N
+        for(s in seq_along(TmpStocks)){
+            cat("\tCalculating stock",s,"\n")
+            tmpCon[[s]][y] <- sprintf("F=%f",pmax(exp(bc_eta$par[s]) * Fdefault,1e-5))
+            TmpStocks[[s]]$logF[[y+1]] <- TmpStocks[[s]]$logF[[y+1]] + pmax(bc_eta$par[s] + log(Fdefault),log(1e-5)) - log(Fdefault)
+            TmpStocks[[s]]$logHazard_F_breakpoints[[y+1]] <- TmpStocks[[s]]$logHazard_F_breakpoints[[y+1]] + pmax(bc_eta$par[s] + log(Fdefault),log(1e-5)) - log(Fdefault)
+            ## Update next logN all the way (from the start to the end to be sure)
+            for(yy in yup[[s]]){
+                ##if(y+2 <= length(TmpStocks[[s]]$logN)){
+                R <- TmpStocks[[s]]$logN[[yy+1]][,1]
+                eps <- TmpStocks[[s]]$logNeps[[yy]] ## No eps for first year (so yy+1-1)
+                logPredN <- TmpStocks[[s]]$logN[[yy]] - exp(TmpStocks[[s]]$logF[[yy]]) - t(TmpStocks[[s]]$M[[yy]])
+                logPredN <- cbind(R,logPredN[,1:(ncol(logPredN)-2)],log(rowSums(exp(logPredN[,-(1:(ncol(logPredN)-2))])))) + eps
+                TmpStocks[[s]]$logN[[yy+1]] <- logPredN
+                ##}
+            }
+        }
+    }
+    attr(F0,"bcOpt") <- bcList
+    attr(F0,"tmpCon") <- tmpCon
+    cat("Final modelforecast...\n")
+    ## Final modelforecast
+    set.seed(seed)
+    F0 <- modelforecast(fit,tmpCon,nosim=nosim,fastFixedF=TRUE, resampleFcorrection = fbarCorrect, year.base=year.base, useModelLastN = useModelLastN, ...)
+    F0
+}

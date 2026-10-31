@@ -1361,6 +1361,7 @@ MSE <- function(OM,
 
         cat("\t\tUpdating assessment...\n")
         ## Update assessment
+        EM_old <- EM_update
         capture.output(EM_update <- try({updateAssessment(OM_update, EM_update, knotRange, AdviceLag, intermediateFleets)}))
         
         if(!methods::is(EM_update,"sam") && !methods::is(EM_update,"msam")){
