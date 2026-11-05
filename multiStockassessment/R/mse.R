@@ -472,7 +472,11 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     adviceRules[yr_tac,"Total"] <- "ICES MSY"
     redoForecast <- FALSE
     ## Check if SSB < MSY Btrigger at the "beginning of advice year"
-    fcorr <- afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] / EMReferencePoints$Btrigger
+    if(!is.null(EMReferencePoints$HCR) && is.function(EMReferencePoints$HCR)){
+        fcorr <- EMReferencePoints$HCR(afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)],EMReferencePoints)
+    }else{
+        fcorr <- afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] / EMReferencePoints$Btrigger
+    }
     cat("\n\n",afFTab,"\n\n")
     cat("fcorr:", fcorr, cAdd(yr_tac,dySSBAR), sprintf("ssb:%s",tabLab), afFTab[cAdd(yr_tac,dySSBAR),sprintf("ssb:%s",tabLab)] , EMReferencePoints$Btrigger,"\n")
     if(fcorr < 1){
@@ -499,7 +503,8 @@ ICESAdviceForecast.sam <- function(EM_update,OM_update,fcThisYear,EMReferencePoi
     if(nssb < EMReferencePoints$Blimit){
         ##If so, forecast to reach Blim
         fcThisYear$constraints[length(fcThisYear$constraints)-1] <- sprintf("SSB=%f",EMReferencePoints$Blimit)
-        redoForecast <- TRUE
+        ## ICES rule to have catch below Blim can be turned off
+        redoForecast <- is.null(EMReferencePoints$CatchBelowBlim) || isTRUE(is.null(EMReferencePoints$CatchBelowBlim))
         adviceRules[yr_tac,"Total"] <- "ICES MSY PA (Below Blim)"
     }
     if(redoForecast){
@@ -591,7 +596,11 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
         cat("\t\tStock: ",s,"\n")
         cat("\t\t\tforecast ssb: ",nssb,"\n")
         cat("\t\t\tBlim: ", EMReferencePoints[[s]]$Blimit,"\n")
-        fcorr <- nssb / EMReferencePoints[[s]]$Btrigger                    
+        if(!is.null(EMReferencePoints[[s]]$HCR) && is.function(EMReferencePoints[[s]]$HCR)){
+            fcorr <- EMReferencePoints[[s]]$HCR(nssb,EMReferencePoints[[s]])
+        }else{
+            fcorr <- nssb / EMReferencePoints[[s]]$Btrigger
+        }
         if(fcorr < 1){
             ## F = FMSY × SSB/MSY Btrigger when the stock is below MSY Btrigger and above Blim (or below Blim but forecasted SSB > Blim           
             fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("F=%f",EMReferencePoints[[s]]$Ftarget * fcorr)
@@ -620,7 +629,9 @@ ICESAdviceForecast.msam <- function(EM_update,OM_update,fcThisYear,EMReferencePo
         if(nssb < EMReferencePoints[[s]]$Blimit){
                                         #If so, forecast to reach Blim (SWITCH TO FIND AN F THAT GIVES 50% > Blim? - Should be the same??)
             fcThisYear$constraints[[s]][length(fcThisYear$constraints[[s]])-1] <- sprintf("SSB=%f",EMReferencePoints[[s]]$Blimit)
-            redoForecast <- TRUE
+            ##redoForecast <- TRUE
+            ## ICES rule to have catch below Blim can be turned off
+            redoForecast <- is.null(EMReferencePoints[[s]]$CatchBelowBlim) || isTRUE(is.null(EMReferencePoints[[s]]$CatchBelowBlim))
             adviceRules[cAdd(yr_tac,0),s] <- "ICES MSY PA (Below Blim)"
         }
     }
